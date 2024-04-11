@@ -1,0 +1,15 @@
+LandisData "Climate Config"				
+		
+ClimateTimeSeries			Daily_RandomYears
+ClimateFile				    "./1000Cell1_climate_LG_calibration.csv"
+ClimateFileFormat			Daily_Temp-C_Precip-mmDay
+
+SpinUpClimateTimeSeries			Daily_RandomYears
+SpinUpClimateFile			    "./1000Cell1_climate_LG_calibration.csv"
+SpinUpClimateFileFormat			Daily_Temp-C_Precip-mmDay
+
+
+UsingFireClimate			no
+RelativeHumiditySlopeAdjust             77.68
+SpringStart				30
+WinterStart				320

@@ -1,0 +1,49 @@
+LandisData	Scenario
+
+Duration  	100
+
+Species   	"./1000Cell1_species.txt"
+
+Ecoregions      "./1000Cell1_ecoregions.txt"
+EcoregionsMap   "../1000_cell_1.tif"
+
+CellLength  	250 << meters, 100 x 100 m = 1 ha
+
+
+>> -----------------------
+>> SUCCESSION EXTENSIONS
+>> -----------------------
+
+>> 	Succession Extension     Initialization File
+>> 	--------------------     -------------------
+   	"NECN Succession"	"./1000Cell1_NECN.txt"
+
+
+>> --------------------------
+>> DISTURBANCE EXTENSIONS
+>> -------------------------
+
+>> 	Disturbance Extension	Initialization File
+>>	--------------------	-------------------
+>>	"Base Fire"		base-fire_SetUp_s1e1.txt
+>>	"Base Wind"		base-wind_SetUp_s1e1.txt
+>>	"Base Harvest"		base-harvest_SetUp_s1e1.txt
+>>	"Base BDA"		base-BDA_SetUp_s1e1.txt
+
+
+>>   DisturbancesRandomOrder  yes  	<< optional
+                         		<< Commented (default) is "no"
+
+
+>> ----------------------
+>> OUTPUT EXTENSIONS
+>> ----------------------
+
+>> 	Output Extension		Initialization File
+>> 	----------------		-------------------
+	"Output Biomass"		"./1000Cell1_output_biomass.txt"
+>>	"Output Cohort Statistics"	"./output_CohortStats.txt"
+
+
+RandomNumberSeed  33  << optional parameter; uncomment for reproducibilty tests
+                          << Commented (default) is a RandomNumberSeed generated using the current time
