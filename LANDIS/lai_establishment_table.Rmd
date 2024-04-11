@@ -1,0 +1,334 @@
+---
+title: "lai_establisment_table"
+output: pdf_document
+date: "2023-03-01"
+---
+
+
+```{r}
+library(tidyverse)
+library(spatstat)
+library(rFIA)
+options(scipen = 999)
+```
+
+
+
+```{r}
+states <- c("VA", "TN", "NC", "SC", "GA")
+states.index <- seq(from = 1, to = 3)
+tables <- c("TREE", "SEEDLING")
+tables.index <- c(1,2)
+directory <- "C:/Users/lagoodal/Desktop/LAI/5 States"
+sp_ref <- read_csv("C:/Users/lagoodal/Downloads/USDA Piedmont Plant Codes.csv")
+```
+
+
+
+```{r}
+ fia <- readFIA(dir = directory,
+                tables = tables,
+                states = states)
+
+trees <- fia$TREE
+trees <- trees[trees$SPGRPCD != c(48:55),]
+seedlings <- fia$SEEDLING
+```
+
+
+
+```{r}
+hardwoods <- seq(25, 43)
+hardwoods.S <- c(0.75, 0.81, 0.74, 0.77, 0.77, 0.83, 0.86, 0.83, 0.88, 0.82, 0.83, 0.82, 0.795, 0.88, 0.9, 0.91, 0.861, 0.78, 0.833)
+softwoods <- seq(1, 9)
+SPGRPCDs <- sort(unique(trees$SPGRPCD))
+SPGRPs <- c("Longleaf and slash pines", "Loblolly and shortleaf pines", "Other yellow pines", "Eastern white and red pines", "Spruce and balsam fir", "Eastern hemlock", "Cypress", "Other eastern softwoods", "Select white oaks", "Select red oaks", "Other white oaks", "Other red oaks", "Hickory", "Yellow birch", "Hard maple", "Soft maple", "Beech", "Sweetgum", "Tupelo and blackgum", "Ash", "Cottonwood and aspen", "Basswood", "Yellow-poplar", "Black walnut", "Other eastern soft hardwoods", "Other eastern hard hardwoods", "Eastern noncommercial hardwoods", "")
+SPGRPCDs.index <- seq(from = 1, to = length(SPGRPCDs))
+S.table <- cbind(hardwoods, hardwoods.S)
+S.table <- as.data.frame(S.table)
+colnames(S.table) <- c("SPGRPCD", "Model.S")
+```
+
+
+
+```{r}
+trees$DIA.CM <- trees$DIA * 2.54
+trees$HT.M <- trees$HT / 3.281
+trees$PLOT.YEAR <- paste(trees$PLT_CN, trees$INVYR, sep = ".")
+trees <- trees[trees$STATUSCD == 1,]
+trees.HARDWOOD <- trees[trees$SPGRPCD %in% hardwoods,]
+trees.HARDWOOD <- merge(trees.HARDWOOD, S.table)
+trees.HARDWOOD$LEAF.AREA.LN <- 0.2102 + (0.0586*trees.HARDWOOD$DIA.CM) + (4.0202*trees.HARDWOOD$Model.S)
+trees.HARDWOOD$LEAF.AREA <- exp(trees.HARDWOOD$LEAF.AREA.LN)
+PIED.PLOT.HARDWOOD.LEAFAREA <- aggregate(trees.HARDWOOD$LEAF.AREA, by=list(PLOT.YEAR=trees.HARDWOOD$PLOT.YEAR), FUN=sum)
+colnames(PIED.PLOT.HARDWOOD.LEAFAREA) <- c("PLOT.YEAR","HARDWOOD.LEAFAREA")
+trees.SOFTWOOD <- trees[trees$SPGRPCD %in% softwoods,]
+trees.SOFTWOOD$LEAF.BIOMASS.KG <- 0.0621*(trees.SOFTWOOD$DIA.CM^1.505)
+trees.SOFTWOOD$LEAF.BIOMASS.G <- trees.SOFTWOOD$LEAF.BIOMASS.KG * 1000
+trees.SOFTWOOD$SURFACEAREA.TOTAL <- trees.SOFTWOOD$LEAF.BIOMASS.G / 227
+trees.SOFTWOOD$SURFACEAREA.HALF <- trees.SOFTWOOD$SURFACEAREA.TOTAL / 2
+PIED.PLOT.SOFTWOOD.LEAFAREA <- aggregate(trees.SOFTWOOD$SURFACEAREA.HALF, by=list(PLOT.YEAR=trees.SOFTWOOD$PLOT.YEAR), FUN=sum)
+colnames(PIED.PLOT.SOFTWOOD.LEAFAREA) <- c("PLOT.YEAR","SOFTWOOD.LEAFAREA")
+PIED.PLOT.TOTAL.LEAFAREA <- merge(PIED.PLOT.HARDWOOD.LEAFAREA, PIED.PLOT.SOFTWOOD.LEAFAREA, all=T)
+PIED.PLOT.TOTAL.LEAFAREA[is.na(PIED.PLOT.TOTAL.LEAFAREA)] <- 0
+PIED.PLOT.TOTAL.LEAFAREA$TOTAL.LEAFAREA <- PIED.PLOT.TOTAL.LEAFAREA$HARDWOOD.LEAFAREA + PIED.PLOT.TOTAL.LEAFAREA$SOFTWOOD.LEAFAREA
+PIED.PLOT.TOTAL.LEAFAREA$PLOT.LAI <- PIED.PLOT.TOTAL.LEAFAREA$TOTAL.LEAFAREA / 672.469876708172
+seedlings$PLOT.YEAR <- paste(seedlings$PLT_CN, seedlings$INVYR, sep=".")
+```
+
+
+
+```{r}
+spp_to_use <- c("ACRU",
+                "BENI",
+                # "CAGL8", Not enough data
+                # "CATO6", Not enough data
+                "FAGR", 
+                "FRAM2", 
+                "FRPE", 
+                "JUNI", 
+                "JUVI", 
+                "LIST2", 
+                "LITU", 
+                "NYSY",
+                "OXAR", 
+                "PIEC2", 
+                "PIST", 
+                "PITA", 
+                "PIVI2", 
+                "PLOC", 
+                "PRSE2", 
+                "QUAL", 
+                "QUCO2", 
+                "QUFA", 
+                "QUMO4", 
+                "QUPH", 
+                "QURU", 
+                "QUST", 
+                "QUVE", 
+                "ULAL", 
+                "ULAM") %>%
+  as.data.frame() %>%
+  `colnames<-`("Symbol")
+spp_to_use <- spp_to_use[[1]]
+spcd_to_use <- sp_ref[sp_ref$Symbol %in% spp_to_use,] %>%
+  arrange(Symbol) %>%
+  as.data.frame()
+spcd_to_use <- spcd_to_use[,2]
+
+
+#TODO refactor with group_by %>% summarise
+for (i in 1:length(spcd_to_use)){
+  SPCD <- spcd_to_use[i]
+  Table <- seedlings[seedlings$SPCD == SPCD,]
+  
+  if(nrow(Table) == 0) next #this breaks the rest of the code, because further down expects a column for every species
+  
+  Sums <- aggregate(Table$TREECOUNT, by=list(PLOT.YEAR = Table$PLOT.YEAR), FUN=sum)
+  
+  colnames(Sums) <- c("PLOT.YEAR", spp_to_use[i])
+  PIED.PLOT.TOTAL.LEAFAREA <- merge(PIED.PLOT.TOTAL.LEAFAREA, Sums, all.x = T)
+}
+
+PIED.PLOT.TOTAL.LEAFAREA$CATO6 <- unlist(PIED.PLOT.TOTAL.LEAFAREA$CATO6)
+PIED.PLOT.TOTAL.LEAFAREA$CAGL8 <- unlist(PIED.PLOT.TOTAL.LEAFAREA$CAGL8)
+
+PIED.PLOT.TOTAL.LEAFAREA[is.na(PIED.PLOT.TOTAL.LEAFAREA)] <- 0
+
+```
+
+
+
+```{r}
+mins <- seq(0, 19.8, 0.2)
+maxs <- seq(0.2, 20, 0.2)
+histogram.index <- seq(1, 100)
+PIED.histogram <- as.data.frame(cbind(mins, maxs))
+colnames(PIED.histogram) <- c("min", "max")
+
+for (i in 1:length(spp_to_use)){
+  SP.needed <- spp_to_use[i]
+  columns.needed.vec <- c("PLOT.LAI", as.vector(SP.needed))
+  columns.needed <- PIED.PLOT.TOTAL.LEAFAREA[names(PIED.PLOT.TOTAL.LEAFAREA)[names(PIED.PLOT.TOTAL.LEAFAREA) %in% columns.needed.vec]]
+  mean.inrange <- c()
+  for (j in length(histogram.index)){
+    min <- mins[j]
+    max <- maxs[j]
+    subset <- columns.needed[columns.needed$PLOT.LAI >= min & columns.needed$PLOT.LAI < max,]
+    final.column <- subset[names(subset)[names(subset) %in% SP.needed]]
+    final.column.vec <- as.vector(final.column)
+    mean.inrange[j] <- mean(final.column[,SP.needed])
+  }
+  PIED.histogram[,SP.needed] <- mean.inrange
+}
+
+
+for (i in length(spp_to_use)){
+  SP.needed <- spp_to_use[i]
+  SPCD.needed <- spcd_to_use[i]
+  barplot(height = PIED.histogram[,SP.needed], names.arg = PIED.histogram$max, main = SP.needed, xlab = "LAI",ylab="Seedlings/plot")
+}
+
+```
+
+
+```{r}
+#estimate parameters of lognormal distribution for each species
+species <- c()
+weighted.LAI.mean <- c()
+weighted.LAI.var <- c()
+weighted.LAI.SD <- c()
+weighted.LAI.log.mean <- c()
+weighted.LAI.log.var <- c()
+weighted.LAI.log.SD <- c()
+Table.NoOutliers <- PIED.PLOT.TOTAL.LEAFAREA[PIED.PLOT.TOTAL.LEAFAREA$PLOT.LAI<20,]
+Table.NoOutliers$PLOT.LAI <- ifelse(Table.NoOutliers$PLOT.LAI < 0.1,
+                                    0.1,
+                                    Table.NoOutliers$PLOT.LAI)
+Table.NoOutliers$PLOT.LAI.LOG <- log(Table.NoOutliers$PLOT.LAI)
+
+for (i in 1:length(spp_to_use)){
+  SP.needed <- spp_to_use[i]
+  PLOT.LAI <- Table.NoOutliers$PLOT.LAI
+  PLOT.LAI.LOG <- Table.NoOutliers$PLOT.LAI.LOG
+  PLOT.SEEDLINGS <- Table.NoOutliers[,SP.needed]
+  PLOT.SEEDLINGS.TOTAL <- sum(PLOT.SEEDLINGS)
+  weights <- PLOT.SEEDLINGS/PLOT.SEEDLINGS.TOTAL
+  Weighted.LAI.mean <- weighted.mean(x = PLOT.LAI, w = weights)
+  Weighted.LAI.var <- weighted.var(x=PLOT.LAI, w=weights)
+  Weighted.LAI.log.mean <- weighted.mean(x = PLOT.LAI.LOG, w = weights)
+  Weighted.LAI.log.var <- weighted.var(x=PLOT.LAI.LOG, w=weights)
+  species[i] <- SP.needed
+  weighted.LAI.mean[i] <- Weighted.LAI.mean
+  weighted.LAI.var[i] <- Weighted.LAI.var
+  weighted.LAI.SD[i] <- sqrt(Weighted.LAI.var)
+  weighted.LAI.log.mean[i] <- Weighted.LAI.log.mean
+  weighted.LAI.log.var[i] <- Weighted.LAI.log.var
+  weighted.LAI.log.SD[i] <- sqrt(Weighted.LAI.log.var)
+}
+
+weighted.mean.LAI.table <- data.frame(species, weighted.LAI.mean, weighted.LAI.var, weighted.LAI.SD, weighted.LAI.log.mean, weighted.LAI.log.var, weighted.LAI.log.SD)
+grid <- seq(0,20,.1)
+
+#plot distribution for each species calculated
+for (i in 1:length(spp_to_use)){
+  SP.needed <- weighted.mean.LAI.table$species[i]
+  logmean <- weighted.mean.LAI.table$weighted.LAI.log.mean[i]
+  logsd <- weighted.mean.LAI.table$weighted.LAI.log.SD[i]
+  plot(grid,dlnorm(grid,logmean,logsd),type="l",xlab="LAI",ylab="f(x)", col="blue", main=SP.needed, ylim=c(0,0.8))
+}
+```
+
+
+```{r}
+hist(Table.NoOutliers$PLOT.LAI)
+bins <- quantile(Table.NoOutliers$PLOT.LAI, c(1/6,2/6,3/6,4/6,5/6,1))
+
+#bin up establishment based on the lognormal pdfs calculated for each spcies
+cdfcolumns <- c("species","class.0","class.1","class.2","class.3","class.4","class.5")
+species.column <- c()
+shade.0 <- c()
+shade.1 <- c()
+shade.2 <- c()
+shade.3 <- c()
+shade.4 <- c()
+shade.5 <- c()
+index <- seq(from=1, to=length(weighted.mean.LAI.table$species))
+for (i in index){
+  species <- weighted.mean.LAI.table$species[i]
+  log.sd <- weighted.mean.LAI.table$weighted.LAI.log.SD[i]
+  log.mean <- weighted.mean.LAI.table$weighted.LAI.log.mean[i]
+  species.column[i] <- species
+  shade.0[i] <- plnorm(q = bins[1], meanlog=log.mean, sdlog =  log.sd)
+  shade.1[i] <- plnorm(q = bins[2], meanlog=log.mean, sdlog =  log.sd) - plnorm(q = bins[1], meanlog=log.mean, sdlog =  log.sd)
+  shade.2[i] <- plnorm(q = bins[3], meanlog=log.mean, sdlog =  log.sd) - plnorm(q = bins[2], meanlog=log.mean, sdlog =  log.sd)
+  shade.3[i] <- plnorm(q = bins[4], meanlog=log.mean, sdlog =  log.sd) - plnorm(q = bins[3], meanlog=log.mean, sdlog =  log.sd)
+  shade.4[i] <- plnorm(q = bins[5], meanlog=log.mean, sdlog =  log.sd) - plnorm(q = bins[4], meanlog=log.mean, sdlog =  log.sd)
+  shade.5[i] <- 1 - plnorm(q = bins[6], meanlog=log.mean, sdlog =  log.sd)
+}
+cdf.table <- data.frame(species.column, shade.0, shade.1, shade.2, shade.3, shade.4, shade.5)
+colnames(cdf.table) <- cdfcolumns
+
+#what species should get assigned to which shade tolerance classes?
+
+weighted.mean.LAI.table$median_shade <- exp(weighted.mean.LAI.table$weighted.LAI.log.mean)
+# a few ways to define the shade tolerance classes
+# shade_quantiles <- quantile(weighted.mean.LAI.table$median_shade, c(0, .2, .4, .6, .8, 1))
+# shade_quantiles <- seq(min(weighted.mean.LAI.table$median_shade), 
+#                        max(weighted.mean.LAI.table$median_shade), 
+#                        length.out = 6)
+shade_quantiles = c(0, bins[-length(bins)])
+weighted.mean.LAI.table$shade_class <- cut(weighted.mean.LAI.table$median_shade, 
+                                           breaks = shade_quantiles,
+                                           labels = FALSE,
+                                           include.lowest = TRUE)
+
+weighted.mean.LAI.table[, c("species", "shade_class")]
+
+### recalculate LAI table for classes
+
+
+#bin up establishment based on the lognormal pdfs calculated for each spcies
+cdfcolumns <- c("class","class.0","class.1","class.2","class.3","class.4","class.5")
+
+shade.0 <- c()
+shade.1 <- c()
+shade.2 <- c()
+shade.3 <- c()
+shade.4 <- c()
+shade.5 <- c()
+index <- seq(from=1, to=5)
+for (i in index){
+  subset <- weighted.mean.LAI.table[which(weighted.mean.LAI.table$shade_class == i), ]
+  
+  log.sd <- mean(subset$weighted.LAI.log.SD)
+  log.mean <- mean(subset$weighted.LAI.log.mean)
+
+  shade.0[i] <- plnorm(q = bins[1], meanlog=log.mean, sdlog =  log.sd)
+  shade.1[i] <- plnorm(q = bins[2], meanlog=log.mean, sdlog =  log.sd) - plnorm(q = bins[1], meanlog=log.mean, sdlog =  log.sd)
+  shade.2[i] <- plnorm(q = bins[3], meanlog=log.mean, sdlog =  log.sd) - plnorm(q = bins[2], meanlog=log.mean, sdlog =  log.sd)
+  shade.3[i] <- plnorm(q = bins[4], meanlog=log.mean, sdlog =  log.sd) - plnorm(q = bins[3], meanlog=log.mean, sdlog =  log.sd)
+  shade.4[i] <- plnorm(q = bins[5], meanlog=log.mean, sdlog =  log.sd) - plnorm(q = bins[4], meanlog=log.mean, sdlog =  log.sd)
+  shade.5[i] <- 1 - plnorm(q = bins[6], meanlog=log.mean, sdlog =  log.sd)
+}
+cdf.table <- data.frame(index, shade.0, shade.1, shade.2, shade.3, shade.4, shade.5)
+colnames(cdf.table) <- cdfcolumns
+
+
+species.rep <- c("ACRU","PITA","OXAR")
+for (i in 1:length(species.rep)){
+  species <- species.rep[i]
+  neededrow <- cdf.table[cdf.table$species %in% species,]
+  probabilities <- c()
+  probabilities[1] <- neededrow$shade.0[1]
+  probabilities[2] <- neededrow$shade.1[1]
+  probabilities[3] <- neededrow$shade.2[1]
+  probabilities[4] <- neededrow$shade.3[1]
+  probabilities[5] <- neededrow$shade.4[1]
+  probabilities[6] <- neededrow$shade.5[1]
+  assign(x=paste(species,".cdfs",sep=""), value=probabilities)
+}
+
+bargraph.data <- data.frame(ACRU.cdfs, PITA.cdfs, OXAR.cdfs)
+shadeclasses <- c("0","1","2","3","4","5")
+row.names(bargraph.data) <- shadeclasses
+bargraph.colors <- c("blue","chocolate","purple")
+bargraph.legend <- c("Balsam fir","White pine","Black spruce")
+barplot(t(as.matrix(bargraph.data)), main="Probability Densities under LAI Ranges",xlab="Shade Class", col= bargraph.colors, legend = bargraph.legend, beside=T, ylim=c(0,1.2))
+
+
+# write_csv(cdf.table, "C:/Users/lagoodal/Desktop/LAI/lai_establishment_table.csv")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+

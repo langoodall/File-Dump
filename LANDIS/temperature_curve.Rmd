@@ -1,0 +1,53 @@
+---
+title: "temperature_curve"
+output: pdf_document
+date: "2023-04-24"
+---
+
+
+```{r}
+library(tidyverse)
+library(minpack.lm)
+```
+
+```{r}
+moisture_1 <- 22
+moisture_2 <- 36
+moisture_3 <- 0.58
+moisture_4 <- 7.7
+
+tsoil_val <- sort(runif(1000, -40, 40))
+
+fraction_val <- (moisture_2 - tsoil_val) / (moisture_2 - moisture_1)
+
+Landis_relative_production <- ifelse(fraction_val>0, (exp(moisture_3/moisture_4*(1-fraction_val^moisture_4))*(fraction_val^moisture_3)), 0)
+plot(tsoil_val, Landis_relative_production)
+lines(tsoil_val, Landis_relative_production, type = "l", lwd = 3, col = "red")
+
+# Fit curve
+
+calculated_fitted_RP <- function(tsoil, coef_1, coef_2, coef_3, coef_4){
+  fraction <- (coef_2 - tsoil)/(coef_2 - coef_1)
+  pred <- ifelse(fraction > 0, (exp(coef_3/coef_4*(1-fraction^coef_4))*(fraction^coef_3)),0)
+  print(pred)
+}
+
+calculated_fitted_RP(tsoil = 20, coef_1 = 20, coef_2 = 50, coef_3 = 2, coef_4 = 5)
+plot(lines())
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

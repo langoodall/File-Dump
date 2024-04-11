@@ -1,0 +1,364 @@
+---
+title: "Untitled"
+output: pdf_document
+date: "2023-10-19"
+---
+
+```{r, message = FALSE, warning = FALSE}
+library(tidyverse)
+library(terra)
+library(sf)
+library(rgdal)
+library(RColorBrewer)
+```
+
+
+
+```{r}
+# Create path and files objects
+path <- "C:/Users/lagoodal/Desktop/All Raster Layers/LANDIS"
+files <- list.files(path = path, pattern = 'tif$', full.names = TRUE)
+# Create a list of rasters
+rastersPiedmontFull <- lapply(files, rast)
+set.seed(33)
+# Read in the CONUS raster and crop down before reprojecting
+forestOwnership <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Management Areas/Data/forest_own1/forest_own1.tif")
+extent <- ext(1000000, 2000000, -500000, 500000)
+forestOwnership <- crop(forestOwnership, extent)
+forestOwnership <- terra::project(forestOwnership, "EPSG:26917", method = "near")
+
+# Now read in Piedmont boundary and crop the reprojected (UTM 17N) to just the Piedmont
+piedmontBoundary <- st_read("C:/Users/lagoodal/Desktop/nc_eco_l3/Piedmont UTM 17N.shp")
+forestOwnership <-  crop(forestOwnership, piedmontBoundary[1])
+piedmontOwnership <- raster::mask(forestOwnership, piedmontBoundary[1])
+# rm(forestOwnership)
+
+# Create a data frame out of all the values in the raster
+piedOwnDf <- values(piedmontOwnership)
+piedOwnDf <- as.data.frame(piedOwnDf)
+piedOwnDf <- piedOwnDf %>% drop_na()
+
+# Add a column with the character references to the numerical factor levels
+piedOwnDf <- piedOwnDf %>%
+  mutate(Category = ifelse(.$forest_own == 1, "Family",
+                           ifelse(.$forest_own1 == 2, "Corporate",
+                                  ifelse(.$forest_own1 == 3, "TIMO/REIT",
+                                         ifelse(.$forest_own1 == 4, "Other Private",
+                                                ifelse(.$forest_own1 == 5, "Federal",
+                                                       ifelse(.$forest_own1 == 6, "State", "Local")))))))
+
+# Calculate percentage values for how much land falls into which category
+piedOwn30m <- piedOwnDf %>%
+  group_by(Category) %>%
+  summarise(n = n(),
+            percent = (n / nrow(piedOwnDf)) * 100) %>%
+  arrange(desc(percent))
+
+# Expand the resolution of the raster from 30m to 250m. First
+# create a template raster from one of your prebuilt Piedmont
+# rasters
+
+
+template <- rastersPiedmontFull[[1]]
+values(template) <- 1
+piedmontOwnership250m <- terra::project(piedmontOwnership, template, method = "near")
+
+# Wrangle that data
+piedOwnDf250 <- values(piedmontOwnership250m)
+piedOwnDf250 <- as.data.frame(piedOwnDf250)
+piedOwnDf250 <- piedOwnDf250 %>% drop_na()
+piedOwnDf250 <- piedOwnDf250 %>%
+  mutate(Category = ifelse(.$forest_own == 1, "Family",
+                           ifelse(.$forest_own1 == 2, "Corporate",
+                                  ifelse(.$forest_own1 == 3, "TIMO/REIT",
+                                         ifelse(.$forest_own1 == 4, "Other Private",
+                                                ifelse(.$forest_own1 == 5, "Federal",
+                                                       ifelse(.$forest_own1 == 6, "State", "Local")))))))
+piedOwn250m <- piedOwnDf250 %>%
+  group_by(Category) %>%
+  summarise(n = n(),
+            percent = (n / nrow(piedOwnDf250)) * 100) %>%
+  arrange(desc(percent))
+
+# New values for Piedmont Ownership
+# 1 = Private Family
+# 2 = Corporate
+# 3 = Public
+
+replacements <- rbind(c(3,2), c(4,1), c(5,3), c(6,3), c(7,3))
+piedmontOwnership250m <- classify(piedmontOwnership250m, replacements)
+
+
+piedmontOwnership250m <- focal(piedmontOwnership250m, w=9, fun = modal, na.policy = "only", na.rm = TRUE)
+
+plot(piedmontOwnership250m)
+
+# writeRaster(piedmontOwnership250m, "C:/Users/lagoodal/Desktop/All Raster Layers/standsraster/ownershipRaster250m.tif")
+
+```
+
+
+```{r}
+Random <- brewer.pal(13, "Set3")
+
+# Read in the HUC10 watershed files
+piedmontOwnership250m <- rast("C:/Users/lagoodal/Desktop/All Raster Layers/standsraster/ownershipRaster250m.tif")
+HUC10 <- st_read("C:/Users/lagoodal/Desktop/All Raster Layers/HUC 8 Watersheds/Shape/WBDHU10.shp") %>%
+  st_transform(crs = crs(piedmontOwnership250m))
+huc10Rast <- rasterize(HUC10, piedmontOwnership250m, field = "ObjectID")
+huc10Rast <- mask(huc10Rast, piedmontOwnership250m)
+huc10Df <- as.data.frame(huc10Rast, xy = TRUE)
+ownershipDf <- as.data.frame(piedmontOwnership250m, xy = TRUE)
+huc10Stands <- right_join(huc10Df, ownershipDf, by = c("x", "y"))
+huc10Stands <- huc10Stands %>% mutate(Stand = paste0(forest_own1, ObjectID))
+huc10StandsRast <- rast(huc10Stands[,c(1,2,5)], extent = ext(piedmontOwnership250m), crs = crs(piedmontOwnership250m), type = "xyz")
+plot(huc10StandsRast, col = rep(Random, 500))
+
+
+HUC12 <- st_read("C:/Users/lagoodal/Desktop/All Raster Layers/HUC 8 Watersheds/Shape/WBDHU12.shp") %>%
+  st_transform(crs = crs(piedmontOwnership250m))
+huc12Rast <- rasterize(HUC12, piedmontOwnership250m, field = "ObjectID")
+huc12Rast <- mask(huc12Rast, piedmontOwnership250m)
+huc12Df <- as.data.frame(huc12Rast, xy = TRUE)
+ownershipDf <- as.data.frame(piedmontOwnership250m, xy = TRUE)
+huc12Stands <- right_join(huc12Df, ownershipDf, by = c("x", "y"))
+huc12Stands <- huc12Stands %>% mutate(Stand = paste0(forest_own1, ObjectID))
+huc12StandsRast <- rast(huc12Stands[,c(1,2,5)], extent = ext(piedmontOwnership250m), crs = crs(piedmontOwnership250m), type = "xyz")
+plot(huc12StandsRast, col = rep(Random, 500))
+
+
+HUC12 <- st_read("C:/Users/lagoodal/Desktop/All Raster Layers/HUC 8 Watersheds/Shape/WBDHU12.shp") %>%
+  st_transform(crs = crs(piedmontOwnership250m))
+huc12Rast <- rasterize(HUC12, piedmontOwnership250m, field = "ObjectID")
+huc12Rast <- mask(huc12Rast, piedmontOwnership250m)
+huc12Df <- as.data.frame(huc12Rast, xy = TRUE)
+ownershipDf <- as.data.frame(piedmontOwnership250m, xy = TRUE)
+huc12Stands <- right_join(huc12Df, ownershipDf, by = c("x", "y"))
+huc12Stands <- huc12Stands %>% mutate(Stand = paste0(forest_own1, ObjectID))
+huc12StandsRast <- rast(huc12Stands[,c(1,2,5)], extent = ext(piedmontOwnership250m), crs = crs(piedmontOwnership250m), type = "xyz")
+plot(huc12StandsRast, col = rep(Random, 500))
+
+plot(huc12Rast, col = rep(Random, 500))
+plot(huc12StandsRast, col = rep(Random, 500))
+
+as.data.frame(huc12StandsRast) %>%
+  mutate(x = substr(as.character(.$Stand),1,1))
+
+plot(piedmontOwnership250m)
+```
+
+
+#################################################################################################################################
+
+```{r}
+piedmontOwnership250m <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Management Areas/Data/piedmontOwnership250.tif")
+
+# Now I need to find out which areas of my landscape will be classed as plantation which
+# will serve as my 4th management area
+# Read in the mapCode data, in there we will find which mapCodes are >80% loblolly pine
+mapCodeTable <- read_csv("C:/Users/lagoodal/Desktop/Test Run LANDIS/Final_table.csv")
+
+# Caluclate how muich biomass each species takes up per MapCode
+bioMapCode <- mapCodeTable %>%
+  group_by(MapCode) %>%
+  transmute(SpeciesName, percent = (CohortBiomass/sum(CohortBiomass)) * 100)
+
+# Filter out those MapCodes
+mapCodes <- bioMapCode %>%
+  filter(MapCode != 0) %>%
+  filter(SpeciesName == "PITA" & percent >= 80) %>%
+  select(MapCode)
+
+# Read in the MapCode raster and then filter for the MapCodes that we want
+mapCodesPITA <- rast("C:/Users/lagoodal/Desktop/All Raster Layers/Full Piedmont/MapCode_IC.tif")
+mapCodesPITA[mapCodesPITA[] %in% mapCodes$MapCode] <- NA
+ext(mapCodesPITA) <- ext(piedmontOwnership250m)
+piedmontOwnership250m <- terra::mask(piedmontOwnership250m, mapCodesPITA)
+piedmontOwnership250m[is.na(piedmontOwnership250m[])] <- 4
+piedmontOwnership250m <- mask(piedmontOwnership250m, piedmontBoundary[1])
+plot(piedmontOwnership250m)
+
+
+# Rivers
+riversNC <- st_read("C:/Users/lagoodal/Desktop/Dissertation Stuff/Management Areas/Data/Rivers/Major_Hydrography_(Streams_Rivers).shp")
+riversNC <- st_transform(riversNC, crs = "EPSG:26917")
+riversNC <- st_crop(riversNC, piedmontBoundary[1])
+riversNC <- st_intersection(riversNC, piedmontBoundary[1])
+
+# Now that we have the 4 management areas that we will be needing, we can start to add 
+# in road and rivers to act as natural boundaries to the stand map that we are creating
+
+# roadsNC <- st_read("C:/Users/lagoodal/Desktop/Dissertation Stuff/Management Areas/Data/Roads/NCDOT_State_Maintained_Roads.shp")
+roadsNC <- st_read("C:/Users/lagoodal/Desktop/Dissertation Stuff/Management Areas/Data/Roads/tl_2022_37_prisecroads.shp")
+roadsNC <- st_transform(roadsNC, crs = 26917)
+roadsNC <- st_crop(roadsNC, piedmontBoundary[1])
+roadsNC <- st_intersection(roadsNC, piedmontBoundary[1])
+
+plot(piedmontOwnership250m)
+plot(riversNC[5], add = TRUE)
+plot(roadsNC[5], add = TRUE)
+
+# Turn raster ownership boundaries into seperate shapefiles for chopping up the management/stand landscape
+owner1map <- piedmontOwnership250m
+owner1map[owner1map[] != 1] <- NA
+owner1Shp <- as.polygons(owner1map)
+owner2map <- piedmontOwnership250m
+owner2map[owner2map[] != 2] <- NA
+owner2Shp <- as.polygons(owner2map)
+owner3map <- piedmontOwnership250m
+owner3map[owner3map[] != 3] <- NA
+owner3Shp <- as.polygons(owner3map)
+owner4map <- piedmontOwnership250m
+owner4map[owner4map[] != 4] <- NA
+owner4Shp <- as.polygons(owner4map)
+
+
+# Write the vectors/shapefiles out to QGIS because I cannot figure out how to merge
+# them properly
+# st_write(roadsNC, "C:/Users/lagoodal/Desktop/Dissertation Stuff/Management Areas/Data/Ownership Shapefiles/roadsNC.shp")
+# writeVector(riversNC, "C:/Users/lagoodal/Desktop/Dissertation Stuff/Management Areas/Data/Ownership Shapefiles/riversNC.shp")
+
+
+riversRoads <- st_read("C:/Users/lagoodal/Desktop/Dissertation Stuff/Management Areas/Data/Piedmont_RR.shp")
+
+# class(riversRoads)
+# plot(riversRoads[7])
+
+ownerPoly <- st_read("C:/Users/lagoodal/Desktop/Dissertation Stuff/Management Areas/Data/Ownership Shapefiles/ownerPolygon.shp")
+
+ 
+# plot(ownerPoly[2])
+```
+
+
+
+
+```{r}
+# climateRegionsFloat <- rast("C:/Users/lagoodal/Desktop/All Raster Layers/Full Piedmont/ClimateRegions_250m.tif")
+# 
+# plot(climateRegionsFloat)
+# 
+# writeRaster(climateRegionsFloat,
+#             filename = file.path("C:/Users/lagoodal/Desktop/All Raster Layers", paste0(names(climateRegionsFloat), ".tif")),
+#             datatype = "INT2S",
+#             overwrite = T)
+
+climateInt <- rast("C:/Users/lagoodal/Desktop/All Raster Layers/Misc/climateRegionsInt.tif")
+plot(climateInt)
+standsRaster <- rast("C:/Users/lagoodal/Desktop/All Raster Layers/Misc/standsRaster.tif")
+# plot(standsRaster)
+
+climateInt[climateInt[] != 0] <- NA
+plot(climateInt)
+
+dim(climateInt)
+dim(standsRaster)
+
+plot(ext(standsRaster))
+plot(ext(climateInt), lty = "dashed", add = TRUE)
+
+ext(climateInt) <- ext(standsRaster)
+dim(standsRaster) <- dim(climateInt)
+
+plot(standsRaster)
+
+# The dimensions are messed up and as such I cannot mask out the areas of the stand map that are in cities etc.
+dim(standsRaster)
+dim(climateInt)
+```
+
+
+
+```{r}
+standsRaster
+
+standsDf <- read_csv("C:/Users/lagoodal/Desktop/Dissertation Stuff/Management Areas/Data/standsDf.csv")
+standsDf <- standsDf[,-1]
+names(standsDf) <- c("STAND_ID", "PIXEL_COUNT")
+
+standsDf <- standsDf %>%
+  mutate(managementArea = as.integer(substr(STAND_ID, 1, 1)),
+         standNumber = as.integer(substr(STAND_ID, 3, 8)),
+         STAND_AREA_HEC = (PIXEL_COUNT * 62500) / 10000)
+
+hist(standsDf$STAND_AREA_HEC)
+
+standsDf
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+allTREE <- data.table::fread("C:/Users/lagoodal/Desktop/ENTIRE/TREE.csv")
+
+allTREE <- as.data.frame(allTREE)
+
+allTREE <- allTREE %>% filter(INVYR > 2015)
+
+allTREE <- allTREE %>% select(CN, PLT_CN, INVYR, STATECD, COUNTYCD, PLOT, TREE, SPCD)
+
+allTREE
+
+
+allPLOT <- data.table::fread("C:/Users/lagoodal/Desktop/ENTIRE/PLOT.csv")
+
+allPLOT <- as.data.frame(allPLOT)
+
+allPLOT <- allPLOT %>% select(CN, INVYR, STATECD, COUNTYCD, PLOT, LAT, LON)
+
+allTREE <- allTREE %>% inner_join(allPLOT, by = c("PLT_CN" = "CN", "STATECD", "COUNTYCD", "PLOT", "INVYR"))
+
+allTREE <- allTREE %>% filter(SPCD %in% 800:899)
+
+allTREE <- allTREE %>%
+  mutate(Spp = ifelse(.$SPCD == 837, "Black oak", ifelse(.$SPCD == 824, "Blackjack oak", ifelse(.$SPCD == 813, "Cherrybark Oak", ifelse(.$SPCD == 832, "Chestnut Oak", ifelse(.$SPCD == 820, "Laurel oak", ifelse(.$SPCD == 833, "Northern red oak", ifelse(.$SPCD == 835, "Post oak", ifelse(.$SPCD == 806, "Scarlet oak", ifelse(.$SPCD == 817, "Shingle oak", ifelse(.$SPCD == 812, "Southern red oak", ifelse(.$SPCD == 827, "Water oak", ifelse(.$SPCD == 802, "White oak", ifelse(.$SPCD == 831, "Willow oak", NA))))))))))))))
+
+allTREE <- allTREE %>% drop_na()
+
+write_csv(allTREE, "C:/Users/lagoodal/Desktop/OakLATLON.csv")
+
+```
+
+
+
+```{r}
+
+standShp <- st_read("C:/Users/lagoodal/Desktop/All Raster Layers/Management and Stands/stands.shp")
+
+rastTemplate <- rast("C:/Users/lagoodal/Desktop/All Raster Layers/LANDIS/ClimateRegions_250m.tif")
+rastTemplate
+
+resolution <- 250
+raster_layer <- rast(ext(rastTemplate), resolution = resolution)
+standsRaster <- rasterize(standShp, raster_layer, feild = "GEOID", close = TRUE)
+
+plot(standsRaster)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+

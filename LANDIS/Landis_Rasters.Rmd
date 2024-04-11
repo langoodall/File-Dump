@@ -1,0 +1,571 @@
+---
+title: "Untitled"
+output: pdf_document
+date: "2023-03-02"
+---
+
+
+```{r message=FALSE, warning=FALSE}
+library(terra)
+library(sf)
+library(rgdal)
+library(tidyverse)
+```
+
+# Cropped Landscape
+
+
+```{r}
+# Create path and files objects
+path <- "C:/Users/lagoodal/Desktop/All Raster Layers/LANDIS"
+files <- list.files(path = path, pattern = 'tif$', full.names = TRUE)
+# Create a list of rasters
+rastersPiedmont <- lapply(files, rast)
+
+# This was working earlier but isn't now. Trying to replace NAs with 0
+rastersPiedmont <- lapply(rastersPiedmont, function(x) replace(x, is.na(x), 0.0))
+rastersPiedmont <- lapply(rastersPiedmont, function(x) replace(x, is.nan(x), 0.0))
+
+rastersPiedmont[[3]] <- classify(rastersPiedmont[[3]], cbind(128, 0))
+
+# Find extent of the test area
+climateRegionClip <- rast("C:/Users/lagoodal/Desktop/All Raster Layers/ClimateRegionsClip.tif")
+climateExtent <- ext(climateRegionClip)
+rastersPiedmont <- lapply(rastersPiedmont, function(x) crop(x, c(610451.70563106, 744951.70563106, 3978177.67455902, 4047927.67455902)))
+
+# Fill NAs
+for (i in 1:length(rastersPiedmont)){
+  NAflag(rastersPiedmont[[i]]) <- 0
+}
+
+# Writes rasters to folder
+for (i in 1:length(rastersPiedmont)){
+  writeRaster(rastersPiedmont[[i]],
+              filename = file.path("C:/Users/lagoodal/Desktop/Test Run LANDIS/Clipped", paste0(names(rastersPiedmont[[i]]), ".tif")),
+              datatype = "FLT4S",
+              overwrite = T,
+              NAflag = 0)
+}
+
+# Climate Regions
+writeRaster(rastersPiedmont[[3]],
+            filename = file.path("C:/Users/lagoodal/Desktop/Test Run LANDIS/Clipped", paste0(names(rastersPiedmont[[3]]), ".tif")),
+            datatype = "INT2S",
+            NAflag = 0.0,
+            overwrite = T)
+
+# Soil Depth
+values(rastersPiedmont[[11]]) <- ifelse(is.nan(values(rastersPiedmont[[11]])), 1, values(rastersPiedmont[[11]])) ### 1 should be 0 ###
+
+writeRaster(rastersPiedmont[[11]],
+            filename = file.path("C:/Users/lagoodal/Desktop/Test Run LANDIS/Clipped", paste0(names(rastersPiedmont[[11]]), ".tif")),
+            datatype = "FLT4S",
+            overwrite = T)
+
+
+# Soil Drainage
+# Values need to be between 0 - 1 so I need to normalise the data
+values(rastersPiedmont[[6]]) <- ifelse(is.nan(values(rastersPiedmont[[6]])), 0.0, values(rastersPiedmont[[6]]))
+drainageValues <- as.data.frame(values(rastersPiedmont[[6]]))
+minDrain <- min(drainageValues)
+maxDrain <- max(drainageValues)
+rastersPiedmont[[6]] <- classify(rastersPiedmont[[6]], cbind(values(rastersPiedmont[[6]]), ((drainageValues - minDrain) / (maxDrain - minDrain))))
+
+writeRaster(rastersPiedmont[[6]],
+            filename = file.path("C:/Users/lagoodal/Desktop/Test Run LANDIS/Clipped", paste0(names(rastersPiedmont[[6]]), ".tif")),
+            datatype = "FLT4S",
+            overwrite = T)
+
+# Soil Field Capacity
+# Values need to be between 0 - 0.75
+
+values(rastersPiedmont[[7]]) <- ifelse(is.nan(values(rastersPiedmont[[7]])), 0.01, values(rastersPiedmont[[7]])) ### 0.01 should be 0 ###
+
+fieldcapacityValues <- as.data.frame(values(rastersPiedmont[[7]]))
+minFCapacity <- min(fieldcapacityValues)
+maxFCapacity <- max(fieldcapacityValues)
+
+rastersPiedmont[[7]] <- classify(rastersPiedmont[[7]], cbind(values(rastersPiedmont[[7]]), (((fieldcapacityValues - minFCapacity) / (maxFCapacity - minFCapacity) * 0.75))))
+
+rastersPiedmont[[7]] <- classify(rastersPiedmont[[7]], cbind(0, 0.01))
+
+writeRaster(rastersPiedmont[[7]],
+            filename = file.path("C:/Users/lagoodal/Desktop/Test Run LANDIS/Clipped", paste0(names(rastersPiedmont[[7]]), ".tif")),
+            datatype = "FLT4S",
+            overwrite = T)
+
+# Soil wilting
+# Values need to be between 0 - 0.75
+values(rastersPiedmont[[21]]) <- ifelse(is.nan(values(rastersPiedmont[[21]])), 0.01, values(rastersPiedmont[[21]])) ### 0.01 should be 0 ###
+wiltingValues <- as.data.frame(values(rastersPiedmont[[21]]))
+minWilting <- min(wiltingValues)
+maxWilting <- max(wiltingValues)
+rastersPiedmont[[21]] <- classify(rastersPiedmont[[21]], cbind(values(rastersPiedmont[[21]]), (((fieldcapacityValues - minFCapacity) / (maxFCapacity - minFCapacity) * 0.75))))
+rastersPiedmont[[21]] <- classify(rastersPiedmont[[21]], cbind(0, 0.01))
+# Changes the wilt point values to match field capacity if they are too high.
+# Values that are not higher remain the same. Those that change are now -0.05 below the field capacity
+rastersPiedmont[[21]] <- ifel(rastersPiedmont[[21]] > rastersPiedmont[[7]], (rastersPiedmont[[7]] * 0.75), rastersPiedmont[[21]])
+rastersPiedmont[[21]] <- classify(rastersPiedmont[[21]], cbind(values(rastersPiedmont[[21]]), values(rastersPiedmont[[21]] * 0.99)))
+
+writeRaster(rastersPiedmont[[21]],
+            filename = file.path("C:/Users/lagoodal/Desktop/Test Run LANDIS/Clipped", paste0(names(rastersPiedmont[[21]]), ".tif")),
+            datatype = "FLT4S",
+            overwrite = T)
+
+#wilt <- rast("C:/Users/lagoodal/Desktop/Test Run LANDIS/Clipped/Wiltpoint.tif")
+#fieldCapacity <- rast("C:/Users/lagoodal/Desktop/Test Run LANDIS/Clipped/FieldCapacity.tif")
+#View(as.data.frame(values(c(wilt, fieldCapacity))))
+
+
+# Sand percentage
+values(rastersPiedmont[[10]]) <- ifelse(is.nan(values(rastersPiedmont[[10]])), 0.00, values(rastersPiedmont[[10]]))
+
+rastersPiedmont[[10]] <- classify(rastersPiedmont[[10]], cbind(values(rastersPiedmont[[10]]), (values(rastersPiedmont[[10]]) / 100)))
+
+writeRaster(rastersPiedmont[[10]],
+            filename = file.path("C:/Users/lagoodal/Desktop/Test Run LANDIS/Clipped", paste0(names(rastersPiedmont[[10]]), ".tif")),
+            datatype = "FLT4S",
+            overwrite = T)
+
+
+# Clay percentage
+
+values(rastersPiedmont[[2]]) <- ifelse(is.nan(values(rastersPiedmont[[2]])), 0.00, values(rastersPiedmont[[2]]))
+
+rastersPiedmont[[2]] <- classify(rastersPiedmont[[2]], cbind(values(rastersPiedmont[[2]]), (values(rastersPiedmont[[2]]) / 100)))
+
+writeRaster(rastersPiedmont[[2]],
+            filename = file.path("C:/Users/lagoodal/Desktop/Test Run LANDIS/Clipped", paste0(names(rastersPiedmont[[2]]), ".tif")),
+            datatype = "FLT4S",
+            overwrite = T)
+
+# Soil Rasters
+soilRasters <- c(rastersPiedmont[[12]], rastersPiedmont[[13]], rastersPiedmont[[14]], rastersPiedmont[[15]], rastersPiedmont[[18]], rastersPiedmont[[19]])
+
+soilRasters <- lapply(soilRasters, function(x) replace(x, is.nan(x), 1.01))
+
+for (i in 1:length(soilRasters)){
+  writeRaster(soilRasters[[i]],
+              filename = file.path("C:/Users/lagoodal/Desktop/Test Run LANDIS/Clipped", paste0(names(soilRasters[[i]]), ".tif")),
+              datatype = "FLT4S",
+              overwrite = T)
+}
+
+
+# Initial communities
+rastersPiedmont[[9]] <- classify(rastersPiedmont[[9]], cbind(NaN, 0.0))
+rastersPiedmont[[9]] <- classify(rastersPiedmont[[9]], cbind(-1, 0.0))
+
+# datatype(rastersPiedmont[[9]]) <- ifelse(is.int(rastersPiedmont[[9]]), "INT2S", "FLT4S")
+
+
+writeRaster(rastersPiedmont[[9]],
+            filename = file.path("C:/Users/lagoodal/Desktop/Test Run LANDIS/Clipped", paste0(names(rastersPiedmont[[9]]), ".tif")),
+            datatype = "FLT4S",
+            overwrite = T)
+
+# SOMsurf
+values(rastersPiedmont[[14]]) <- values(rastersPiedmont[[14]]) * 1
+values(rastersPiedmont[[15]]) <- values(rastersPiedmont[[15]]) * 0.1 #1cell = 0.18
+rastersPiedmont[[14]][is.na(values(rastersPiedmont[[14]]))] <- min(values(rastersPiedmont[[14]]), na.rm = T)
+rastersPiedmont[[15]][is.na(values(rastersPiedmont[[15]]))] <- min(values(rastersPiedmont[[15]]), na.rm = T)
+
+writeRaster(rastersPiedmont[[14]],
+            filename = file.path("C:/Users/lagoodal/Desktop/Test Run LANDIS/Clipped", paste0(names(rastersPiedmont[[14]]), ".tif")),
+            datatype = "FLT4S",
+            overwrite = T)
+
+writeRaster(rastersPiedmont[[15]],
+            filename = file.path("C:/Users/lagoodal/Desktop/Test Run LANDIS/Clipped", paste0(names(rastersPiedmont[[15]]), ".tif")),
+            datatype = "FLT4S",
+            overwrite = T)
+
+
+# SOM1
+values(rastersPiedmont[[12]]) <- values(rastersPiedmont[[12]]) * 1
+values(rastersPiedmont[[13]]) <- values(rastersPiedmont[[13]]) * 0.8 # 1cell = 0.8
+rastersPiedmont[[12]][is.na(values(rastersPiedmont[[12]]))] <- min(values(rastersPiedmont[[12]]), na.rm = T)
+rastersPiedmont[[13]][is.na(values(rastersPiedmont[[13]]))] <- min(values(rastersPiedmont[[13]]), na.rm = T)
+
+writeRaster(rastersPiedmont[[12]],
+            filename = file.path("C:/Users/lagoodal/Desktop/Test Run LANDIS/Clipped", paste0(names(rastersPiedmont[[12]]), ".tif")),
+            datatype = "FLT4S",
+            overwrite = T)
+
+writeRaster(rastersPiedmont[[13]],
+            filename = file.path("C:/Users/lagoodal/Desktop/Test Run LANDIS/Clipped", paste0(names(rastersPiedmont[[13]]), ".tif")),
+            datatype = "FLT4S",
+            overwrite = T)
+
+
+# SOM2
+values(rastersPiedmont[[16]]) <- values(rastersPiedmont[[16]]) * 1
+values(rastersPiedmont[[17]]) <- values(rastersPiedmont[[17]]) * 0.5 # 1cell = 0.3
+rastersPiedmont[[16]][is.na(values(rastersPiedmont[[16]]))] <- min(values(rastersPiedmont[[16]]), na.rm = T)
+rastersPiedmont[[17]][is.na(values(rastersPiedmont[[17]]))] <- min(values(rastersPiedmont[[17]]), na.rm = T)
+
+writeRaster(rastersPiedmont[[16]],
+            filename = file.path("C:/Users/lagoodal/Desktop/Test Run LANDIS/Clipped", paste0(names(rastersPiedmont[[16]]), ".tif")),
+            datatype = "FLT4S",
+            overwrite = T)
+
+writeRaster(rastersPiedmont[[17]],
+            filename = file.path("C:/Users/lagoodal/Desktop/Test Run LANDIS/Clipped", paste0(names(rastersPiedmont[[17]]), ".tif")),
+            datatype = "FLT4S",
+            overwrite = T)
+
+# SOM3
+values(rastersPiedmont[[18]]) <- values(rastersPiedmont[[18]]) * 1
+values(rastersPiedmont[[19]]) <- values(rastersPiedmont[[19]]) * 1
+rastersPiedmont[[18]][is.na(values(rastersPiedmont[[18]]))] <- min(values(rastersPiedmont[[18]]), na.rm = T)
+rastersPiedmont[[19]][is.na(values(rastersPiedmont[[19]]))] <- min(values(rastersPiedmont[[19]]), na.rm = T)
+
+
+writeRaster(rastersPiedmont[[18]],
+            filename = file.path("C:/Users/lagoodal/Desktop/Test Run LANDIS/Clipped", paste0(names(rastersPiedmont[[18]]), ".tif")),
+            datatype = "FLT4S",
+            overwrite = T)
+
+writeRaster(rastersPiedmont[[19]],
+            filename = file.path("C:/Users/lagoodal/Desktop/Test Run LANDIS/Clipped", paste0(names(rastersPiedmont[[19]]), ".tif")),
+            datatype = "FLT4S",
+            overwrite = T)
+
+```
+
+
+# Full Landscape
+
+```{r}
+# Create path and files objects
+path <- "C:/Users/lagoodal/Desktop/All Raster Layers/LANDIS"
+files <- list.files(path = path, pattern = 'tif$', full.names = TRUE)
+# Create a list of rasters
+rastersPiedmontFull <- lapply(files, rast)
+
+# This was working earlier but isn't now. Trying to replace NAs with 0
+#rastersPiedmont <- lapply(rastersPiedmont, function(x) replace(x, is.na(x), 0.0))
+#rastersPiedmont <- lapply(rastersPiedmont, function(x) replace(x, is.nan(x), 0.0))
+
+#rastersPiedmontFull[[3]] <- classify(rastersPiedmontFull[[3]], cbind(128, 0))
+
+# Find extent of the test area
+climateRegionClipFull <- rast("C:/Users/lagoodal/Desktop/All Raster Layers/LANDIS/ClimateRegions_250m.tif")
+climateExtent <- ext(climateRegionClipFull)
+rastersPiedmontFull <- lapply(rastersPiedmontFull, function(x) crop(x, c(377451.70563106, 801451.70563106, 3814427.67455902, 4109427.67455902)))
+
+for(i in rastersPiedmontFull){
+  dim(i) <- dim(climateRegionClipFull)
+}
+
+
+# Writes rasters to folder
+for (i in 1:length(rastersPiedmontFull)){
+  terra::writeRaster(rastersPiedmontFull[[i]],
+              filename = file.path("C:/Users/lagoodal/Desktop/All Raster Layers/Full Piedmont", paste0(names(rastersPiedmontFull[[i]]), ".tif")),
+              datatype = "FLT4S",
+              overwrite = T)
+}
+
+
+# Soil Depth
+values(rastersPiedmontFull[[11]]) <- ifelse(is.nan(values(rastersPiedmontFull[[11]])), 1, values(rastersPiedmontFull[[11]])) ### 1 should be 0 ###
+values(rastersPiedmontFull[[11]]) <- ifelse(is.na(values(rastersPiedmontFull[[11]])), 1, values(rastersPiedmontFull[[11]]))
+values(rastersPiedmontFull[[11]]) <- ifelse(values(rastersPiedmontFull[[11]]) == 0, 1, values(rastersPiedmontFull[[11]]))
+
+
+writeRaster(rastersPiedmontFull[[11]],
+            filename = file.path("C:/Users/lagoodal/Desktop/All Raster Layers/Full Piedmont", paste0(names(rastersPiedmontFull[[11]]), ".tif")),
+            datatype = "FLT4S",
+            overwrite = T)
+
+
+# Soil Drainage
+# Values need to be between 0 - 1 so I need to normalise the data
+values(rastersPiedmontFull[[6]]) <- ifelse(values(rastersPiedmontFull[[6]]) == 5, NA,
+       ifelse(values(rastersPiedmontFull[[6]]) == 7, 1,
+              ifelse(values(rastersPiedmontFull[[6]]) == 6, 2,
+                     ifelse(values(rastersPiedmontFull[[6]]) == 2, 3,
+                            ifelse(values(rastersPiedmontFull[[6]]) == 3, 5,
+                                   ifelse(values(rastersPiedmontFull[[6]]) == 8, 6,
+                                          ifelse(values(rastersPiedmontFull[[6]]) == 1, 7, values(rastersPiedmontFull[[6]]))))))))
+
+values(rastersPiedmontFull[[6]]) <- ifelse(is.nan(values(rastersPiedmontFull[[6]])), 0.0, values(rastersPiedmontFull[[6]]))
+values(rastersPiedmontFull[[6]]) <- ifelse(is.na(values(rastersPiedmontFull[[6]])), 0, values(rastersPiedmontFull[[6]]))
+values(rastersPiedmontFull[[6]]) <- values(rastersPiedmontFull[[6]]) / 7
+
+writeRaster(rastersPiedmontFull[[6]],
+            filename = file.path("C:/Users/lagoodal/Desktop/All Raster Layers/Full Piedmont", paste0(names(rastersPiedmontFull[[6]]), ".tif")),
+            datatype = "FLT4S",
+            overwrite = T)
+
+
+# Soil Field Capacity
+# Values need to be between 0 - 0.75
+rastersPiedmontFull[[7]] <- extend(rastersPiedmontFull[[7]], rastersPiedmontFull[[11]])
+values(rastersPiedmontFull[[7]]) <- ifelse(is.nan(values(rastersPiedmontFull[[7]])), 0.01, values(rastersPiedmontFull[[7]])) ### 0.01 should be 0 ###
+values(rastersPiedmontFull[[7]]) <- ifelse(is.na(values(rastersPiedmontFull[[7]])), 0.01, values(rastersPiedmontFull[[7]]))
+
+fieldcapacityValues <- as.data.frame(values(rastersPiedmontFull[[7]]))
+minFCapacity <- min(fieldcapacityValues, na.rm = T)
+maxFCapacity <- max(fieldcapacityValues, na.rm = T)
+
+# dim(rastersPiedmontFull[[7]]) <- dim(rastersPiedmontFull[[11]])
+
+rastersPiedmontFull[[7]] <- classify(rastersPiedmontFull[[7]], cbind(values(rastersPiedmontFull[[7]]), (((fieldcapacityValues - minFCapacity) / (maxFCapacity - minFCapacity) * 0.75))))
+
+rastersPiedmontFull[[7]] <- classify(rastersPiedmontFull[[7]], cbind(0, 0.01))
+
+writeRaster(rastersPiedmontFull[[7]],
+            filename = file.path("C:/Users/lagoodal/Desktop/All Raster Layers/Full Piedmont", paste0(names(rastersPiedmontFull[[7]]), ".tif")),
+            datatype = "FLT4S",
+            overwrite = T)
+
+# Soil wilting
+# Values need to be between 0 - 0.75
+rastersPiedmontFull[[21]] <- extend(rastersPiedmontFull[[21]], rastersPiedmontFull[[11]])
+values(rastersPiedmontFull[[21]]) <- ifelse(is.nan(values(rastersPiedmontFull[[21]])), 0.01, values(rastersPiedmontFull[[21]])) ### 0.01 should be 0 ###
+values(rastersPiedmontFull[[21]]) <- ifelse(is.na(values(rastersPiedmontFull[[21]])), 0.01, values(rastersPiedmontFull[[21]]))
+wiltingValues <- as.data.frame(values(rastersPiedmontFull[[21]]))
+minWilting <- min(wiltingValues, na.rm = T)
+maxWilting <- max(wiltingValues, na.rm = T)
+rastersPiedmontFull[[21]] <- classify(rastersPiedmontFull[[21]], cbind(values(rastersPiedmontFull[[21]]), (((wiltingValues - minWilting) / (maxWilting - minWilting) * 0.75))))
+rastersPiedmontFull[[21]] <- classify(rastersPiedmontFull[[21]], cbind(0, 0.01))
+# Changes the wilt point values to match field capacity if they are too high.
+# Values that are not higher remain the same. Those that change are now -0.05 below the field capacity
+rastersPiedmontFull[[21]] <- ifel(rastersPiedmontFull[[21]] > rastersPiedmontFull[[7]], (rastersPiedmontFull[[7]] * 0.75), rastersPiedmontFull[[21]])
+rastersPiedmontFull[[21]] <- classify(rastersPiedmontFull[[21]], cbind(values(rastersPiedmontFull[[21]]), values(rastersPiedmontFull[[21]] * 0.99)))
+
+writeRaster(rastersPiedmontFull[[21]],
+            filename = file.path("C:/Users/lagoodal/Desktop/All Raster Layers/Full Piedmont", paste0(names(rastersPiedmontFull[[21]]), ".tif")),
+            datatype = "FLT4S",
+            overwrite = T,
+            NAflag = 0.01)
+
+# Sand percentage
+rastersPiedmontFull[[10]] <- extend(rastersPiedmontFull[[10]], rastersPiedmontFull[[11]])
+rastersPiedmontFull[[10]] <- classify(rastersPiedmontFull[[10]], cbind(values(rastersPiedmontFull[[10]]), (values(rastersPiedmontFull[[10]]) / 100)))
+
+values(rastersPiedmontFull[[10]]) <- ifelse(is.nan(values(rastersPiedmontFull[[10]])), 0.00, values(rastersPiedmontFull[[10]]))
+values(rastersPiedmontFull[[10]]) <- ifelse(is.na(values(rastersPiedmontFull[[10]])), 0.00, values(rastersPiedmontFull[[10]]))
+
+writeRaster(rastersPiedmontFull[[10]],
+            filename = file.path("C:/Users/lagoodal/Desktop/All Raster Layers/Full Piedmont", paste0(names(rastersPiedmontFull[[10]]), ".tif")),
+            datatype = "FLT4S",
+            overwrite = T)
+
+# Clay percentage
+rastersPiedmontFull[[2]] <- extend(rastersPiedmontFull[[2]], rastersPiedmontFull[[11]])
+rastersPiedmontFull[[2]] <- classify(rastersPiedmontFull[[2]], cbind(values(rastersPiedmontFull[[2]]), (values(rastersPiedmontFull[[2]]) / 100)))
+
+values(rastersPiedmontFull[[2]]) <- ifelse(is.nan(values(rastersPiedmontFull[[2]])), 0.00, values(rastersPiedmontFull[[2]]))
+values(rastersPiedmontFull[[2]]) <- ifelse(is.na(values(rastersPiedmontFull[[2]])), 0.00, values(rastersPiedmontFull[[2]]))
+
+writeRaster(rastersPiedmontFull[[2]],
+            filename = file.path("C:/Users/lagoodal/Desktop/All Raster Layers/Full Piedmont", paste0(names(rastersPiedmontFull[[2]]), ".tif")),
+            datatype = "FLT4S",
+            overwrite = T)
+
+# Stormflow
+values(rastersPiedmontFull[[20]]) <- ifelse(is.nan(values(rastersPiedmontFull[[20]])), 0.00, values(rastersPiedmontFull[[20]]))
+values(rastersPiedmontFull[[20]]) <- ifelse(is.na(values(rastersPiedmontFull[[20]])), 0.00, values(rastersPiedmontFull[[20]]))
+
+writeRaster(rastersPiedmontFull[[20]],
+            filename = file.path("C:/Users/lagoodal/Desktop/All Raster Layers/Full Piedmont", paste0(names(rastersPiedmontFull[[20]]), ".tif")),
+            datatype = "FLT4S",
+            overwrite = T)
+
+# Flood Frequency
+values(rastersPiedmontFull[[8]]) <- ifelse(values(rastersPiedmontFull[[8]]) == 2, 0,
+       ifelse(values(rastersPiedmontFull[[8]]) == 6, 1,
+              ifelse(values(rastersPiedmontFull[[8]]) == 4, 2,
+                     ifelse(values(rastersPiedmontFull[[8]]) == 5, 3,
+                            ifelse(values(rastersPiedmontFull[[8]]) == 1, 4,
+                                   ifelse(values(rastersPiedmontFull[[8]]) == 3, NA, values(rastersPiedmontFull[[8]])))))))
+
+writeRaster(rastersPiedmontFull[[8]],
+            filename = file.path("C:/Users/lagoodal/Desktop/All Raster Layers/Full Piedmont", paste0(names(rastersPiedmontFull[[8]]), ".tif")),
+            datatype = "FLT4S",
+            overwrite = T)
+
+
+
+# # Soil Rasters
+# SOMsurf
+# values(rastersPiedmontFull[[14]]) <- values(rastersPiedmontFull[[14]]) * 1
+# values(rastersPiedmontFull[[14]]) <- ifelse(is.nan(values(rastersPiedmontFull[[14]])), 0.00, values(rastersPiedmontFull[[14]]))
+# values(rastersPiedmontFull[[14]]) <- ifelse(is.na(values(rastersPiedmontFull[[14]])), 0.00, values(rastersPiedmontFull[[14]]))
+# values(rastersPiedmontFull[[15]]) <- values(rastersPiedmontFull[[15]]) * 0.1 #1cell = 0.18
+# values(rastersPiedmontFull[[15]]) <- ifelse(is.nan(values(rastersPiedmontFull[[15]])), 0.00, values(rastersPiedmontFull[[15]]))
+# values(rastersPiedmontFull[[15]]) <- ifelse(is.na(values(rastersPiedmontFull[[15]])), 0.00, values(rastersPiedmontFull[[15]]))
+# values(rastersPiedmontFull[[14]]) <- ifelse(values(rastersPiedmontFull[[14]]) == 0, 0.02, values(rastersPiedmontFull[[14]]))
+# values(rastersPiedmontFull[[15]]) <- ifelse(values(rastersPiedmontFull[[15]]) == 0, 0.02, values(rastersPiedmontFull[[15]]))
+
+
+values(rastersPiedmontFull[[14]]) <- values(rastersPiedmontFull[[14]]) * 1
+values(rastersPiedmontFull[[15]]) <- values(rastersPiedmontFull[[15]]) * 0.8 # 1cell = 0.8
+rastersPiedmontFull[[14]][is.nan(values(rastersPiedmontFull[[14]]))] <- mean(values(rastersPiedmontFull[[12]]), na.rm = T)
+rastersPiedmontFull[[15]][is.nan(values(rastersPiedmontFull[[15]]))] <- mean(values(rastersPiedmontFull[[13]]), na.rm = T)
+rastersPiedmontFull[[14]][is.na(values(rastersPiedmontFull[[14]]))] <- mean(values(rastersPiedmontFull[[12]]), na.rm = T)
+rastersPiedmontFull[[15]][is.na(values(rastersPiedmontFull[[15]]))] <- mean(values(rastersPiedmontFull[[13]]), na.rm = T)
+values(rastersPiedmontFull[[14]]) <- ifelse(values(rastersPiedmontFull[[14]]) == 0, 1.1, values(rastersPiedmontFull[[14]]))
+values(rastersPiedmontFull[[15]]) <- ifelse(values(rastersPiedmontFull[[14]]) == 0, 1.1, values(rastersPiedmontFull[[14]]))
+
+writeRaster(rastersPiedmontFull[[14]],
+            filename = file.path("C:/Users/lagoodal/Desktop/All Raster Layers/Full Piedmont", paste0(names(rastersPiedmontFull[[14]]), ".tif")),
+            datatype = "FLT4S",
+            overwrite = T,
+            NAflag = 1.1)
+
+writeRaster(rastersPiedmontFull[[15]],
+            filename = file.path("C:/Users/lagoodal/Desktop/All Raster Layers/Full Piedmont", paste0(names(rastersPiedmontFull[[15]]), ".tif")),
+            datatype = "FLT4S",
+            overwrite = T,
+            NAflag = 0.1)
+
+
+# SOM1
+values(rastersPiedmontFull[[12]]) <- values(rastersPiedmontFull[[12]]) * 1
+values(rastersPiedmontFull[[13]]) <- values(rastersPiedmontFull[[13]]) * 0.8 # 1cell = 0.8
+rastersPiedmontFull[[12]][is.nan(values(rastersPiedmontFull[[12]]))] <- mean(values(rastersPiedmontFull[[12]]), na.rm = T)
+rastersPiedmontFull[[13]][is.nan(values(rastersPiedmontFull[[13]]))] <- mean(values(rastersPiedmontFull[[13]]), na.rm = T)
+rastersPiedmontFull[[12]][is.na(values(rastersPiedmontFull[[12]]))] <- mean(values(rastersPiedmontFull[[12]]), na.rm = T)
+rastersPiedmontFull[[13]][is.na(values(rastersPiedmontFull[[13]]))] <- mean(values(rastersPiedmontFull[[13]]), na.rm = T)
+values(rastersPiedmontFull[[12]]) <- ifelse(values(rastersPiedmontFull[[13]]) == 0, 1.1, values(rastersPiedmontFull[[13]]))
+values(rastersPiedmontFull[[13]]) <- ifelse(values(rastersPiedmontFull[[13]]) == 0, 1.1, values(rastersPiedmontFull[[13]]))
+
+writeRaster(rastersPiedmontFull[[12]],
+            filename = file.path("C:/Users/lagoodal/Desktop/All Raster Layers/Full Piedmont", paste0(names(rastersPiedmontFull[[12]]), ".tif")),
+            datatype = "FLT4S",
+            overwrite = T,
+            NAflag = 1.1)
+
+writeRaster(rastersPiedmontFull[[13]],
+            filename = file.path("C:/Users/lagoodal/Desktop/All Raster Layers/Full Piedmont", paste0(names(rastersPiedmontFull[[13]]), ".tif")),
+            datatype = "FLT4S",
+            overwrite = T,
+            NAflag = 0.1)
+
+# SOM2
+values(rastersPiedmontFull[[16]]) <- values(rastersPiedmontFull[[16]]) * 1
+values(rastersPiedmontFull[[17]]) <- values(rastersPiedmontFull[[17]]) * 0.5 # 1cell = 0.3
+rastersPiedmontFull[[16]][is.nan(values(rastersPiedmontFull[[16]]))] <- mean(values(rastersPiedmontFull[[16]]), na.rm = T)
+rastersPiedmontFull[[17]][is.nan(values(rastersPiedmontFull[[17]]))] <- mean(values(rastersPiedmontFull[[17]]), na.rm = T)
+rastersPiedmontFull[[16]][is.na(values(rastersPiedmontFull[[16]]))] <- mean(values(rastersPiedmontFull[[16]]), na.rm = T)
+rastersPiedmontFull[[17]][is.na(values(rastersPiedmontFull[[17]]))] <- mean(values(rastersPiedmontFull[[17]]), na.rm = T)
+values(rastersPiedmontFull[[16]]) <- ifelse(values(rastersPiedmontFull[[16]]) == 0, 1.1, values(rastersPiedmontFull[[16]]))
+values(rastersPiedmontFull[[17]]) <- ifelse(values(rastersPiedmontFull[[17]]) == 0, 0.1, values(rastersPiedmontFull[[17]]))
+
+writeRaster(rastersPiedmontFull[[16]],
+            filename = file.path("C:/Users/lagoodal/Desktop/All Raster Layers/Full Piedmont", paste0(names(rastersPiedmontFull[[16]]), ".tif")),
+            datatype = "FLT4S",
+            overwrite = T,
+            NAflag = 1.1)
+
+writeRaster(rastersPiedmontFull[[17]],
+            filename = file.path("C:/Users/lagoodal/Desktop/All Raster Layers/Full Piedmont", paste0(names(rastersPiedmontFull[[17]]), ".tif")),
+            datatype = "FLT4S",
+            overwrite = T,
+            NAflag = 0.1)
+
+# SOM3
+values(rastersPiedmontFull[[18]]) <- values(rastersPiedmontFull[[18]]) * 1
+values(rastersPiedmontFull[[19]]) <- values(rastersPiedmontFull[[19]]) * 1
+rastersPiedmontFull[[18]][is.nan(values(rastersPiedmontFull[[18]]))] <- mean(values(rastersPiedmontFull[[18]]), na.rm = T)
+rastersPiedmontFull[[19]][is.nan(values(rastersPiedmontFull[[19]]))] <- mean(values(rastersPiedmontFull[[19]]), na.rm = T)
+rastersPiedmontFull[[18]][is.na(values(rastersPiedmontFull[[18]]))] <- mean(values(rastersPiedmontFull[[18]]), na.rm = T)
+rastersPiedmontFull[[19]][is.na(values(rastersPiedmontFull[[19]]))] <- mean(values(rastersPiedmontFull[[19]]), na.rm = T)
+values(rastersPiedmontFull[[18]]) <- ifelse(values(rastersPiedmontFull[[18]]) == 0, 1.1, values(rastersPiedmontFull[[18]]))
+values(rastersPiedmontFull[[19]]) <- ifelse(values(rastersPiedmontFull[[19]]) == 0, 0.1, values(rastersPiedmontFull[[19]]))
+
+writeRaster(rastersPiedmontFull[[18]],
+            filename = file.path("C:/Users/lagoodal/Desktop/All Raster Layers/Full Piedmont", paste0(names(rastersPiedmontFull[[18]]), ".tif")),
+            datatype = "FLT4S",
+            overwrite = T,
+            NAflag = 1.1)
+
+writeRaster(rastersPiedmontFull[[19]],
+            filename = file.path("C:/Users/lagoodal/Desktop/All Raster Layers/Full Piedmont", paste0(names(rastersPiedmontFull[[19]]), ".tif")),
+            datatype = "FLT4S",
+            overwrite = T,
+            NAflag = 0.1)
+
+
+# Deadwood
+deadwoodRaster <- rast("C:/Users/lagoodal/Desktop/All Raster Layers/LANDIS/Deadwood.tif")
+deadwoodRaster <- extend(deadwoodRaster, rastersPiedmontFull[[11]])
+deadwoodRaster[is.nan(values(deadwoodRaster))] <- mean(values(deadwoodRaster), na.rm = T)
+deadwoodRaster[is.na(values(deadwoodRaster))] <- mean(values(deadwoodRaster), na.rm = T)
+writeRaster(deadwoodRaster,
+            filename = file.path("C:/Users/lagoodal/Desktop/All Raster Layers/Full Piedmont", paste0(names(deadwoodRaster), ".tif")),
+            datatype = "FLT4S",
+            overwrite = T)
+
+# Dead Roots
+deadRootsRaster <- rast("C:/Users/lagoodal/Desktop/All Raster Layers/LANDIS/DeadRoots.tif")
+deadRootsRaster <- extend(deadRootsRaster, rastersPiedmontFull[[11]])
+deadRootsRaster[is.nan(values(deadRootsRaster))] <- mean(values(deadRootsRaster), na.rm = T)
+deadRootsRaster[is.na(values(deadRootsRaster))] <- mean(values(deadRootsRaster), na.rm = T)
+writeRaster(deadRootsRaster,
+            filename = file.path("C:/Users/lagoodal/Desktop/All Raster Layers/Full Piedmont", paste0(names(deadRootsRaster), ".tif")), 
+            datatype = "FLT4S",
+            overwrite = T,
+            NAflag = 0.0)
+
+# Initial communities
+rastersPiedmontFull[[9]] <- extend(rastersPiedmontFull[[9]], rastersPiedmontFull[[11]])
+rastersPiedmontFull[[9]] <- resample(rastersPiedmontFull[[9]], rastersPiedmontFull[[11]], method = "near")
+rastersPiedmontFull[[9]] <- classify(rastersPiedmontFull[[9]], cbind(-1:0, 1.0))
+rastersPiedmontFull[[9]] <- classify(rastersPiedmontFull[[9]], cbind(NaN, 1.0))
+
+writeRaster(rastersPiedmontFull[[9]],
+            filename = file.path("C:/Users/lagoodal/Desktop/All Raster Layers/Full Piedmont", paste0(names(rastersPiedmontFull[[9]]), ".tif")),
+            datatype = "INT2S",
+            overwrite = T)
+
+
+
+# SOMsurfC Redo
+soilRaster <- rastersPiedmontFull[[14]]
+values(soilRaster) <-  values(soilRaster) * 50
+writeRaster(soilRaster,
+            filename = file.path("C:/Users/lagoodal/Desktop/All Raster Layers/Full Piedmont", paste0(names(soilRaster), ".tif")),
+            datatype = "FLT4S",
+            overwrite = T,
+            NAflag = 1.1)
+```
+
+
+
+```{r}
+# Create path and files objects
+path <- "C:/Users/lagoodal/Desktop/All Raster Layers/Full Piedmont"
+files <- list.files(path = path, pattern = 'tif$', full.names = TRUE)
+# Create a list of rasters
+rastersPiedmontFull2 <- lapply(files, rast)
+
+
+# This was working earlier but isn't now. Trying to replace NAs with 0
+#rastersPiedmont <- lapply(rastersPiedmont, function(x) replace(x, is.na(x), 0.0))
+#rastersPiedmont <- lapply(rastersPiedmont, function(x) replace(x, is.nan(x), 0.0))
+
+#rastersPiedmontFull[[3]] <- classify(rastersPiedmontFull[[3]], cbind(128, 0))
+
+# Find extent of the test area
+climateRegionClipFull <- rast("C:/Users/lagoodal/Desktop/All Raster Layers/LANDIS/ClimateRegions_250m.tif")
+climateExtent <- ext(climateRegionClipFull)
+rastersPiedmontFull <- lapply(rastersPiedmontFull, function(x) crop(x, c(377451.70563106, 801451.70563106, 3814427.67455902, 4109427.67455902)))
+
+for(i in rastersPiedmontFull){
+  dim(i) <- dim(climateRegionClipFull)
+}
+
+rastersPiedmontFull[[11]]
+```
+
+
+
+
+
+
+

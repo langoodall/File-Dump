@@ -1,0 +1,1316 @@
+---
+title: "Biomass calibration"
+output: pdf_document
+date: "2023-05-24"
+---
+
+
+
+
+```{r, message=FALSE}
+library(tidyverse)
+library(rFIA)
+library(latex2exp)
+library(data.table)
+```
+
+
+
+```{r}
+NC_FIA <- readFIA("C:/Users/lagoodal/Desktop/Dissertation Stuff/NC FIA")
+Piedmont_coords <- read_csv("C:/Users/lagoodal/Downloads/Level 4 Piedmont Co-ordinates.csv")
+
+TREE <- NC_FIA$TREE %>% inner_join(Piedmont_coords, by = c("COUNTYCD", "PLOT"))
+COND <- NC_FIA$COND %>% inner_join(Piedmont_coords, by = c("COUNTYCD", "PLOT"))
+
+TREE$COUNTYCD <- sprintf("%03s", TREE$COUNTYCD)
+TREE$PLOT <- sprintf("%05s", TREE$PLOT)
+TREE$SUBP <- sprintf("%03s", TREE$SUBP)
+TREE$TREE <- sprintf("%03s", TREE$TREE)
+TREE <- TREE %>%
+  mutate(GEOID = paste0(COUNTYCD, PLOT),
+         TREEID = paste0(COUNTYCD, PLOT, SUBP, TREE))
+
+COND$COUNTYCD <- sprintf("%03s", COND$COUNTYCD)
+COND$PLOT <- sprintf("%05s", COND$PLOT)
+COND <- COND %>%
+  mutate(GEOID = paste0(COUNTYCD, PLOT))
+
+
+TREE <- TREE %>%
+  filter(SPGRPCD < 50,
+         INVYR %in% 2000:9000,
+         SPCD == c(316,373,403,409,531,541,544,602,68,621,611,693,711,110,129,131,132,731,762,802,806,812,832,831,833,835,837,972,971)) %>%
+  mutate(dummySPGRPCD = ifelse(SPGRPCD %in% 1:24, "Softwoods", "Hardwoods"))
+
+TREE$dummySPGRPCD <- ifelse(TREE$SPCD == 831 | TREE$SPCD == 832 | TREE$SPCD == 802 | TREE$SPCD == 806 | TREE$SPCD == 812 | TREE$SPCD == 833 | TREE$SPCD == 835 | TREE$SPCD == 837, "Oaks", TREE$dummySPGRPCD)
+
+treeTable <- full_join(TREE, COND, by = c("GEOID", "COUNTYCD", "PLT_CN", "INVYR", "STATECD", "UNITCD", "PLOT", "CONDID"))
+
+treeTable <- treeTable %>%
+  filter(INVYR < 9000,
+         SPCD < 998)
+
+treeTable <- treeTable[,c("GEOID", "TREEID", "CARBON_AG", "STDAGE", "INVYR", "SPCD", "dummySPGRPCD", "TPA_UNADJ")] %>%
+  unique()
+
+treeTable <- treeTable %>%
+  mutate(BIOMASS = CARBON_AG * 2,
+         BIOMASS_AC = BIOMASS * TPA_UNADJ,
+         BIOMASS_gm2 = BIOMASS_AC * 0.1121)
+
+
+treeTable <- treeTable %>%
+  mutate(binnedAGE = ifelse(STDAGE %in% 1:10, 10,
+                            ifelse(STDAGE %in% 11:20, 20,
+                                   ifelse(STDAGE %in% 21:30, 30,
+                                          ifelse(STDAGE %in% 31:40, 40,
+                                                 ifelse(STDAGE %in% 41:50, 50,
+                                                        ifelse(STDAGE %in% 51:60, 60,
+                                                               ifelse(STDAGE %in% 61:70, 70,
+                                                                      ifelse(STDAGE %in% 71:80, 80,
+                                                                             ifelse(STDAGE %in% 81:90, 90,
+                                                                                    ifelse(STDAGE %in% 91:100, 100,
+                                                                                           ifelse(STDAGE %in% 101:110, 110,
+                                                                                                  ifelse(STDAGE %in% 111:120, 120,
+                                                                                                         ifelse(STDAGE %in% 121:130, 130,
+                                                                                                                ifelse(STDAGE %in% 131:140, 140,
+                                                                                                                       ifelse(STDAGE %in% 141:150, 150, 160))))))))))))))))
+
+treeTable <- treeTable %>%
+  group_by(binnedAGE, dummySPGRPCD) %>%
+  filter(quantile(BIOMASS_gm2, 0.75, na.rm = T) < BIOMASS_gm2,
+         binnedAGE < 101)
+
+
+########################
+# 1st one cell ecoregion
+########################
+# Hardwood
+ggplot(treeTable, aes(x = as.factor(binnedAGE), y = BIOMASS_gm2)) +
+  geom_boxplot() +
+  theme_classic() +
+  #ylim(0,5100) +
+  facet_wrap(~dummySPGRPCD) +
+  xlab("Stand Age") +
+  ylab(TeX("AGB $(\\g/m^2)$")) +
+  geom_point(aes(x = 4, y = 247), col = "blue") +
+  geom_point(aes(x = 5, y = 392), col = "blue") +
+  geom_point(aes(x = 6, y = 569), col = "blue") +
+  geom_point(aes(x = 7, y = 703), col = "blue") +
+  geom_point(aes(x = 8, y = 791), col = "blue") +
+  geom_point(aes(x = 9, y = 869), col = "blue") +
+  geom_point(aes(x = 10, y = 949), col = "blue") +
+  geom_point(aes(x = 5, y = 405), col = "red") +
+  geom_point(aes(x = 6, y = 650), col = "red") +
+  geom_point(aes(x = 7, y = 966), col = "red") +
+  geom_point(aes(x = 8, y = 1212), col = "red") +
+  geom_point(aes(x = 9, y = 1372), col = "red") +
+  geom_point(aes(x = 10, y = 1498), col = "red") +
+  geom_smooth(method = "loess", aes(group=1))
+
+# Softwood
+ggplot(treeTable, aes(x = as.factor(binnedAGE), y = BIOMASS_gm2)) +
+  geom_boxplot() +
+  theme_classic() +
+  #ylim(0,5100) +
+  facet_wrap(~dummySPGRPCD) +
+  xlab("Stand Age") +
+  ylab(TeX("AGB $(\\g/m^2)$")) +
+  geom_point(aes(x = 3, y = 273), col = "blue") +
+  geom_point(aes(x = 4, y = 519), col = "blue") +
+  geom_point(aes(x = 5, y = 701), col = "blue") +
+  geom_point(aes(x = 6, y = 959), col = "blue") +
+  geom_point(aes(x = 7, y = 1082), col = "blue") +
+  geom_point(aes(x = 8, y = 1241), col = "blue") +
+  geom_point(aes(x = 9, y = 1338), col = "blue") +
+  geom_point(aes(x = 10, y = 1369), col = "blue") +
+  geom_point(aes(x = 3, y = 168), col = "red") +
+  geom_point(aes(x = 4, y = 249), col = "red") +
+  geom_point(aes(x = 5, y = 296), col = "red") +
+  geom_point(aes(x = 6, y = 366), col = "red") +
+  geom_point(aes(x = 7, y = 386), col = "red") +
+  geom_point(aes(x = 8, y = 413), col = "red") +
+  geom_point(aes(x = 9, y = 405), col = "red") +
+  geom_point(aes(x = 10, y = 331), col = "red") +
+  geom_smooth(method = "loess", aes(group=1))
+```
+
+
+
+```{r}
+########################
+# 2nd one cell ecoregion
+########################
+# Hardwood
+ggplot(treeTable, aes(x = as.factor(binnedAGE), y = BIOMASS_gm2)) +
+  geom_boxplot() +
+  theme_classic() +
+  #ylim(0,5100) +
+  facet_wrap(~dummySPGRPCD) +
+  xlab("Stand Age") +
+  ylab(TeX("AGB $(\\g/m^2)$")) +
+  geom_point(aes(x = 4, y = 247), col = "blue") +
+  geom_point(aes(x = 5, y = 592), col = "blue") +
+  geom_point(aes(x = 6, y = 911), col = "blue") +
+  geom_point(aes(x = 7, y = 1129), col = "blue") +
+  geom_point(aes(x = 8, y = 1246), col = "blue") +
+  geom_point(aes(x = 9, y = 1321), col = "blue") +
+  geom_point(aes(x = 10, y = 1392), col = "blue") +
+  geom_point(aes(x = 5, y = 990), col = "red") +
+  geom_point(aes(x = 6, y = 1536), col = "red") +
+  geom_point(aes(x = 7, y = 1937), col = "red") +
+  geom_point(aes(x = 8, y = 2162), col = "red") +
+  geom_point(aes(x = 9, y = 2309), col = "red") +
+  geom_point(aes(x = 10, y = 2493), col = "red") +
+  geom_smooth(method = "loess", aes(group=1))
+
+# Softwood
+ggplot(treeTable, aes(x = as.factor(binnedAGE), y = BIOMASS_gm2)) +
+  geom_boxplot() +
+  theme_classic() +
+  #ylim(0,5100) +
+  facet_wrap(~dummySPGRPCD) +
+  xlab("Stand Age") +
+  ylab(TeX("AGB $(\\g/m^2)$")) +
+  geom_point(aes(x = 3, y = 273), col = "blue") +
+  geom_point(aes(x = 4, y = 664), col = "blue") +
+  geom_point(aes(x = 5, y = 938), col = "blue") +
+  geom_point(aes(x = 6, y = 1220), col = "blue") +
+  geom_point(aes(x = 7, y = 1352), col = "blue") +
+  geom_point(aes(x = 8, y = 1525), col = "blue") +
+  geom_point(aes(x = 9, y = 1594), col = "blue") +
+  geom_point(aes(x = 10, y = 1601), col = "blue") +
+  geom_point(aes(x = 3, y = 168), col = "red") +
+  geom_point(aes(x = 4, y = 303), col = "red") +
+  geom_point(aes(x = 5, y = 380), col = "red") +
+  geom_point(aes(x = 6, y = 458), col = "red") +
+  geom_point(aes(x = 7, y = 483), col = "red") +
+  geom_point(aes(x = 8, y = 515), col = "red") +
+  geom_point(aes(x = 9, y = 495), col = "red") +
+  geom_point(aes(x = 10, y = 400), col = "red") +
+  geom_smooth(method = "loess", aes(group=1))
+
+
+```
+
+
+```{r}
+########################
+# 1st Multi Cell Landscape (9 cells)
+########################
+# Hardwood
+ggplot(treeTable, aes(x = as.factor(binnedAGE), y = BIOMASS_gm2)) +
+  geom_boxplot() +
+  theme_classic() +
+  #ylim(0,5100) +
+  facet_wrap(~dummySPGRPCD) +
+  xlab("Stand Age") +
+  ylab(TeX("AGB $(\\g/m^2)$")) +
+  geom_point(aes(x = 3, y = 30), col = "red") +
+  geom_point(aes(x = 4, y = 349), col = "red") +
+  geom_point(aes(x = 5, y = 510), col = "red") +
+  geom_point(aes(x = 6, y = 780), col = "red") +
+  geom_point(aes(x = 7, y = 911), col = "red") +
+  geom_point(aes(x = 8, y = 983), col = "red") +
+  geom_point(aes(x = 9, y = 1013), col = "red") +
+  geom_point(aes(x = 10, y = 1233), col = "red") +
+  geom_smooth(method = "loess", aes(group=1))
+
+# Softwood
+ggplot(treeTable, aes(x = as.factor(binnedAGE), y = BIOMASS_gm2)) +
+  geom_boxplot() +
+  theme_classic() +
+  #ylim(0,5100) +
+  facet_wrap(~dummySPGRPCD) +
+  xlab("Stand Age") +
+  ylab(TeX("AGB $(\\g/m^2)$")) +
+  geom_point(aes(x = 3, y = 400), col = "blue") +
+  geom_point(aes(x = 4, y = 586), col = "blue") +
+  geom_point(aes(x = 5, y = 744), col = "blue") +
+  geom_point(aes(x = 6, y = 955), col = "blue") +
+  geom_point(aes(x = 7, y = 1122), col = "blue") +
+  geom_point(aes(x = 8, y = 1318), col = "blue") +
+  geom_point(aes(x = 9, y = 1494), col = "blue") +
+  geom_point(aes(x = 10, y = 1542), col = "blue") +
+  geom_point(aes(x = 3, y = 127), col = "red") +
+  geom_point(aes(x = 4, y = 166), col = "red") +
+  geom_point(aes(x = 5, y = 199), col = "red") +
+  geom_point(aes(x = 6, y = 229), col = "red") +
+  geom_point(aes(x = 7, y = 235), col = "red") +
+  geom_point(aes(x = 8, y = 214), col = "red") +
+  geom_point(aes(x = 9, y = 133), col = "red") +
+  geom_point(aes(x = 10, y = 24), col = "red") +
+  geom_smooth(method = "loess", aes(group=1))
+```
+
+
+```{r}
+########################
+# 2nd Multi Cell Landscape (9 cells)
+########################
+ggplot(treeTable, aes(x = as.factor(binnedAGE), y = BIOMASS_gm2)) +
+  geom_boxplot() +
+  geom_point(alpha = 0) +
+  geom_smooth(method = "loess", aes(group = 1)) +
+  theme_classic() +
+  #ylim(0,5100) +
+  facet_wrap(~dummySPGRPCD) +
+  xlab("Stand Age") +
+  ylab(TeX("AGB $(\\g/m^2)$")) +
+  geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 89, dummySPGRPCD = "Hardwoods"), col = "orange") + # LIST
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 161, dummySPGRPCD = "Hardwoods"), col = "orange") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 392, dummySPGRPCD = "Hardwoods"), col = "orange") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 574, dummySPGRPCD = "Hardwoods"), col = "orange") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 708, dummySPGRPCD = "Hardwoods"), col = "orange") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 825, dummySPGRPCD = "Hardwoods"), col = "orange") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 1050, dummySPGRPCD = "Hardwoods"), col = "orange") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 1192, dummySPGRPCD = "Hardwoods"), col = "orange") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 1340, dummySPGRPCD = "Hardwoods"), col = "violetred") + # ACRU
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 1517, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 1771, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 1944, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 2032, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 136, dummySPGRPCD = "Hardwoods"), col = "seagreen") + # PLOC
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 254, dummySPGRPCD = "Hardwoods"), col = "seagreen") + 
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 554, dummySPGRPCD = "Hardwoods"), col = "seagreen") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 828, dummySPGRPCD = "Hardwoods"), col = "seagreen") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 1216, dummySPGRPCD = "Hardwoods"), col = "seagreen") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 90, dummySPGRPCD = "Oaks"), col = "firebrick") + # QUFA
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 168, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 237, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 421, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 611, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 707, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 745, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 677, dummySPGRPCD = "Oaks"), col = "forestgreen") + # QUAL
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 742, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 783, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 813, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 849, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 870, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 450, dummySPGRPCD = "Softwoods"), col = "red") + # PITA
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 637, dummySPGRPCD = "Softwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 784, dummySPGRPCD = "Softwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 1005, dummySPGRPCD = "Softwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 1139, dummySPGRPCD = "Softwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 1341, dummySPGRPCD = "Softwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 1497, dummySPGRPCD = "Softwoods"), col = "red")
+```
+
+
+```{r}
+########################
+# 1st 100 Cells
+########################
+ggplot(treeTable, aes(x = as.factor(binnedAGE), y = BIOMASS_gm2)) +
+  geom_boxplot() +
+  geom_point(alpha = 0) +
+  geom_smooth(method = "loess", aes(group = 1)) +
+  theme_classic() +
+  #ylim(0,5100) +
+  facet_wrap(~dummySPGRPCD) +
+  xlab("Stand Age") +
+  ylab(TeX("AGB $(\\g/m^2)$")) +
+  geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 212, dummySPGRPCD = "Hardwoods"), col = "orange") + # LIST
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 306, dummySPGRPCD = "Hardwoods"), col = "orange") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 399, dummySPGRPCD = "Hardwoods"), col = "orange") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 493, dummySPGRPCD = "Hardwoods"), col = "orange") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 569, dummySPGRPCD = "Hardwoods"), col = "orange") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 652, dummySPGRPCD = "Hardwoods"), col = "orange") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 716, dummySPGRPCD = "Hardwoods"), col = "orange") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 789, dummySPGRPCD = "Hardwoods"), col = "orange") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 52, dummySPGRPCD = "Hardwoods"), col = "violetred") + # ACRU
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 39, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 63, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 117, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 257, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 514, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 742, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  #geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 24, dummySPGRPCD = "Hardwoods"), col = "seagreen") + # PLOC
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 320, dummySPGRPCD = "Hardwoods"), col = "seagreen") + 
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 534, dummySPGRPCD = "Hardwoods"), col = "seagreen") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 986, dummySPGRPCD = "Hardwoods"), col = "seagreen") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 1396, dummySPGRPCD = "Hardwoods"), col = "seagreen") +
+  #geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 16, dummySPGRPCD = "Oaks"), col = "firebrick") + # QUFA
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 639, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 1114, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 1479, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 1735, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 2027, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 2173, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  #geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 12, dummySPGRPCD = "Oaks"), col = "forestgreen") + # QUAL
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 677, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 742, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 783, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 813, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 849, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  #geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 652, dummySPGRPCD = "Softwoods"), col = "red") + # PITA
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 442, dummySPGRPCD = "Softwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 590, dummySPGRPCD = "Softwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 695, dummySPGRPCD = "Softwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 846, dummySPGRPCD = "Softwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 942, dummySPGRPCD = "Softwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 1073, dummySPGRPCD = "Softwoods"), col = "red")
+```
+
+
+
+
+
+
+
+```{r}
+########################
+# 1st 100 Cells
+########################
+ggplot(treeTable, aes(x = as.factor(binnedAGE), y = BIOMASS_gm2)) +
+  geom_boxplot() +
+  geom_point(alpha = 0) +
+  geom_smooth(method = "loess", aes(group = 1)) +
+  theme_classic() +
+  #ylim(0,5100) +
+  facet_wrap(~dummySPGRPCD) +
+  xlab("Stand Age") +
+  ylab(TeX("AGB $(\\g/m^2)$")) +
+  geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 161, dummySPGRPCD = "Hardwoods"), col = "orange") + # LIST
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 235, dummySPGRPCD = "Hardwoods"), col = "orange") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 334, dummySPGRPCD = "Hardwoods"), col = "orange") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 404, dummySPGRPCD = "Hardwoods"), col = "orange") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 457, dummySPGRPCD = "Hardwoods"), col = "orange") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 539, dummySPGRPCD = "Hardwoods"), col = "orange") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 585, dummySPGRPCD = "Hardwoods"), col = "orange") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 631, dummySPGRPCD = "Hardwoods"), col = "orange") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 133, dummySPGRPCD = "Hardwoods"), col = "violetred") + # ACRU
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 164, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 196, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 218, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 232, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 251, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 256, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  #geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 24, dummySPGRPCD = "Hardwoods"), col = "seagreen") + # PLOC
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 246, dummySPGRPCD = "Hardwoods"), col = "seagreen") + 
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 461, dummySPGRPCD = "Hardwoods"), col = "seagreen") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 859, dummySPGRPCD = "Hardwoods"), col = "seagreen") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 1154, dummySPGRPCD = "Hardwoods"), col = "seagreen") +
+  #geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 16, dummySPGRPCD = "Oaks"), col = "firebrick") + # QUFA
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 72, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 128, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 183, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 270, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 402, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 502, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  #geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 12, dummySPGRPCD = "Oaks"), col = "forestgreen") + # QUAL
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 115, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 128, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 162, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 214, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 265, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 652, dummySPGRPCD = "Softwoods"), col = "red") + # PITA
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 442, dummySPGRPCD = "Softwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 590, dummySPGRPCD = "Softwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 695, dummySPGRPCD = "Softwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 846, dummySPGRPCD = "Softwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 942, dummySPGRPCD = "Softwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 1073, dummySPGRPCD = "Softwoods"), col = "red")
+```
+
+
+```{r}
+########################
+# 2nd 100 Cells
+########################
+ggplot(treeTable, aes(x = as.factor(binnedAGE), y = BIOMASS_gm2)) +
+  geom_boxplot() +
+  geom_point(alpha = 0) +
+  geom_smooth(method = "loess", aes(group = 1)) +
+  theme_classic() +
+  #ylim(0,5100) +
+  facet_wrap(~dummySPGRPCD) +
+  xlab("Stand Age") +
+  ylab(TeX("AGB $(\\g/m^2)$")) +
+  geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 161, dummySPGRPCD = "Hardwoods"), col = "orange") + # LIST r2 = 0.88
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 261, dummySPGRPCD = "Hardwoods"), col = "orange") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 378, dummySPGRPCD = "Hardwoods"), col = "orange") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 467, dummySPGRPCD = "Hardwoods"), col = "orange") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 525, dummySPGRPCD = "Hardwoods"), col = "orange") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 627, dummySPGRPCD = "Hardwoods"), col = "orange") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 698, dummySPGRPCD = "Hardwoods"), col = "orange") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 757, dummySPGRPCD = "Hardwoods"), col = "orange") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 45, dummySPGRPCD = "Hardwoods"), col = "violetred") + # ACRU
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 81, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 124, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 159, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 193, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 237, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 265, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  #geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 24, dummySPGRPCD = "Hardwoods"), col = "seagreen") + # PLOC r2 = 0.55
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 246, dummySPGRPCD = "Hardwoods"), col = "seagreen") + 
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 461, dummySPGRPCD = "Hardwoods"), col = "seagreen") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 893, dummySPGRPCD = "Hardwoods"), col = "seagreen") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 1214, dummySPGRPCD = "Hardwoods"), col = "seagreen") +
+  #geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 16, dummySPGRPCD = "Oaks"), col = "firebrick") + # QUFA
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 162, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 329, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 452, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 541, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 625, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 669, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  #geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 12, dummySPGRPCD = "Oaks"), col = "forestgreen") + # QUAL
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 677, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 742, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 783, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 813, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 849, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  #geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 652, dummySPGRPCD = "Softwoods"), col = "red") + # PITA  r2 = 0.78
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 459, dummySPGRPCD = "Softwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 645, dummySPGRPCD = "Softwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 793, dummySPGRPCD = "Softwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 998, dummySPGRPCD = "Softwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 1154, dummySPGRPCD = "Softwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 1353, dummySPGRPCD = "Softwoods"), col = "red")
+```
+
+```{r}
+treeTable %>%
+  group_by(dummySPGRPCD, binnedAGE) %>%
+  summarise(median = median(BIOMASS_gm2)) %>%
+  filter(dummySPGRPCD == "Hardwoods")
+
+expected <- c(929,763,1056,1194)
+simulated <- c(246,461,893,1241)
+
+summary(lm(expected ~ simulated))
+
+```
+
+
+```{r}
+########################
+# 1st 10000 Cells
+########################
+ggplot(treeTable, aes(x = as.factor(binnedAGE), y = BIOMASS_gm2)) +
+  geom_boxplot() +
+  geom_point(alpha = 0) +
+  geom_smooth(method = "loess", aes(group = 1)) +
+  theme_classic() +
+  #ylim(0,5100) +
+  facet_wrap(~dummySPGRPCD) +
+  xlab("Stand Age") +
+  ylab(TeX("AGB $(\\g/m^2)$")) +
+  geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 11, dummySPGRPCD = "Hardwoods"), col = "orange") + # LIST
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 35, dummySPGRPCD = "Hardwoods"), col = "orange") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 116, dummySPGRPCD = "Hardwoods"), col = "orange") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 216, dummySPGRPCD = "Hardwoods"), col = "orange") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 308, dummySPGRPCD = "Hardwoods"), col = "orange") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 445, dummySPGRPCD = "Hardwoods"), col = "orange") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 584, dummySPGRPCD = "Hardwoods"), col = "orange") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 749, dummySPGRPCD = "Hardwoods"), col = "orange") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 0.9, dummySPGRPCD = "Hardwoods"), col = "violetred") + # PRSE2
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 0.8, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 9, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 21, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 39, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 76, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 114, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  #geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 24, dummySPGRPCD = "Hardwoods"), col = "seagreen") + # PLOC
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 246, dummySPGRPCD = "Hardwoods"), col = "seagreen") + 
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 461, dummySPGRPCD = "Hardwoods"), col = "seagreen") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 893, dummySPGRPCD = "Hardwoods"), col = "seagreen") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 1214, dummySPGRPCD = "Hardwoods"), col = "seagreen") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 2, dummySPGRPCD = "Oaks"), col = "firebrick") + # QUFA
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 6, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 9, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 15, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 21, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 23, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 31, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 18, dummySPGRPCD = "Oaks"), col = "forestgreen") + # QUAL
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 30, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 60, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 105, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 149, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 201, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  #geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 652, dummySPGRPCD = "Softwoods"), col = "red") + # PITA 
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 459, dummySPGRPCD = "Softwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 645, dummySPGRPCD = "Softwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 793, dummySPGRPCD = "Softwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 998, dummySPGRPCD = "Softwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 1154, dummySPGRPCD = "Softwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 1353, dummySPGRPCD = "Softwoods"), col = "red")
+```
+
+```{r}
+calibrateLOG <- fread("C:/Users/lagoodal/Desktop/Test Run LANDIS/1000_Cell_Landscape/test1/NECN-calibrate-log.csv")
+
+calibrateLOG %>%
+  filter(Year == 10,
+         Month == 1) %>%
+  group_by(SpeciesName) %>%
+  summarise(avgAGE = round(mean(CohortAge)),
+            medianAGE = round(median(CohortAge)))
+  
+
+```
+
+```{r}
+########################
+# SOFTWOODS
+########################
+ggplot(treeTable, aes(x = as.factor(binnedAGE), y = BIOMASS_gm2)) +
+  geom_boxplot() +
+  geom_point(alpha = 0) +
+  geom_smooth(method = "loess", aes(group = 1)) +
+  theme_classic() +
+  #ylim(0,5100) +
+  facet_wrap(~dummySPGRPCD) +
+  xlab("Stand Age") +
+  ylab(TeX("AGB $(\\g/m^2)$")) +
+  #geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 407, dummySPGRPCD = "Softwoods"), col = "firebrick") + #PITA r2=0.71
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 284, dummySPGRPCD = "Softwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 406, dummySPGRPCD = "Softwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 498, dummySPGRPCD = "Softwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 628, dummySPGRPCD = "Softwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 692, dummySPGRPCD = "Softwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 789, dummySPGRPCD = "Softwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 837, dummySPGRPCD = "Softwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 284, dummySPGRPCD = "Softwoods"), col = "skyblue") + # PIEC r2 = 0.81
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 486, dummySPGRPCD = "Softwoods"), col = "skyblue") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 717, dummySPGRPCD = "Softwoods"), col = "skyblue") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 1042, dummySPGRPCD = "Softwoods"), col = "skyblue") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 1256, dummySPGRPCD = "Softwoods"), col = "skyblue") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 1520, dummySPGRPCD = "Softwoods"), col = "skyblue") +
+  geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 127, dummySPGRPCD = "Softwoods"), col = "forestgreen") + # PIVI2 0.65
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 185, dummySPGRPCD = "Softwoods"), col = "forestgreen") + 
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 230, dummySPGRPCD = "Softwoods"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 297, dummySPGRPCD = "Softwoods"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 335, dummySPGRPCD = "Softwoods"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 385, dummySPGRPCD = "Softwoods"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 399, dummySPGRPCD = "Softwoods"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 339, dummySPGRPCD = "Softwoods"), col = "forestgreen")
+```
+
+```{r}
+treeTable %>%
+  group_by(dummySPGRPCD, binnedAGE) %>%
+  summarise(median = median(BIOMASS_gm2)) %>%
+  filter(dummySPGRPCD == "Softwoods")
+
+expected <- c(818,709,864,1142,1075,1279)
+simulated <- c(284, 
+486, 
+717, 
+1042,
+1256,
+ 1520)
+
+summary(lm(expected ~ simulated))
+```
+
+
+
+```{r}
+########################
+# HARDWOODS
+########################
+ggplot(treeTable, aes(x = as.factor(binnedAGE), y = BIOMASS_gm2)) +
+  geom_boxplot() +
+  geom_point(alpha = 0) +
+  geom_smooth(method = "loess", aes(group = 1)) +
+  theme_classic() +
+  #ylim(0,5100) +
+  facet_wrap(~dummySPGRPCD) +
+  xlab("Stand Age") +
+  ylab(TeX("AGB $(\\g/m^2)$")) +
+  geom_point(data = data.frame(binnedAGE = 20, BIOMASS_gm2 = 92, dummySPGRPCD = "Hardwoods"), col = "firebrick") + # ACRU r2 = 0.73
+  geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 541, dummySPGRPCD = "Hardwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 1038, dummySPGRPCD = "Hardwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 1398, dummySPGRPCD = "Hardwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 1603, dummySPGRPCD = "Hardwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 1755, dummySPGRPCD = "Hardwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 1806, dummySPGRPCD = "Hardwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 1790, dummySPGRPCD = "Hardwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 1731, dummySPGRPCD = "Hardwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 29, dummySPGRPCD = "Hardwoods"), col = "violet") + # CATO6 r2 = 0.82
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 305, dummySPGRPCD = "Hardwoods"), col = "violet") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 591, dummySPGRPCD = "Hardwoods"), col = "violet") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 811, dummySPGRPCD = "Hardwoods"), col = "violet") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 961, dummySPGRPCD = "Hardwoods"), col = "violet") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 1089, dummySPGRPCD = "Hardwoods"), col = "violet") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 1177, dummySPGRPCD = "Hardwoods"), col = "violet") +
+  geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 17, dummySPGRPCD = "Hardwoods"), col = "skyblue") + # FRPE r2 = 0.69
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 195, dummySPGRPCD = "Hardwoods"), col = "skyblue") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 383, dummySPGRPCD = "Hardwoods"), col = "skyblue") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 503, dummySPGRPCD = "Hardwoods"), col = "skyblue") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 595, dummySPGRPCD = "Hardwoods"), col = "skyblue") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 647, dummySPGRPCD = "Hardwoods"), col = "skyblue") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 654, dummySPGRPCD = "Hardwoods"), col = "skyblue") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 567, dummySPGRPCD = "Hardwoods"), col = "skyblue") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 33, dummySPGRPCD = "Hardwoods"), col = "forestgreen") +#PRES2 r2= 0.78
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 174, dummySPGRPCD = "Hardwoods"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 317, dummySPGRPCD = "Hardwoods"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 460, dummySPGRPCD = "Hardwoods"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 555, dummySPGRPCD = "Hardwoods"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 597, dummySPGRPCD = "Hardwoods"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 625, dummySPGRPCD = "Hardwoods"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 1, dummySPGRPCD = "Hardwoods"), col = "violetred") + # PLOC r2 = 0.83
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 106, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 282, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 433, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 519, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 594, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 624, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 638, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 55, dummySPGRPCD = "Hardwoods"), col = "red") + # LIST r2 = 0.82
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 167, dummySPGRPCD = "Hardwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 272, dummySPGRPCD = "Hardwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 349, dummySPGRPCD = "Hardwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 403, dummySPGRPCD = "Hardwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 450, dummySPGRPCD = "Hardwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 479, dummySPGRPCD = "Hardwoods"), col = "red")
+```
+
+```{r}
+treeTable %>%
+  group_by(dummySPGRPCD, binnedAGE) %>%
+  summarise(median = median(BIOMASS_gm2)) %>%
+  filter(dummySPGRPCD == "Hardwoods")
+
+expected <- c(459,608,751,929,763,1056,1194)
+simulated <- c(33, 
+174,
+317,
+460,
+555,
+597,
+625)
+
+summary(lm(expected ~ simulated))
+
+```
+
+```{r}
+########################
+# OAKS
+########################
+ggplot(treeTable, aes(x = as.factor(binnedAGE), y = BIOMASS_gm2)) +
+  geom_boxplot() +
+  geom_point(alpha = 0) +
+  geom_smooth(method = "loess", aes(group = 1)) +
+  theme_classic() +
+  #ylim(0,5100) +
+  facet_wrap(~dummySPGRPCD) +
+  xlab("Stand Age") +
+  ylab(TeX("AGB $(\\g/m^2)$")) +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 177, dummySPGRPCD = "Oaks"), col = "firebrick") + # QUFA r2 = 0.79
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 802, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 1344, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 1645, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 1856, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 1980, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 2035, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 297, dummySPGRPCD = "Oaks"), col = "forestgreen") + # QUAL r2 = 0.83
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 698, dummySPGRPCD = "Oaks"), col = "forestgreen") + 
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 1262, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 1605, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 1851, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 2033, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 2137, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 156, dummySPGRPCD = "Oaks"), col = "deepskyblue4") + # QUCO2 r2 = 0.70
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 808, dummySPGRPCD = "Oaks"), col = "deepskyblue4") + 
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 1484, dummySPGRPCD = "Oaks"), col = "deepskyblue4") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 1766, dummySPGRPCD = "Oaks"), col = "deepskyblue4") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 1952, dummySPGRPCD = "Oaks"), col = "deepskyblue4") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 2046, dummySPGRPCD = "Oaks"), col = "deepskyblue4") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 2077, dummySPGRPCD = "Oaks"), col = "deepskyblue4") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 210, dummySPGRPCD = "Oaks"), col = "deepskyblue") + # QUMO4 r2 = 0.65
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 869, dummySPGRPCD = "Oaks"), col = "deepskyblue") + 
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 1270, dummySPGRPCD = "Oaks"), col = "deepskyblue") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 1489, dummySPGRPCD = "Oaks"), col = "deepskyblue") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 1638, dummySPGRPCD = "Oaks"), col = "deepskyblue") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 1698, dummySPGRPCD = "Oaks"), col = "deepskyblue") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 1701, dummySPGRPCD = "Oaks"), col = "deepskyblue")
+```
+
+
+```{r}
+treeTable %>%
+  group_by(dummySPGRPCD, binnedAGE) %>%
+  summarise(median = median(BIOMASS_gm2)) %>%
+  filter(dummySPGRPCD == "Oaks")
+
+expected <- c(940,915,1312,1448,1750,2302,2043)
+simulated <- c(210, 
+869, 
+1270,
+1489,
+1638,
+1698,
+ 1701)
+
+summary(lm(expected ~ simulated))
+
+```
+
+
+```{r}
+mapcodeTable <- read_csv("C:/Users/lagoodal/Desktop/Test Run LANDIS/Final_table.csv")
+
+x <- mapcodeTable %>%
+  filter(SpeciesName == "PITA") %>%
+  select(MapCode)
+
+mapcodeTable[mapcodeTable$MapCode %in% x$MapCode,]
+
+```
+
+
+
+
+```{r}
+calibrateLOG <- fread("C:/Users/lagoodal/Desktop/Test Run LANDIS/1000_Cell_Landscape/test1/NECN-calibrate-log.csv")
+
+calibrateLOG %>%
+  filter(Year == 10,
+         Month == 1) %>%
+  group_by(SpeciesName) %>%
+  summarise(avgAGE = round(mean(CohortAge)),
+            medianAGE = round(median(CohortAge)))
+
+```
+
+
+```{r}
+ggplot(treeTable, aes(x = as.factor(binnedAGE), y = BIOMASS_gm2)) +
+  geom_boxplot() +
+  geom_point(alpha = 0) +
+  geom_smooth(method = "loess", aes(group = 1)) +
+  theme_classic() +
+  #ylim(0,5100) +
+  facet_wrap(~dummySPGRPCD) +
+  xlab("Stand Age") +
+  ylab(TeX("AGB $(\\g/m^2)$")) +
+  geom_point(data = data.frame(binnedAGE = 20, BIOMASS_gm2 = 41, dummySPGRPCD = "Softwoods"), col = "firebrick") + # PITA r2=0.87
+  geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 166, dummySPGRPCD = "Softwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 331, dummySPGRPCD = "Softwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 555, dummySPGRPCD = "Softwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 735, dummySPGRPCD = "Softwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 914, dummySPGRPCD = "Softwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 1037, dummySPGRPCD = "Softwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 1086, dummySPGRPCD = "Softwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 1181, dummySPGRPCD = "Softwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 10, BIOMASS_gm2 = 5, dummySPGRPCD = "Softwoods"), col = "skyblue") + # PIEC r2=0.91
+  geom_point(data = data.frame(binnedAGE = 20, BIOMASS_gm2 = 234, dummySPGRPCD = "Softwoods"), col = "skyblue") +
+  geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 480, dummySPGRPCD = "Softwoods"), col = "skyblue") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 865, dummySPGRPCD = "Softwoods"), col = "skyblue") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 1180, dummySPGRPCD = "Softwoods"), col = "skyblue") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 1534, dummySPGRPCD = "Softwoods"), col = "skyblue") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 1795, dummySPGRPCD = "Softwoods"), col = "skyblue") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 1923, dummySPGRPCD = "Softwoods"), col = "skyblue") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 2133, dummySPGRPCD = "Softwoods"), col = "skyblue") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 2289, dummySPGRPCD = "Softwoods"), col = "skyblue") +
+  geom_point(data = data.frame(binnedAGE = 10, BIOMASS_gm2 = 6, dummySPGRPCD = "Softwoods"), col = "forestgreen") + # PIVI2 r2=0.86
+  geom_point(data = data.frame(binnedAGE = 20, BIOMASS_gm2 = 89, dummySPGRPCD = "Softwoods"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 160, dummySPGRPCD = "Softwoods"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 260, dummySPGRPCD = "Softwoods"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 356, dummySPGRPCD = "Softwoods"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 470, dummySPGRPCD = "Softwoods"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 569, dummySPGRPCD = "Softwoods"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 611, dummySPGRPCD = "Softwoods"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 656, dummySPGRPCD = "Softwoods"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 598, dummySPGRPCD = "Softwoods"), col = "forestgreen")
+  geom_point(data = data.frame(binnedAGE = 10, BIOMASS_gm2 = 2, dummySPGRPCD = "Hardwoods"), col = "firebrick") + # ACRU r2 = 0.78
+  geom_point(data = data.frame(binnedAGE = 20, BIOMASS_gm2 = 342, dummySPGRPCD = "Hardwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 693, dummySPGRPCD = "Hardwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 907, dummySPGRPCD = "Hardwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 1051, dummySPGRPCD = "Hardwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 1188, dummySPGRPCD = "Hardwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 1255, dummySPGRPCD = "Hardwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 1309, dummySPGRPCD = "Hardwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 1325, dummySPGRPCD = "Hardwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 1315, dummySPGRPCD = "Hardwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 20, BIOMASS_gm2 = 1, dummySPGRPCD = "Hardwoods"), col = "violet") + # CATO6 r2 = 0.76
+  geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 119, dummySPGRPCD = "Hardwoods"), col = "violet") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 245, dummySPGRPCD = "Hardwoods"), col = "violet") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 330, dummySPGRPCD = "Hardwoods"), col = "violet") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 377, dummySPGRPCD = "Hardwoods"), col = "violet") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 408, dummySPGRPCD = "Hardwoods"), col = "violet") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 416, dummySPGRPCD = "Hardwoods"), col = "violet") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 427, dummySPGRPCD = "Hardwoods"), col = "violet") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 425, dummySPGRPCD = "Hardwoods"), col = "violet") +
+  geom_point(data = data.frame(binnedAGE = 10, BIOMASS_gm2 = 1, dummySPGRPCD = "Hardwoods"), col = "royalblue") + # FAGR r2 = 0.85
+  geom_point(data = data.frame(binnedAGE = 20, BIOMASS_gm2 = 199, dummySPGRPCD = "Hardwoods"), col = "royalblue") +
+  geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 404, dummySPGRPCD = "Hardwoods"), col = "royalblue") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 527, dummySPGRPCD = "Hardwoods"), col = "royalblue") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 614, dummySPGRPCD = "Hardwoods"), col = "royalblue") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 718, dummySPGRPCD = "Hardwoods"), col = "royalblue") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 773, dummySPGRPCD = "Hardwoods"), col = "royalblue") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 823, dummySPGRPCD = "Hardwoods"), col = "royalblue") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 849, dummySPGRPCD = "Hardwoods"), col = "royalblue") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 867, dummySPGRPCD = "Hardwoods"), col = "royalblue") +
+  geom_point(data = data.frame(binnedAGE = 10, BIOMASS_gm2 = 4, dummySPGRPCD = "Hardwoods"), col = "red") + # LIST r2 = 0.77
+  geom_point(data = data.frame(binnedAGE = 20, BIOMASS_gm2 = 703, dummySPGRPCD = "Hardwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 1422, dummySPGRPCD = "Hardwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 1896, dummySPGRPCD = "Hardwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 2180, dummySPGRPCD = "Hardwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 2410, dummySPGRPCD = "Hardwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 2489, dummySPGRPCD = "Hardwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 2583, dummySPGRPCD = "Hardwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 2628, dummySPGRPCD = "Hardwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 2664, dummySPGRPCD = "Hardwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 10, BIOMASS_gm2 = 2, dummySPGRPCD = "Hardwoods"), col = "turquoise") + # LITU r2 = 0.79
+  geom_point(data = data.frame(binnedAGE = 20, BIOMASS_gm2 = 488, dummySPGRPCD = "Hardwoods"), col = "turquoise") +
+  geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 1002, dummySPGRPCD = "Hardwoods"), col = "turquoise") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 1323, dummySPGRPCD = "Hardwoods"), col = "turquoise") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 1508, dummySPGRPCD = "Hardwoods"), col = "turquoise") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 1673, dummySPGRPCD = "Hardwoods"), col = "turquoise") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 1745, dummySPGRPCD = "Hardwoods"), col = "turquoise") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 1833, dummySPGRPCD = "Hardwoods"), col = "turquoise") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 1882, dummySPGRPCD = "Hardwoods"), col = "turquoise") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 1919, dummySPGRPCD = "Hardwoods"), col = "turquoise") +
+  geom_point(data = data.frame(binnedAGE = 20, BIOMASS_gm2 = 7, dummySPGRPCD = "Hardwoods"), col = "violetred") + # PLOC r2 = 0.8
+  geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 201, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 416, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 544, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 616, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 687, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 710, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 735, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 748, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 10, BIOMASS_gm2 = 5, dummySPGRPCD = "Oaks"), col = "firebrick") + # QUFA r2 = 0.68
+  geom_point(data = data.frame(binnedAGE = 20, BIOMASS_gm2 = 903, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 1673, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 2090, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 2356, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 2491, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 2657, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 2739, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 2773, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 2872, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 10, BIOMASS_gm2 = 4, dummySPGRPCD = "Oaks"), col = "forestgreen") + # QUAL r2 = 0.82
+  geom_point(data = data.frame(binnedAGE = 20, BIOMASS_gm2 = 151, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 325, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 447, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 542, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 618, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 687, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 732, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 745, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 796, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 20, BIOMASS_gm2 = 1, dummySPGRPCD = "Oaks"), col = "deepskyblue4") +
+  geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 221, dummySPGRPCD = "Oaks"), col = "deepskyblue4") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 385, dummySPGRPCD = "Oaks"), col = "deepskyblue4") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 452, dummySPGRPCD = "Oaks"), col = "deepskyblue4") + # QUCO2 r2 = 0.62
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 501, dummySPGRPCD = "Oaks"), col = "deepskyblue4") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 523, dummySPGRPCD = "Oaks"), col = "deepskyblue4") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 530, dummySPGRPCD = "Oaks"), col = "deepskyblue4") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 528, dummySPGRPCD = "Oaks"), col = "deepskyblue4") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 537, dummySPGRPCD = "Oaks"), col = "deepskyblue4") +
+  geom_point(data = data.frame(binnedAGE = 10, BIOMASS_gm2 = 2, dummySPGRPCD = "Oaks"), col = "deepskyblue") + #QUMO4 r2 = 0.52
+  geom_point(data = data.frame(binnedAGE = 20, BIOMASS_gm2 = 962, dummySPGRPCD = "Oaks"), col = "deepskyblue") +
+  geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 1699, dummySPGRPCD = "Oaks"), col = "deepskyblue") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 2039, dummySPGRPCD = "Oaks"), col = "deepskyblue") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 2221, dummySPGRPCD = "Oaks"), col = "deepskyblue") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 2312, dummySPGRPCD = "Oaks"), col = "deepskyblue") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 2358, dummySPGRPCD = "Oaks"), col = "deepskyblue") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 2340, dummySPGRPCD = "Oaks"), col = "deepskyblue") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 2352, dummySPGRPCD = "Oaks"), col = "deepskyblue") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 2350, dummySPGRPCD = "Oaks"), col = "deepskyblue") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 28, dummySPGRPCD = "Oaks"), col = "red") + # QURU r2 = 0.84
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 167, dummySPGRPCD = "Oaks"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 308, dummySPGRPCD = "Oaks"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 420, dummySPGRPCD = "Oaks"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 440, dummySPGRPCD = "Oaks"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 56, dummySPGRPCD = "Oaks"), col = "purple") + # QUPH r2 = 0.67
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 257, dummySPGRPCD = "Oaks"), col = "purple") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 420, dummySPGRPCD = "Oaks"), col = "purple") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 499, dummySPGRPCD = "Oaks"), col = "purple") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 541, dummySPGRPCD = "Oaks"), col = "purple") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 562, dummySPGRPCD = "Oaks"), col = "purple") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 572, dummySPGRPCD = "Oaks"), col = "purple") +
+  geom_point(data = data.frame(binnedAGE = 20, BIOMASS_gm2 = 14, dummySPGRPCD = "Oaks"), col = "blue") + # QUST r2 = 0.79
+  geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 370, dummySPGRPCD = "Oaks"), col = "blue") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 783, dummySPGRPCD = "Oaks"), col = "blue") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 1038, dummySPGRPCD = "Oaks"), col = "blue") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 1216, dummySPGRPCD = "Oaks"), col = "blue") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 1347, dummySPGRPCD = "Oaks"), col = "blue") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 1423, dummySPGRPCD = "Oaks"), col = "blue") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 1461, dummySPGRPCD = "Oaks"), col = "blue") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 1503, dummySPGRPCD = "Oaks"), col = "blue")
+```
+
+# All together now
+
+```{r}
+ggplot(treeTable, aes(x = as.factor(binnedAGE), y = BIOMASS_gm2)) +
+  geom_boxplot() +
+  geom_point(alpha = 0) +
+  geom_smooth(method = "loess", aes(group = 1)) +
+  theme_classic() +
+  #ylim(0,5100) +
+  facet_wrap(~dummySPGRPCD) +
+  xlab("Stand Age") +
+  ylab(TeX("AGB $(\\g/m^2)$")) +
+  geom_point(data = data.frame(binnedAGE = 20, BIOMASS_gm2 = 16, dummySPGRPCD = "Softwoods"), col = "firebrick") + # PITA r2=0.84
+  geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 149, dummySPGRPCD = "Softwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 378, dummySPGRPCD = "Softwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 570, dummySPGRPCD = "Softwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 669, dummySPGRPCD = "Softwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 748, dummySPGRPCD = "Softwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 786, dummySPGRPCD = "Softwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 805, dummySPGRPCD = "Softwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 821, dummySPGRPCD = "Softwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 10, BIOMASS_gm2 = 2, dummySPGRPCD = "Softwoods"), col = "skyblue") + # PIEC r2= 0.88
+  geom_point(data = data.frame(binnedAGE = 20, BIOMASS_gm2 = 208, dummySPGRPCD = "Softwoods"), col = "skyblue") +
+  geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 632, dummySPGRPCD = "Softwoods"), col = "skyblue") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 1061, dummySPGRPCD = "Softwoods"), col = "skyblue") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 1289, dummySPGRPCD = "Softwoods"), col = "skyblue") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 1498, dummySPGRPCD = "Softwoods"), col = "skyblue") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 1595, dummySPGRPCD = "Softwoods"), col = "skyblue") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 1657, dummySPGRPCD = "Softwoods"), col = "skyblue") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 1704, dummySPGRPCD = "Softwoods"), col = "skyblue") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 1737, dummySPGRPCD = "Softwoods"), col = "skyblue") +
+  geom_point(data = data.frame(binnedAGE = 10, BIOMASS_gm2 = 2, dummySPGRPCD = "Softwoods"), col = "forestgreen") + # PIVI2 r2=0.79
+  geom_point(data = data.frame(binnedAGE = 20, BIOMASS_gm2 = 64, dummySPGRPCD = "Softwoods"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 178, dummySPGRPCD = "Softwoods"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 325, dummySPGRPCD = "Softwoods"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 426, dummySPGRPCD = "Softwoods"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 517, dummySPGRPCD = "Softwoods"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 566, dummySPGRPCD = "Softwoods"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 585, dummySPGRPCD = "Softwoods"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 575, dummySPGRPCD = "Softwoods"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 491, dummySPGRPCD = "Softwoods"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 10, BIOMASS_gm2 = 1, dummySPGRPCD = "Hardwoods"), col = "firebrick") + # ACRU r2 =0.81
+  geom_point(data = data.frame(binnedAGE = 20, BIOMASS_gm2 = 88, dummySPGRPCD = "Hardwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 217, dummySPGRPCD = "Hardwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 310, dummySPGRPCD = "Hardwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 376, dummySPGRPCD = "Hardwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 437, dummySPGRPCD = "Hardwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 463, dummySPGRPCD = "Hardwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 482, dummySPGRPCD = "Hardwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 488, dummySPGRPCD = "Hardwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 483, dummySPGRPCD = "Hardwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 20, BIOMASS_gm2 = 1, dummySPGRPCD = "Hardwoods"), col = "violet") + # CATO6 r2 = 0.80
+  geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 35, dummySPGRPCD = "Hardwoods"), col = "violet") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 74, dummySPGRPCD = "Hardwoods"), col = "violet") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 103, dummySPGRPCD = "Hardwoods"), col = "violet") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 120, dummySPGRPCD = "Hardwoods"), col = "violet") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 133, dummySPGRPCD = "Hardwoods"), col = "violet") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 139, dummySPGRPCD = "Hardwoods"), col = "violet") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 143, dummySPGRPCD = "Hardwoods"), col = "violet") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 144, dummySPGRPCD = "Hardwoods"), col = "violet") +
+  geom_point(data = data.frame(binnedAGE = 10, BIOMASS_gm2 = 1, dummySPGRPCD = "Hardwoods"), col = "royalblue") + # FAGR r2 = 0.91
+  geom_point(data = data.frame(binnedAGE = 20, BIOMASS_gm2 = 51, dummySPGRPCD = "Hardwoods"), col = "royalblue") +
+  geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 120, dummySPGRPCD = "Hardwoods"), col = "royalblue") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 166, dummySPGRPCD = "Hardwoods"), col = "royalblue") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 197, dummySPGRPCD = "Hardwoods"), col = "royalblue") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 236, dummySPGRPCD = "Hardwoods"), col = "royalblue") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 263, dummySPGRPCD = "Hardwoods"), col = "royalblue") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 292, dummySPGRPCD = "Hardwoods"), col = "royalblue") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 313, dummySPGRPCD = "Hardwoods"), col = "royalblue") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 329, dummySPGRPCD = "Hardwoods"), col = "royalblue") +
+  geom_point(data = data.frame(binnedAGE = 10, BIOMASS_gm2 = 1, dummySPGRPCD = "Hardwoods"), col = "red") + # LIST r2 = 0.82
+  geom_point(data = data.frame(binnedAGE = 20, BIOMASS_gm2 = 200, dummySPGRPCD = "Hardwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 424, dummySPGRPCD = "Hardwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 596, dummySPGRPCD = "Hardwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 700, dummySPGRPCD = "Hardwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 794, dummySPGRPCD = "Hardwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 835, dummySPGRPCD = "Hardwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 872, dummySPGRPCD = "Hardwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 896, dummySPGRPCD = "Hardwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 923, dummySPGRPCD = "Hardwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 10, BIOMASS_gm2 = 1, dummySPGRPCD = "Hardwoods"), col = "turquoise") + # LITU r2 =0.83
+  geom_point(data = data.frame(binnedAGE = 20, BIOMASS_gm2 = 138, dummySPGRPCD = "Hardwoods"), col = "turquoise") +
+  geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 299, dummySPGRPCD = "Hardwoods"), col = "turquoise") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 425, dummySPGRPCD = "Hardwoods"), col = "turquoise") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 505, dummySPGRPCD = "Hardwoods"), col = "turquoise") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 580, dummySPGRPCD = "Hardwoods"), col = "turquoise") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 616, dummySPGRPCD = "Hardwoods"), col = "turquoise") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 646, dummySPGRPCD = "Hardwoods"), col = "turquoise") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 661, dummySPGRPCD = "Hardwoods"), col = "turquoise") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 677, dummySPGRPCD = "Hardwoods"), col = "turquoise") +
+  geom_point(data = data.frame(binnedAGE = 20, BIOMASS_gm2 = 2, dummySPGRPCD = "Hardwoods"), col = "violetred") + # PLOC r2 = 0.90
+  geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 49, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 118, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 164, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 196, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 235, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 255, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 277, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 294, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 10, BIOMASS_gm2 = 1, dummySPGRPCD = "Oaks"), col = "firebrick") + # QUFA r2 = 0.70
+  geom_point(data = data.frame(binnedAGE = 20, BIOMASS_gm2 = 322, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 689, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 866, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 977, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 1089, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 1127, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 1175, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 1198, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 1217, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 10, BIOMASS_gm2 = 1, dummySPGRPCD = "Oaks"), col = "forestgreen") + # QUAL r2 = 0.86
+  geom_point(data = data.frame(binnedAGE = 20, BIOMASS_gm2 = 118, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 249, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 359, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 433, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 500, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 544, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 589, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 631, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 656, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 20, BIOMASS_gm2 = 1, dummySPGRPCD = "Oaks"), col = "deepskyblue4") +
+  geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 43, dummySPGRPCD = "Oaks"), col = "deepskyblue4") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 100, dummySPGRPCD = "Oaks"), col = "deepskyblue4") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 126, dummySPGRPCD = "Oaks"), col = "deepskyblue4") + # QUCO2 r2 = 0.65
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 139, dummySPGRPCD = "Oaks"), col = "deepskyblue4") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 155, dummySPGRPCD = "Oaks"), col = "deepskyblue4") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 154, dummySPGRPCD = "Oaks"), col = "deepskyblue4") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 157, dummySPGRPCD = "Oaks"), col = "deepskyblue4") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 156, dummySPGRPCD = "Oaks"), col = "deepskyblue4") +
+  geom_point(data = data.frame(binnedAGE = 10, BIOMASS_gm2 = 1, dummySPGRPCD = "Oaks"), col = "deepskyblue") + #QUMO4 r2 = 0.65
+  geom_point(data = data.frame(binnedAGE = 20, BIOMASS_gm2 = 228, dummySPGRPCD = "Oaks"), col = "deepskyblue") +
+  geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 506, dummySPGRPCD = "Oaks"), col = "deepskyblue") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 619, dummySPGRPCD = "Oaks"), col = "deepskyblue") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 684, dummySPGRPCD = "Oaks"), col = "deepskyblue") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 744, dummySPGRPCD = "Oaks"), col = "deepskyblue") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 766, dummySPGRPCD = "Oaks"), col = "deepskyblue") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 796, dummySPGRPCD = "Oaks"), col = "deepskyblue") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 807, dummySPGRPCD = "Oaks"), col = "deepskyblue") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 811, dummySPGRPCD = "Oaks"), col = "deepskyblue") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 8, dummySPGRPCD = "Oaks"), col = "red") + # QURU r2 = 0.76
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 49, dummySPGRPCD = "Oaks"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 92, dummySPGRPCD = "Oaks"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 114, dummySPGRPCD = "Oaks"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 134, dummySPGRPCD = "Oaks"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 17, dummySPGRPCD = "Oaks"), col = "purple") + # QUPH r2 = 0.67
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 81, dummySPGRPCD = "Oaks"), col = "purple") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 131, dummySPGRPCD = "Oaks"), col = "purple") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 154, dummySPGRPCD = "Oaks"), col = "purple") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 167, dummySPGRPCD = "Oaks"), col = "purple") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 177, dummySPGRPCD = "Oaks"), col = "purple") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 176, dummySPGRPCD = "Oaks"), col = "purple") +
+  geom_point(data = data.frame(binnedAGE = 20, BIOMASS_gm2 = 4, dummySPGRPCD = "Oaks"), col = "blue") + # QUST r2 = 0.78
+  geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 120, dummySPGRPCD = "Oaks"), col = "blue") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 250, dummySPGRPCD = "Oaks"), col = "blue") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 349, dummySPGRPCD = "Oaks"), col = "blue") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 402, dummySPGRPCD = "Oaks"), col = "blue") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 449, dummySPGRPCD = "Oaks"), col = "blue") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 465, dummySPGRPCD = "Oaks"), col = "blue") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 479, dummySPGRPCD = "Oaks"), col = "blue") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 490, dummySPGRPCD = "Oaks"), col = "blue")
+```
+
+```{r}
+#calibrateLOG <- fread("C:/Users/lagoodal/Desktop/Test Run LANDIS/1000_Cell_Landscape/test1/NECN-calibrate-log.csv")
+
+calibrateLOG %>%
+  filter(Year == 10,
+         Month == 1) %>%
+  group_by(SpeciesName) %>%
+  summarise(avgAGE = round(mean(CohortAge)),
+            medianAGE = round(median(CohortAge)))
+```
+
+
+```{r}
+ggplot(treeTable, aes(x = as.factor(binnedAGE), y = BIOMASS_gm2)) +
+  geom_boxplot() +
+  geom_point(alpha = 0) +
+  geom_smooth(method = "loess", aes(group = 1)) +
+  theme_classic() +
+  #ylim(0,5100) +
+  facet_wrap(~dummySPGRPCD) +
+  xlab("Stand Age") +
+  ylab(TeX("AGB $(\\g/m^2)$")) +
+  #geom_point(data = data.frame(binnedAGE = 20, BIOMASS_gm2 = 16, dummySPGRPCD = "Softwoods"), col = "firebrick") + # PITA r2=
+  #geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 149, dummySPGRPCD = "Softwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 624, dummySPGRPCD = "Softwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 1240, dummySPGRPCD = "Softwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 1602, dummySPGRPCD = "Softwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 1790, dummySPGRPCD = "Softwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 1739, dummySPGRPCD = "Softwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 1616, dummySPGRPCD = "Softwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 1469, dummySPGRPCD = "Softwoods"), col = "firebrick") +
+  #geom_point(data = data.frame(binnedAGE = 10, BIOMASS_gm2 = 2, dummySPGRPCD = "Softwoods"), col = "skyblue") + # PIEC r2=0.62
+  #geom_point(data = data.frame(binnedAGE = 20, BIOMASS_gm2 = 208, dummySPGRPCD = "Softwoods"), col = "skyblue") +
+  #geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 632, dummySPGRPCD = "Softwoods"), col = "skyblue") +
+  #geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 1061, dummySPGRPCD = "Softwoods"), col = "skyblue") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 52, dummySPGRPCD = "Softwoods"), col = "skyblue") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 194, dummySPGRPCD = "Softwoods"), col = "skyblue") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 299, dummySPGRPCD = "Softwoods"), col = "skyblue") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 379, dummySPGRPCD = "Softwoods"), col = "skyblue") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 419, dummySPGRPCD = "Softwoods"), col = "skyblue") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 456, dummySPGRPCD = "Softwoods"), col = "skyblue") +
+  #geom_point(data = data.frame(binnedAGE = 10, BIOMASS_gm2 = 2, dummySPGRPCD = "Softwoods"), col = "forestgreen") + # PIVI2 r2=
+  #geom_point(data = data.frame(binnedAGE = 20, BIOMASS_gm2 = 64, dummySPGRPCD = "Softwoods"), col = "forestgreen") +
+  #geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 178, dummySPGRPCD = "Softwoods"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 110, dummySPGRPCD = "Softwoods"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 302, dummySPGRPCD = "Softwoods"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 404, dummySPGRPCD = "Softwoods"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 452, dummySPGRPCD = "Softwoods"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 445, dummySPGRPCD = "Softwoods"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 417, dummySPGRPCD = "Softwoods"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 362, dummySPGRPCD = "Softwoods"), col = "forestgreen") +
+  #geom_point(data = data.frame(binnedAGE = 10, BIOMASS_gm2 = 1, dummySPGRPCD = "Hardwoods"), col = "firebrick") + # ACRU r2 =0.84
+  #geom_point(data = data.frame(binnedAGE = 20, BIOMASS_gm2 = 94, dummySPGRPCD = "Hardwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 87, dummySPGRPCD = "Hardwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 435, dummySPGRPCD = "Hardwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 804, dummySPGRPCD = "Hardwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 1068, dummySPGRPCD = "Hardwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 1226, dummySPGRPCD = "Hardwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 1391, dummySPGRPCD = "Hardwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 1450, dummySPGRPCD = "Hardwoods"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 1497, dummySPGRPCD = "Hardwoods"), col = "firebrick") +
+  #geom_point(data = data.frame(binnedAGE = 20, BIOMASS_gm2 = 1, dummySPGRPCD = "Hardwoods"), col = "violet") + # CATO6 r2 =
+  geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 2, dummySPGRPCD = "Hardwoods"), col = "violet") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 6, dummySPGRPCD = "Hardwoods"), col = "violet") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 12, dummySPGRPCD = "Hardwoods"), col = "violet") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 17, dummySPGRPCD = "Hardwoods"), col = "violet") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 19, dummySPGRPCD = "Hardwoods"), col = "violet") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 22, dummySPGRPCD = "Hardwoods"), col = "violet") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 24, dummySPGRPCD = "Hardwoods"), col = "violet") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 26, dummySPGRPCD = "Hardwoods"), col = "violet") +
+  #geom_point(data = data.frame(binnedAGE = 10, BIOMASS_gm2 = 1, dummySPGRPCD = "Hardwoods"), col = "royalblue") + # FAGR r2 =0.86
+  #geom_point(data = data.frame(binnedAGE = 20, BIOMASS_gm2 = 51, dummySPGRPCD = "Hardwoods"), col = "royalblue") +
+  geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 1, dummySPGRPCD = "Hardwoods"), col = "royalblue") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 5, dummySPGRPCD = "Hardwoods"), col = "royalblue") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 10, dummySPGRPCD = "Hardwoods"), col = "royalblue") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 14, dummySPGRPCD = "Hardwoods"), col = "royalblue") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 16, dummySPGRPCD = "Hardwoods"), col = "royalblue") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 18, dummySPGRPCD = "Hardwoods"), col = "royalblue") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 20, dummySPGRPCD = "Hardwoods"), col = "royalblue") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 21, dummySPGRPCD = "Hardwoods"), col = "royalblue") +
+  #geom_point(data = data.frame(binnedAGE = 10, BIOMASS_gm2 = 1, dummySPGRPCD = "Hardwoods"), col = "red") + # LIST r2 = 0.83
+  #geom_point(data = data.frame(binnedAGE = 20, BIOMASS_gm2 = 200, dummySPGRPCD = "Hardwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 234, dummySPGRPCD = "Hardwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 808, dummySPGRPCD = "Hardwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 1336, dummySPGRPCD = "Hardwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 1701, dummySPGRPCD = "Hardwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 1920, dummySPGRPCD = "Hardwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 2127, dummySPGRPCD = "Hardwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 2227, dummySPGRPCD = "Hardwoods"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 2312, dummySPGRPCD = "Hardwoods"), col = "red") +
+  #geom_point(data = data.frame(binnedAGE = 10, BIOMASS_gm2 = 1, dummySPGRPCD = "Hardwoods"), col = "turquoise") + # LITU r2 =
+  #geom_point(data = data.frame(binnedAGE = 20, BIOMASS_gm2 = 138, dummySPGRPCD = "Hardwoods"), col = "turquoise") +
+  #geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 299, dummySPGRPCD = "Hardwoods"), col = "turquoise") +
+  #geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 425, dummySPGRPCD = "Hardwoods"), col = "turquoise") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 517, dummySPGRPCD = "Hardwoods"), col = "turquoise") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 1050, dummySPGRPCD = "Hardwoods"), col = "turquoise") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 1522, dummySPGRPCD = "Hardwoods"), col = "turquoise") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 1811, dummySPGRPCD = "Hardwoods"), col = "turquoise") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 1927, dummySPGRPCD = "Hardwoods"), col = "turquoise") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 2005, dummySPGRPCD = "Hardwoods"), col = "turquoise") +
+  #geom_point(data = data.frame(binnedAGE = 20, BIOMASS_gm2 = 2, dummySPGRPCD = "Hardwoods"), col = "violetred") + # PLOC r2 =
+  #geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 49, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 118, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 164, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 196, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 235, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 255, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 277, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 294, dummySPGRPCD = "Hardwoods"), col = "violetred") +
+  #geom_point(data = data.frame(binnedAGE = 10, BIOMASS_gm2 = 1, dummySPGRPCD = "Oaks"), col = "firebrick") + # QUFA r2 =0.85
+  #geom_point(data = data.frame(binnedAGE = 20, BIOMASS_gm2 = 322, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 11, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 99, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 163, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 197, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 218, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 241, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 249, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 259, dummySPGRPCD = "Oaks"), col = "firebrick") +
+  #geom_point(data = data.frame(binnedAGE = 10, BIOMASS_gm2 = 1, dummySPGRPCD = "Oaks"), col = "forestgreen") + # QUAL r2 =0.79
+  #geom_point(data = data.frame(binnedAGE = 20, BIOMASS_gm2 = 118, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  #geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 249, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  #geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 359, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  #geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 433, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 273, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 617, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 988, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 1273, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 1472, dummySPGRPCD = "Oaks"), col = "forestgreen") +
+  #geom_point(data = data.frame(binnedAGE = 20, BIOMASS_gm2 = 1, dummySPGRPCD = "Oaks"), col = "deepskyblue4") +
+  geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 2, dummySPGRPCD = "Oaks"), col = "deepskyblue4") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 17, dummySPGRPCD = "Oaks"), col = "deepskyblue4") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 28, dummySPGRPCD = "Oaks"), col = "deepskyblue4") + # QUCO2 r2 =0.82
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 34, dummySPGRPCD = "Oaks"), col = "deepskyblue4") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 37, dummySPGRPCD = "Oaks"), col = "deepskyblue4") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 41, dummySPGRPCD = "Oaks"), col = "deepskyblue4") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 42, dummySPGRPCD = "Oaks"), col = "deepskyblue4") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 44, dummySPGRPCD = "Oaks"), col = "deepskyblue4") +
+  #geom_point(data = data.frame(binnedAGE = 10, BIOMASS_gm2 = 1, dummySPGRPCD = "Oaks"), col = "deepskyblue") + #QUMO4 r2 =0.82
+  #geom_point(data = data.frame(binnedAGE = 20, BIOMASS_gm2 = 228, dummySPGRPCD = "Oaks"), col = "deepskyblue") +
+  geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 11, dummySPGRPCD = "Oaks"), col = "deepskyblue") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 55, dummySPGRPCD = "Oaks"), col = "deepskyblue") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 89, dummySPGRPCD = "Oaks"), col = "deepskyblue") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 105, dummySPGRPCD = "Oaks"), col = "deepskyblue") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 113, dummySPGRPCD = "Oaks"), col = "deepskyblue") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 123, dummySPGRPCD = "Oaks"), col = "deepskyblue") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 127, dummySPGRPCD = "Oaks"), col = "deepskyblue") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 130, dummySPGRPCD = "Oaks"), col = "deepskyblue") +
+  geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 3, dummySPGRPCD = "Oaks"), col = "red") + # QURU r2 = 0.87
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 14, dummySPGRPCD = "Oaks"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 25, dummySPGRPCD = "Oaks"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 32, dummySPGRPCD = "Oaks"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 37, dummySPGRPCD = "Oaks"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 42, dummySPGRPCD = "Oaks"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 45, dummySPGRPCD = "Oaks"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 48, dummySPGRPCD = "Oaks"), col = "red") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 3, dummySPGRPCD = "Oaks"), col = "purple") + # QUPH r2 = 0.59
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 33, dummySPGRPCD = "Oaks"), col = "purple") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 54, dummySPGRPCD = "Oaks"), col = "purple") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 63, dummySPGRPCD = "Oaks"), col = "purple") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 66, dummySPGRPCD = "Oaks"), col = "purple") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 69, dummySPGRPCD = "Oaks"), col = "purple") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 67, dummySPGRPCD = "Oaks"), col = "purple") +
+  #geom_point(data = data.frame(binnedAGE = 10, BIOMASS_gm2 = 1, dummySPGRPCD = "Oaks"), col = "blue") + # QUST r2 =0.75
+  geom_point(data = data.frame(binnedAGE = 20, BIOMASS_gm2 = 1, dummySPGRPCD = "Oaks"), col = "blue") +
+  geom_point(data = data.frame(binnedAGE = 30, BIOMASS_gm2 = 11, dummySPGRPCD = "Oaks"), col = "blue") +
+  geom_point(data = data.frame(binnedAGE = 40, BIOMASS_gm2 = 21, dummySPGRPCD = "Oaks"), col = "blue") +
+  geom_point(data = data.frame(binnedAGE = 50, BIOMASS_gm2 = 27, dummySPGRPCD = "Oaks"), col = "blue") +
+  geom_point(data = data.frame(binnedAGE = 60, BIOMASS_gm2 = 30, dummySPGRPCD = "Oaks"), col = "blue") +
+  geom_point(data = data.frame(binnedAGE = 70, BIOMASS_gm2 = 32, dummySPGRPCD = "Oaks"), col = "blue") +
+  geom_point(data = data.frame(binnedAGE = 80, BIOMASS_gm2 = 34, dummySPGRPCD = "Oaks"), col = "blue") +
+  geom_point(data = data.frame(binnedAGE = 90, BIOMASS_gm2 = 35, dummySPGRPCD = "Oaks"), col = "blue") +
+  geom_point(data = data.frame(binnedAGE = 100, BIOMASS_gm2 = 35, dummySPGRPCD = "Oaks"), col = "blue")
+```
+
+```{r}
+treeTable %>%
+  group_by(dummySPGRPCD, binnedAGE) %>%
+  summarise(median = median(BIOMASS_gm2)) %>%
+  filter(dummySPGRPCD == "Oaks")
+
+expected <- c(1312,1448,1750,2302,2043)
+simulated <- c(273, 
+617, 
+988, 
+1273,
+ 1472)
+
+summary(lm(simulated ~ expected))
+
+df <- as.data.frame(cbind(expected, simulated))
+
+ggplot(df, aes(x = expected, y = simulated)) +
+  geom_point() +
+  theme_classic() +
+  ylim(0,1500) +
+  stat_function(fun = function(x){947.4386 + 0.1362*x}, color = "red")
+
+
+```
+
+
+
+
+```{r}
+calibrateLOG <- fread("C:/Users/lagoodal/Desktop/Test Run LANDIS/1000_Cell_Landscape/test1/NECN-calibrate-log.csv")
+
+calibrateLOG %>%
+  filter(Year == 10,
+         Month == 1) %>%
+  group_by(SpeciesName) %>%
+  summarise(avgAGE = round(mean(CohortAge)),
+            medianAGE = round(median(CohortAge)))
+```

@@ -1,0 +1,223 @@
+---
+title: "download_climate_data"
+output: pdf_document
+date: "2023-04-11"
+---
+
+```{r, wartning = FALSE, message = FALSE}
+library(geoknife)
+library(terra)
+library(janitor)
+library(sf)
+library(sp)
+library(tidyverse)
+library(basemaps)
+library(miscTools)
+```
+
+
+
+```{r}
+# Read in the Piedmont boundary and then change the projection to one that
+# geoknife needs (WGS84)
+piedmontBoundary <- st_read("C:/Users/lagoodal/Desktop/nc_eco_l3/Piedmont UTM 17N.shp") %>%
+  st_transform(crs = "+proj=longlat +datum=WGS84")
+
+# Get the extent of the area
+stencil <- simplegeom(as(piedmontBoundary, Class = "Spatial"))
+
+
+# fabric <- webdata(url = 'https://cida.usgs.gov/thredds/catalog.html?dataset=cida.usgs.gov/macav2metdata_daily_historical')
+fabric <- webdata(url = 'https://cida.usgs.gov/thredds/dodsC/UofIMETDATA')
+
+geoknife::query(fabric, 'variables')
+
+webdatasets <- geoknife::query('webdata')
+webdatasets[grep("UofIMETDATA", webdatasets@group)]
+
+vars_url <- c("pr", "tmmx", "tmmn", "vs", "th")
+urls <- paste0("http://thredds.northwestknowledge.net:8080/thredds/dodsC/agg_met_", vars_url, "_1979_CurrentYear_CONUS.nc")
+
+fabric <-  webdata(url = urls[1])
+geoknife::query(fabric, 'variables')
+
+vars_long <- c("precipitation_amount", "daily_maximum_temperature", "daily_minimum_temperature",
+               "daily_mean_windspeed", "daily_mean_wind_direction")
+
+summary_stats <- c("MEAN", "VARIANCE", "STD_DEV")
+
+knife <- webprocess(wait = FALSE, email = "lagoodal@ncsu.edu")
+geoknife::query(knife, 'algorithms')
+algorithm(knife) <- list('Area Grid Statistics (weighted)' = "gov.usgs.cida.gdp.wps.algorithm.FeatureWeightedGridStatisticsAlgorithm")
+knife@processInputs$STATISTICS <- summary_stats
+
+
+# job_results <- list()
+# for(i in 1:length(vars_long)){
+#   #set the fabric for a new variable, but keep everything else the same (i.e. the stencil and knife)
+#   fabric <- webdata(url = urls[i])
+#   variables(fabric) <- vars_long[i]
+#   print(vars_long[i])
+#   job <- geoknife(stencil, fabric, knife)
+#   if(error(job)){
+#     break
+#     check(job)
+#   }
+#   
+#   job_results[[i]] <- geoknife::result(job)
+# }
+
+fabric <- webdata(url = urls[4])
+variables(fabric) <- vars_long[4]
+job <- geoknife(stencil, fabric, knife)
+if(error(job)){
+  break
+  check(job)
+}
+pr <- result(job)
+
+# Quick data formatting
+ecoregions <- c("","eco1", "eco2", "eco3", "eco1", "eco2", "eco3", "eco1", "eco2", "eco3")
+precip <- read_csv("C:/Users/lagoodal/Desktop/Test Run LANDIS/Climate Data/geoknife_output_precip.csv")
+Tmax <- read_csv("C:/Users/lagoodal/Desktop/Test Run LANDIS/Climate Data/geoknife_output_Tmax.csv")
+Tmin <- read_csv("C:/Users/lagoodal/Desktop/Test Run LANDIS/Climate Data/geoknife_output_Tmin.csv")
+windDirection <- read_csv("C:/Users/lagoodal/Desktop/Test Run LANDIS/Climate Data/geoknife_output_wind_direction.csv")
+windSpeed <- read_csv("C:/Users/lagoodal/Desktop/Test Run LANDIS/Climate Data/geoknife_output_windspeed.csv")
+
+precip <- precip %>% row_to_names(row_number = 1)
+colnames(precip)[1] <- "TIMESTEP"
+
+Tmax$`MEAN(K)` <- Tmax$`MEAN(K)` - 273.15
+Tmin$`MEAN(K)` <- Tmin$`MEAN(K)` - 273.15
+
+Tmax <- cbind(Tmax, rep(Tmax[2:4],2))
+Tmax <- Tmax[,c(1,2,5,8,3,6,9,4,7,10)]
+names(Tmax) <- c("TIMESTEP", "MEAN(C)", "MEAN(C)", "MEAN(C)", "VARIANCE(C^2)", "VARIANCE(C^2)", "VARIANCE(C^2)", "STD_DEV(C)", "STD_DEV(C)", "STD_DEV(C)")
+Tmin <- cbind(Tmin, rep(Tmin[2:4],2))
+Tmin <- Tmin[,c(1,2,5,8,3,6,9,4,7,10)]
+names(Tmin) <- c("TIMESTEP", "MEAN(C)", "MEAN(C)", "MEAN(C)", "VARIANCE(C^2)", "VARIANCE(C^2)", "VARIANCE(C^2)", "STD_DEV(C)", "STD_DEV(C)", "STD_DEV(C)")
+
+windDirection <- windDirection %>% row_to_names(row_number = 1)
+colnames(windDirection)[1] <- "TIMESTEP"
+windSpeed <- windSpeed %>% row_to_names(row_number = 1)
+colnames(windSpeed)[1] <- "TIMESTEP"
+
+rbind(precip, windDirection, windSpeed)
+
+tempsDF <- rbind(Tmax, Tmin)
+otherDF <- rbind(precip, windDirection, windSpeed)
+
+# write_csv(tempsDF, "C:/Users/lagoodal/Desktop/Test Run LANDIS/Climate Data/tempsDF.csv")
+# write_csv(otherDF, "C:/Users/lagoodal/Desktop/Test Run LANDIS/Climate Data/otherDF.csv")
+
+```
+
+
+
+
+```{r}
+climateData <- read_csv("C:/Users/lagoodal/Desktop/Test Run LANDIS/test_climate_LG.csv")
+
+climateData <- climateData[-c(1,2),]
+
+climateData$...2 <- ifelse(climateData$...2 < 0, 0, climateData$...2)
+climateData$...3 <- ifelse(climateData$...3 < 0, 0, climateData$...3)
+climateData$...4 <- ifelse(climateData$...4 < 0, 0, climateData$...4)
+
+climateData$...2 <- as.numeric(climateData$...2)
+climateData$...3 <- as.numeric(climateData$...3)
+climateData$...4 <- as.numeric(climateData$...4)
+
+climateData <- climateData %>% drop_na()
+
+
+
+# write_csv(climateData,"C:/Users/lagoodal/Desktop/Test Run LANDIS/test_climate_LG.csv")
+
+climate <- read_csv("C:/Users/lagoodal/Desktop/Test Run LANDIS/test_climate_LG.csv")
+climate <- climate[-c(1,2),]
+climate <- climate %>%
+  mutate_if(is.character, as.numeric)
+
+range(climate$...2)
+
+```
+
+
+```{r}
+all_webdata <- geoknife::query("webdata")
+all_webdata
+
+```
+
+
+
+
+```{r, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(geoknife)
+```
+
+
+
+```{r}
+knife <- webprocess(wait = TRUE, email = "lagoodal@ncsu.edu")
+# query(knife, 'algorithms')
+algorithm(knife) <- list('Area Grid Statistics (weighted)' = "gov.usgs.cida.gdp.wps.algorithm.FeatureWeightedGridStatisticsAlgorithm")
+knife@processInputs$STATISTICS <- c("MEAN", "VARIANCE", "STD_DEV")
+stencil <- simplegeom(piedmontBoundary[1])
+fabric <- webdata(list(
+  times = as.POSIXct(c('1979-01-01', '2022-12-31')),
+  url = 'https://cida.usgs.gov/thredds/catalog.html?dataset=cida.usgs.gov/thredds/UofIMETDATA'
+  #variables = c("precipitation", "maximum temperature", "minimum temperature", "wind speed", "wind direction")
+))
+varList <- c("precipitation", "maximum temperature", "minimum temperature", "wind speed", "wind direction")
+
+job_results <- list()
+for(i in 1:length(varList)){
+  variables(fabric) <- varList[i]
+  print(varList[i])
+  job <- geoknife(stencil, fabric, knife)
+  if(error(job)){
+    break
+    check(job)
+  }
+  job_results[[1]] <- result(job)
+}
+
+knife <- webprocess(wait = TRUE, email = "lagoodal@ncsu.edu")
+# query(knife, 'algorithms')
+algorithm(knife) <- list('Area Grid Statistics (weighted)' = "gov.usgs.cida.gdp.wps.algorithm.FeatureWeightedGridStatisticsAlgorithm")
+knife@processInputs$STATISTICS <- c("MEAN", "VARIANCE", "STD_DEV")
+stencil <- simplegeom(piedmontBoundary[1])
+fabric <- webdata(list(
+  times = as.POSIXct(c('1979-01-01', '2022-12-31')),
+  url = 'https://cida.usgs.gov/thredds/catalog.html?dataset=cida.usgs.gov/thredds/UofIMETDATA'
+  #variables = c("precipitation", "maximum temperature", "minimum temperature", "wind speed", "wind direction")
+))
+variables(fabric) <- "precipitation"
+job <- geoknife(stencil = stencil, fabric = fabric, knife = knife)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

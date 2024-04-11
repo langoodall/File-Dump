@@ -1,0 +1,367 @@
+---
+title: "create_1_cell_landscape"
+output: pdf_document
+date: "2023-04-14"
+---
+
+```{r}
+# Create a test landscape that is one cell in size
+
+library(terra)
+ecoregions <- rast("C:/Users/lagoodal/Desktop/Test Run LANDIS/Clipped/ClimateRegions_250m.tif")
+values(ecoregions) <- 0
+ecoregions[100,150] <- 1
+writeRaster(ecoregions, "C:/Users/lagoodal/Desktop/Test Run LANDIS/One_Cell_Landscape/one_cell.tif", datatype = "INT2S", overwrite = TRUE)
+
+values(ecoregions)
+
+ecoregions[100,150]
+plot(ecoregions)
+```
+
+
+```{r}
+# Create a test landscape that is one cell in size
+
+library(terra)
+ecoregions <- rast("C:/Users/lagoodal/Desktop/Test Run LANDIS/Clipped/ClimateRegions_250m.tif")
+values(ecoregions) <- 0
+ecoregions[250,530] <- 1
+writeRaster(ecoregions, "C:/Users/lagoodal/Desktop/Test Run LANDIS/One_Cell_Landscape/one_cell_2.tif", datatype = "INT2S", overwrite = TRUE)
+
+#values(ecoregions)
+
+#ecoregions[102,150]
+plot(ecoregions)
+
+
+#mapIC <- rast("C:/Users/lagoodal/Desktop/Test Run LANDIS/MapCode_IC.tif")
+#plot(mapIC)
+
+
+#View(as.data.frame(values(mapIC)))
+
+```
+
+
+# Create a multicell landscape
+
+```{r}
+library(terra)
+ecoregions <- rast("C:/Users/lagoodal/Desktop/Test Run LANDIS/Clipped/ClimateRegions_250m.tif")
+values(ecoregions) <- 0
+ecoregions[19,1] <- 1
+ecoregions[19,2] <- 1
+ecoregions[19,3] <- 1
+ecoregions[20,1] <- 1
+ecoregions[20,2] <- 1
+ecoregions[20,3] <- 1
+ecoregions[21,1] <- 1
+ecoregions[21,2] <- 1
+ecoregions[21,3] <- 1
+writeRaster(ecoregions, "C:/Users/lagoodal/Desktop/Test Run LANDIS/Multi_Cell_Landscape/multi_cell_1.tif", datatype = "INT2S", overwrite = TRUE)
+
+plot(ecoregions)
+```
+
+
+# Create a multicell landscape 2
+
+```{r}
+library(terra)
+ecoregions <- rast("C:/Users/lagoodal/Desktop/Test Run LANDIS/Clipped/ClimateRegions_250m.tif")
+values(ecoregions) <- 0
+ecoregions[205,400] <- 1
+ecoregions[205,401] <- 1
+ecoregions[205,402] <- 1
+ecoregions[206,400] <- 1
+ecoregions[206,401] <- 1
+ecoregions[206,402] <- 1
+ecoregions[207,400] <- 1
+ecoregions[207,401] <- 1
+ecoregions[207,402] <- 1
+writeRaster(ecoregions, "C:/Users/lagoodal/Desktop/Test Run LANDIS/Multi_Cell_Landscape/multi_cell_2.tif", datatype = "INT2S", overwrite = TRUE)
+
+plot(ecoregions)
+```
+
+
+# Create a multicell landscape 3
+
+```{r}
+ecoregions <- rast("C:/Users/lagoodal/Desktop/Test Run LANDIS/Clipped/ClimateRegions_250m.tif")
+values(ecoregions) <- 0
+ecoregions[205,400] <- 1
+ecoregions[205,401] <- 1
+ecoregions[205,402] <- 1
+ecoregions[206,400] <- 1
+ecoregions[206,401] <- 1
+ecoregions[206,402] <- 1
+ecoregions[207,400] <- 1
+ecoregions[207,401] <- 1
+
+#values(ecoregions) <- 0
+#ecoregions[273,115] <- 1
+#ecoregions[274,115] <- 1
+#ecoregions[275,115] <- 1
+#ecoregions[273,116] <- 1
+#ecoregions[274,116] <- 1
+#ecoregions[275,116] <- 1
+#ecoregions[273,117] <- 1
+#ecoregions[274,117] <- 1
+#ecoregions[275,117] <- 1
+writeRaster(ecoregions, "C:/Users/lagoodal/Desktop/Test Run LANDIS/Multi_Cell_Landscape/multi_cell_3.tif", datatype = "INT2S", overwrite = TRUE)
+
+plot(ecoregions)
+plot(oaksRaster)
+```
+
+```{r}
+pinesRaster <- rast("C:/Users/lagoodal/Desktop/pinesRasterIC.tif")
+
+```
+
+
+
+```{r}
+library(terra)
+ecoregions <- rast("C:/Users/lagoodal/Desktop/Test Run LANDIS/Clipped/ClimateRegions_250m.tif")
+values(ecoregions) <- 0
+# ecoregions[10:19, 10:19] <- 1
+ecoregions[180:189, 200:209] <- 1
+writeRaster(ecoregions, "C:/Users/lagoodal/Desktop/Test Run LANDIS/100_Cell_Landscape/100_cell_1.tif", datatype = "INT2S", overwrite = TRUE)
+
+plot(oaksRaster)
+# plot(pinesRaster)
+plot(ecoregions)
+
+```
+
+
+
+
+```{r}
+library(terra)
+oaksRaster <- rast("C:/Users/lagoodal/Desktop/oaksRasterIC.tif")
+plot(oaksRaster)
+```
+
+# 10000 Cell
+
+```{r}
+library(terra)
+ecoregions <- rast("C:/Users/lagoodal/Desktop/All Raster Layers/Full Piedmont/ClimateRegions_250m.tif")
+
+values(ecoregions) <- 0
+#ecoregions[630:729, 320:419] <- 1
+ecoregions[350:449, 1420:1519] <- 1
+ext(ecoregions) <- c(377451.70563106, 801451.70563106, 3814427.67455902, 4109427.67455902)
+writeRaster(ecoregions, "C:/Users/lagoodal/Desktop/Test Run LANDIS/1000_Cell_Landscape/1000_cell_1.tif", datatype = "INT2S", overwrite = TRUE)
+
+# OG <- ecoregions
+plot(OG)
+plot(ecoregions)
+
+```
+
+
+# Isolating Oak Cells
+
+```{r}
+# Load in IC raster
+library(terra)
+mapCodeMap <- rast("C:/Users/lagoodal/Desktop/All Raster Layers/Full Piedmont/MapCode_IC.tif")
+
+# Turn all non-selected cells into NAs
+mapCodeMap[!mapCodeMap$MapCode_IC %in% c(50)] <- NA
+
+# c(29,34,37,47,50,51,57,60,67,68,71,1080,1083,1084,1091,1442,1572,1914,2066,3020)
+
+# Find which cells are left by ID
+oakCells <- cells(mapCodeMap)
+
+# Create matrix for cell numbers to then look up row/column based on cell number
+cellMatrixNumbers <- c(1:2001280)
+cellMatrix <- matrix(cellMatrixNumbers, nrow = 1180, ncol = 1696, byrow = T)
+
+# For loop to print row/col values
+for(i in oakCells){
+  print(which(cellMatrix == i, arr.ind = T))
+}
+
+# Read in ecoregions raster
+ecoregions <- rast("C:/Users/lagoodal/Desktop/All Raster Layers/Full Piedmont/ClimateRegions_250m.tif")
+ext(ecoregions) <- ext(mapCodeMap)
+
+# Change ecoregion raster to only have the selected cells as being active
+# values(ecoregions) <- ifelse(cells(ecoregions) %in% oakCells, 1, 0)
+# ext(ecoregions) <- c(377451.70563106, 801451.70563106, 3814427.67455902, 4109427.67455902)
+#dim(ecoregions) <- dim(rastersPiedmontFull[[11]])
+values(ecoregions) <- 0
+ecoregions[292,1000] <- 1
+
+writeRaster(ecoregions, "C:/Users/lagoodal/Desktop/Test Run LANDIS/1000_Cell_Landscape/1000_cell_1.tif", datatype = "INT2S", overwrite = TRUE)
+
+plot(mapCodeMap)
+plot(ecoregions)
+
+mapCodeMap[292,1000]
+
+# write.csv(cellMatrix, "C:/Users/lagoodal/Desktop/MATRIX.csv")
+```
+
+
+
+```{r}
+# Load in IC raster
+library(terra)
+mapCodeMap <- rast("C:/Users/lagoodal/Desktop/All Raster Layers/Full Piedmont/MapCode_IC.tif")
+
+# Turn all non-selected cells into NAs
+mapCodeMap[!mapCodeMap$MapCode_IC %in% c(509)] <- NaN
+
+# Oak Map Codes =  c(34,67,1936,2418,3663,3884,4202,4210,4214)
+# Hardwood Map Codes =  c(25,39,137,699,754,2520,2589,2601,4045,5304)
+# Softwood Map Codes = c(115,8256,8190,8012,7898,6793,672)
+
+# Find which cells are left by ID
+hardwoodCells <- cells(mapCodeMap)
+
+# Create matrix for cell numbers to then look up row/column based on cell number
+cellMatrixNumbers <- c(1:2001280)
+cellMatrix <- matrix(cellMatrixNumbers, nrow = 1180, ncol = 1696, byrow = T)
+
+# For loop to print row/col values
+for(i in hardwoodCells){
+  print(which(cellMatrix == i, arr.ind = T))
+}
+
+
+x <- mapcodeTable %>% filter(SpeciesName == "PITA")
+mapcodeTable %>% filter(MapCode %in% x$MapCode,)
+mapcodeTable %>% filter(MapCode %in% x$MapCode,) %>% group_by(MapCode) %>% summarise(n = n()) %>% filter(n < 2)
+
+
+# Read in ecoregions raster
+ecoregions <- rast("C:/Users/lagoodal/Desktop/All Raster Layers/Full Piedmont/ClimateRegions_250m.tif")
+ext(ecoregions) <- terra::ext(mapCodeMap)
+
+# Change ecoregion raster to only have the selected cells as being active
+# values(ecoregions) <- ifelse(cells(ecoregions) %in% oakCells, 1, 0)
+# ext(ecoregions) <- c(377451.70563106, 801451.70563106, 3814427.67455902, 4109427.67455902)
+#dim(ecoregions) <- dim(rastersPiedmontFull[[11]])
+values(ecoregions) <- 0
+
+ecoregions[840:849,532:541] <- 1 # PIEC 2528 30
+ecoregions[364:373,584:593] <- 1 # PIEC 4420 10
+ecoregions[364:373,585:594] <- 1 # PIEC 4420 10
+ecoregions[384:383,956:964] <- 1 # PIEC 4420 10
+ecoregions[441:450,758:767] <- 1 # PIEC 4420 10
+ecoregions[446:455,757:766] <- 1 # PIEC 4420 10
+ecoregions[451:460,937:946] <- 1 # PIEC 4420 10
+ecoregions[451:460,938:947] <- 1 # PIEC 4420 10
+ecoregions[459:468,782:791] <- 1 # PIEC 4420 10
+ecoregions[459:468,879:888] <- 1 # PIEC 4420 10
+ecoregions[460:469,750:759] <- 1 # PIEC 4420 10
+ecoregions[460:469,751:760] <- 1 # PIEC 4420 10
+ecoregions[261:270,1445:1454] <- 1 # PIVI2 21 10
+ecoregions[368:377,833:842] <- 1 # PIVI2 21 10
+ecoregions[374:385,1125:1134] <- 1 # PIVI2 21 10
+ecoregions[452:461,389:397] <- 1 # PIVI2 21 10
+ecoregions[654:663,762:771] <- 1 # PIVI2 21 10
+ecoregions[700:709,534:543] <- 1 # PIVI2 21 10
+ecoregions[748:757,758:767] <- 1 # PITA 49 10
+ecoregions[1010:1019,732:741] <- 1 # PITA 107 10
+ecoregions[654:663,1415:1424] <- 1 # PITA 132 20
+ecoregions[299:308,1532:1541] <- 1 # PITA 509 20
+ecoregions[374:383,1446:1455] <- 1 # PITA 509 20
+ecoregions[749:758,819:828] <- 1 # PITA 509 20
+
+# Hardwoods
+ecoregions[293:302,1221:1230] <- 1 # ACRU 276 10
+ecoregions[478:487,550:559] <- 1 # ACRU 276 10
+ecoregions[589:598,477:486] <- 1 # ACRU 276 10
+ecoregions[809:818,320:329] <- 1 # CATO6 1130 20
+ecoregions[798:807,701:710] <- 1 # LIST 148 20
+ecoregions[261:270,992:1001] <- 1 # LIST 900 10
+ecoregions[459:468,762:771] <- 1 # LIST 900 10
+ecoregions[598:607,523:532] <- 1 # LIST 900 10
+ecoregions[678:687,544:553] <- 1 # LIST 900 10
+ecoregions[718:727,541:550] <- 1 # LIST 900 10
+ecoregions[876:885,659:668] <- 1 # LIST 900 10
+ecoregions[461:470,932:941] <- 1 # LITU 1814 10
+ecoregions[566:575,384:393] <- 1 # LITU 1814 10
+ecoregions[589:598,480:489] <- 1 # LITU 1814 10
+ecoregions[633:642,410:419] <- 1 # LITU 1814 10
+ecoregions[707:716,381:390] <- 1 # LITU 1814 10
+ecoregions[644:653,1406:1415] <- 1 # PLOC 1429 20
+ecoregions[924:933,727:736] <- 1 # PLOC 1429 20
+ecoregions[619:628,358:367] <- 1 # FAGR 2108 10
+ecoregions[619:628,373:382] <- 1 # FAGR 2121 10
+
+# Oaks
+ecoregions[678:687,548:557] <- 1 # QUMO4 340 10
+ecoregions[692:701,644:653] <- 1 # QUMO4 340 10
+ecoregions[734:742,406:415] <- 1 # QUMO4 340 10
+ecoregions[607:616,729:738] <- 1 # QUMO4 340 10
+ecoregions[793:802,417:426] <- 1 # QUCO2 1846 20
+ecoregions[444:453,828:837] <- 1 # QUST 821 20
+ecoregions[452:361,818:827] <- 1 # QUST 821 20
+ecoregions[486:495,731:740] <- 1 # QUST 821 20
+ecoregions[798:807,284:293] <- 1 # QUPH 8007 40
+ecoregions[738:747,914:923] <- 1 # QUFA 262 10
+ecoregions[754:763,816:825] <- 1 # QUFA 819 10
+ecoregions[789:798,629:638] <- 1 # QUFA 819 10
+ecoregions[813:822,327:336] <- 1 # QUFA 819 10
+ecoregions[841:850,551:560] <- 1 # QUFA 819 10
+ecoregions[850:859,511:520] <- 1 # QUFA 819 10
+ecoregions[606:615,518:527] <- 1 # QUAL 29 10
+ecoregions[820:829,814:823] <- 1 # QUAL 1443 30
+ecoregions[923:932,539:548] <- 1 # QUAL 7902 10
+ecoregions[858:857,341:350] <- 1 # QURU 1287 60
+
+# Extra
+#ecoregions[500:600,1000:1100] <- 1
+#ecoregions[300:400, 1200:1300] <- 1
+
+writeRaster(ecoregions, "C:/Users/lagoodal/Desktop/Test Run LANDIS/1000_Cell_Landscape/1000_cell_1.tif", datatype = "INT2S", overwrite = TRUE)
+
+plot(mapCodeMap)
+plot(ecoregions)
+
+
+# write.csv(cellMatrix, "C:/Users/lagoodal/Desktop/MATRIX.csv")
+```
+
+
+
+
+```{r}
+# Create path and files objects
+path <- "C:/Users/lagoodal/Desktop/All Raster Layers/LANDIS"
+files <- list.files(path = path, pattern = 'tif$', full.names = TRUE)
+# Create a list of rasters
+rastersPiedmontFull <- lapply(files, rast)
+
+
+plot(rastersPiedmontFull[[14]])
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
