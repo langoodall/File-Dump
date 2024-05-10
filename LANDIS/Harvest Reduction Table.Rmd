@@ -1,0 +1,180 @@
+---
+title: "Harvest Reduction Table"
+output: pdf_document
+date: "2024-05-07"
+---
+
+
+```{r, message = FALSE, warning = FALSE}
+library(tidyverse)
+library(terra)
+library(sf)
+```
+
+
+
+```{r}
+# Read in data we will need
+mgmtRast <- rast("C:/Users/lagoodal/Desktop/All Raster Layers/standsraster/clippedPiedmontOwnership.tif")
+mgmtRastOG <- rast("C:/Users/lagoodal/Desktop/All Raster Layers/standsraster/clippedPiedmontOwnership.tif")
+ecoregions <- rast("C:/Users/lagoodal/Desktop/All Raster Layers/Clipped Piedmont/ecoregions.tif")
+ICMap <- rast("C:/Users/lagoodal/Desktop/All Raster Layers/Clipped Piedmont/MapCode_IC.tif")
+mapCodeDf <- read_csv("C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/test1/Final_table.csv")
+
+# Reclassify some ecoregion values
+ecoregions <- ifel(ecoregions == 0, NA,
+                   ifel(ecoregions == 1, 1, ecoregions))
+
+# Mask out NA ecoregions on management and ICMap raster
+mgmtRast <- mask(mgmtRast, ecoregions)
+ICMap <- mask(ICMap, ecoregions)
+
+# Cells per management area
+mgmtRast %>%
+  as.data.frame() %>%
+  `colnames<-`("Class") %>%
+  group_by(Class) %>%
+  summarise(n = n())
+
+# Create filtered management area map which will then be used to figure out what
+# Map Codes are in which management area
+mgmt1 <- ifel(mgmtRast == 1, 1, NA)
+mgmt2 <- ifel(mgmtRast == 2, 2, NA)
+mgmt3 <- ifel(mgmtRast == 3, 3, NA)
+IC1 <- mask(ICMap, mgmt1)
+IC2 <- mask(ICMap, mgmt2)
+IC3 <- mask(ICMap, mgmt3)
+
+# Get Map Codes by management area
+IC1MC <- values(IC1) %>% as.data.frame() %>% drop_na() %>% unique()
+IC2MC <- values(IC2) %>% as.data.frame() %>% drop_na() %>% unique()
+IC3MC <- values(IC3) %>% as.data.frame() %>% drop_na() %>% unique()
+IC1Df <- mapCodeDf %>% filter(MapCode %in% IC1MC$MapCode_IC)
+IC2Df <- mapCodeDf %>% filter(MapCode %in% IC2MC$MapCode_IC)
+IC3Df <- mapCodeDf %>% filter(MapCode %in% IC3MC$MapCode_IC)
+
+# Create vectors that contain the species for each FORTYP classification
+oakHickory <- c("QUAL","QUCO2","QUMO4","QUPH","QURU","QUST","QUVE","CATO6","CAGL8","LIST","LITU","ACRU")
+oakPine <- c("QUAL","QUCO2","QUMO4","QUPH","QURU","QUST","QUVE","PITA","PIEC","PIVI2","PIPA","JUVI")
+softwoods <- c("PIEC", "PIPA", "PIVI2", "PITA", "JUVI")
+
+
+# Now to determine which cells fall into which forest type based upon their species and biomass values
+IC1Df <- IC1Df %>%
+  group_by(MapCode, SpeciesName) %>%
+  summarise(biomass = sum(CohortBiomass)) %>%
+  mutate(totalBiomass = sum(biomass),
+         propBiomass = biomass / totalBiomass) %>%
+  ungroup() %>%
+  group_by(MapCode) %>%
+  mutate(FORTYP = case_when(
+    sum(propBiomass[SpeciesName == "PITA"]) > 0.9 ~ "LOBLOLLY",
+    sum(propBiomass[SpeciesName %in% oakHickory]) > 0.6 ~ "OAK-HICKORY",
+    sum(propBiomass[SpeciesName %in% oakPine]) > 0.6 ~ "OAK-PINE",
+    sum(propBiomass[SpeciesName %in% softwoods]) >= 0.4 ~ "SOFTWOODS",
+    TRUE ~ NA_character_
+  )) %>%
+  ungroup()
+
+
+IC2Df <- IC2Df %>%
+  group_by(MapCode, SpeciesName) %>%
+  summarise(biomass = sum(CohortBiomass)) %>%
+  mutate(totalBiomass = sum(biomass),
+         propBiomass = biomass / totalBiomass) %>%
+  ungroup() %>%
+  group_by(MapCode) %>%
+  mutate(FORTYP = case_when(
+    sum(propBiomass[SpeciesName == "PITA"]) > 0.9 ~ "LOBLOLLY",
+    sum(propBiomass[SpeciesName %in% oakHickory]) > 0.6 ~ "OAK-HICKORY",
+    sum(propBiomass[SpeciesName %in% oakPine]) > 0.6 ~ "OAK-PINE",
+    sum(propBiomass[SpeciesName %in% softwoods]) >= 0.4 ~ "SOFTWOODS",
+    TRUE ~ NA_character_
+  )) %>%
+  ungroup()
+
+
+IC3Df <- IC3Df %>%
+  group_by(MapCode, SpeciesName) %>%
+  summarise(biomass = sum(CohortBiomass)) %>%
+  mutate(totalBiomass = sum(biomass),
+         propBiomass = biomass / totalBiomass) %>%
+  ungroup() %>%
+  group_by(MapCode) %>%
+  mutate(FORTYP = case_when(
+    sum(propBiomass[SpeciesName == "PITA"]) > 0.9 ~ "LOBLOLLY",
+    sum(propBiomass[SpeciesName %in% oakHickory]) > 0.6 ~ "OAK-HICKORY",
+    sum(propBiomass[SpeciesName %in% oakPine]) > 0.6 ~ "OAK-PINE",
+    sum(propBiomass[SpeciesName %in% softwoods]) >= 0.4 ~ "SOFTWOODS",
+    TRUE ~ NA_character_
+  )) %>%
+  ungroup()
+
+# Proportions of each FORTYP in each management zone
+IC1Df %>% group_by(FORTYP) %>% summarise(n = n()) %>% mutate(total = sum(n), prop = n / total)
+IC2Df %>% group_by(FORTYP) %>% summarise(n = n()) %>% mutate(total = sum(n), prop = n / total)
+IC3Df %>% group_by(FORTYP) %>% summarise(n = n()) %>% mutate(total = sum(n), prop = n / total)
+
+
+IC1MapCodes <- IC1Df %>% select(MapCode, FORTYP) %>% unique()
+IC2MapCodes <- IC2Df %>% select(MapCode, FORTYP) %>% unique()
+IC3MapCodes <- IC3Df %>% select(MapCode, FORTYP) %>% unique()
+
+
+# NEED TO IFEL/RECLASSIFY THE MAPCODE VALUES TO FORTYP VALUES
+```
+
+
+
+# Calculate how many active and inactive cells are in each management area
+# First of all, how many NAs fall outside of the AOI
+clippedHUC.shp <- st_read("C:/Users/lagoodal/Desktop/All Raster Layers/standsraster/Clipped Shapefile/clippedHUC.shp")
+rastHUC <- rasterize(clippedHUC.shp, mgmtRast)
+# Cell counts
+totalCells <- 1011 * 1442
+outsideNAs <- 493699 # Calculated by counting all cells outside of the landscape
+totalMgmt1 <- values(mgmtRastOG) %>% as.data.frame() %>% drop_na() %>% filter(forest_own1 == 1) %>% nrow()
+totalMgmt2 <- values(mgmtRastOG) %>% as.data.frame() %>% drop_na() %>% filter(forest_own1 == 2) %>% nrow()
+totalMgmt3 <- values(mgmtRastOG) %>% as.data.frame() %>% drop_na() %>% filter(forest_own1 == 3) %>% nrow()
+
+mgmt1Active <- values(mgmt1) %>% as.data.frame() %>% drop_na() %>% nrow()
+mgmt2Active <- values(mgmt2) %>% as.data.frame() %>% drop_na() %>% nrow()
+mgmt3Active <- values(mgmt3) %>% as.data.frame() %>% drop_na() %>% nrow()
+
+# 22087 are NAs that fell within the clippedHUC.shp and still need to be counted
+# or the totals will be off
+mgmt1Inactive <- (totalCells - outsideNAs - 22087 - totalMgmt2 - totalMgmt3 - mgmt1Active)
+mgmt2Inactive <- (totalCells - outsideNAs - 22087 - totalMgmt1 - totalMgmt3 - mgmt2Active)
+mgmt3Inactive <- (totalCells - outsideNAs - 22087 - totalMgmt1 - totalMgmt2 - mgmt3Active)
+
+
+
+plot(clippedHUC.shp)
+# NumclippedHUC.Shp# Number of time steps per rotation
+# FORTYP    Rotation    Timesteps/Rotation
+# Loblolly  35          3
+# Oak-H     40          4
+# Oak-P     40          4
+# Soft      40          4
+
+
+plot(mgmtRast)
+plot(clippedHUC.shp, add = TRUE, col = NA)
+
+```
+
+
+
+
+FORTYP    N     total prop
+LOBLOLLY	3842	14899	0.25786966	
+OAK-HICKORY	5693	14899	0.38210618	
+OAK-PINE	3275	14899	0.21981341	
+SOFTWOODS	595	14899	0.03993557	
+NA	1494	14899	0.10027519
+
+
+
+
+
+
