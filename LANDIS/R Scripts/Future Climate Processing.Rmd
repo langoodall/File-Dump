@@ -1,0 +1,784 @@
+# download and process climate data
+# use geoknife, guide found here: https://cran.r-project.org/web/packages/geoknife/vignettes/geoknife.html
+
+```{r}
+library("exactextractr")
+#library("geoknife")
+library("sf")
+#library("sp")
+library("tidyverse")
+library('terra')
+library('data.table')
+library('ggplot2')
+```
+
+############################################################################################################################################
+##################################### NETCDF PROCESSING FOR LANDIS CLIMATE INPUT FILE ######################################################
+############################################################################################################################################
+
+
+```{r}
+# Import ecoregions shapefile/gpkg and reproject to match netcdf CRS (import one nc for this)
+nc_crs <- terra::rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Daily Climate/agg_macav2metdata_pr_BNU-ESM_r1i1p1_rcp45_2006_2099_CONUS_daily.nc")
+crs(nc_crs) # WGS 84 (CRS84) (OGC:CRS84)
+boundary <- st_read("C:/Users/lagoodal/Desktop/nc_eco_l3/Piedmont UTM 17N.shp") %>%
+  sf::st_transform(crs(nc_crs))
+
+ecoregions <- rast("C:/Users/lagoodal/Desktop/All Raster Layers/ecoregions.tif")
+
+plot(ecoregions)
+
+eco1 <- ecoregions
+eco1[eco1[] != 1] <- NA
+eco1.shp <- as.polygons(eco1)
+eco1.shp <- st_as_sf(eco1.shp)
+
+eco2 <- ecoregions
+eco2[eco2[] != 2] <- NA
+eco2.shp <- as.polygons(eco2)
+eco2.shp <- st_as_sf(eco2.shp)
+
+eco3 <- ecoregions
+eco3[eco3[] != 3] <- NA
+eco3.shp <- as.polygons(eco3)
+eco3.shp <- st_as_sf(eco3.shp)
+
+
+plot(eco1)
+plot(eco2, add = TRUE, col = "blue")
+plot(eco3, add = TRUE, col = "red")
+
+
+ecoregions.shp <- rbind(eco1.shp, eco2.shp, eco3.shp)
+
+
+ecoregions.shp <- ecoregions.shp %>% st_transform(crs = crs(nc_crs))
+
+```
+
+
+```{r}
+# Import netcdf (geographically and temporally subset via netCDF subset)
+# http://thredds.northwestknowledge.net:8080/thredds/reacch_climate_CMIP5_aggregated_macav2_catalog.html 
+# 2020-01-01 to 2099-12-31
+
+nc_vars <- c("pr", "tasmax", "tasmin", "uas", "vas")
+ncs <- paste0("C:/Users/lagoodal/Desktop/Dissertation Stuff/Daily Climate/agg_macav2metdata_",nc_vars,"_MRI-CGCM3_r1i1p1_rcp85_2006_2099_CONUS_daily.nc")
+ncs
+```
+
+```{r}
+# Check pr annual sums 
+##########################################################
+pr <- paste0("./climate/bcc-csm-rcp85/agg_macav2metdata_pr_bcc-csm1-1_r1i1p1_rcp85_2006_2099_CONUS_daily.nc")
+pr <- terra::rast(pr) # all layers (~29,220 days)
+lyrs <- pr
+lyrs <- lyrs[[1:7305]] # Subset multiple layers (just 3 days for testing)
+lyrs <- lyrs[[1:14610]]
+
+plot(lyrs[[210]])
+plot(boundary$geom, add=T)
+
+
+dates <- time(lyrs) # Create a vector of dates for "timestep" variable
+
+mean <- exact_extract(lyrs[[210:213]], boundary, fun='mean') # Exract mean by ecoregion, transform it to a data table, and transpose the rows/columns
+setDT(mean)
+mean <- transpose(mean) # column names match order of ecoregion 
+
+sd <-  exact_extract(lyrs[[210:213]], boundary, fun='stdev')
+setDT(sd)
+sd <- transpose(sd)
+
+cnt <- exact_extract(lyrs[[1:2]], boundary, fun='count')
+sum <-  exact_extract(lyrs[[1:2]], boundary, fun='sum')
+
+
+#colnames(mean) <- paste0(colnames(mean), "mean")
+mean$date <- dates
+mean$yr <- substr(dates, 1, 4)
+sum <- mean[, lapply(.SD, sum), by=yr, .SDcols=c("V1", "V2", "V3", "V4")]
+sum_long <- melt(sum, id.vars="yr")
+
+sum_long %>%
+  ggplot( aes(x=yr, y=value, group=variable, color=variable)) +
+  geom_line(size=2)
+```
+
+##########################################################
+
+```{r}
+#initialize empty list
+# resulting list variable order will follow order of "nc_vars" 
+job_results <- list()
+
+start.time <- Sys.time()
+for(i in 1:length(ncs)){ #about 2 minutes to run this loop 
+  lyrs <- terra::rast(ncs[i]) # all layers (~34333, days)
+  #lyrs <- lyrs[[1:3]] # Subset multiple layers (just 3 days for testing)
+  dates <- time(lyrs) # Create a vector of dates for "timestep" variable
+  
+  mean <- exact_extract(lyrs, ecoregions.shp, fun='mean') # Exract mean by ecoregion, transform it to a data table, and transpose the rows/columns
+  setDT(mean)
+  mean <- transpose(mean) # column names match order of ecoregion 
+  colnames(mean) <- paste0(colnames(mean), "mean")
+  
+  sd <- exact_extract(lyrs, ecoregions.shp, fun='stdev') #Repeat for sd 
+  setDT(sd)
+  sd <- transpose(sd) 
+  colnames(sd) <- paste0(colnames(sd), "sd")
+  
+  var <- exact_extract(lyrs, ecoregions.shp, fun='variance') #Repeat for var
+  setDT(var)
+  var <- transpose(var) 
+  colnames(var) <- paste0(colnames(var), "var")
+  
+  comb <- cbind(mean, sd, var)
+  comb$date <- dates 
+  
+  job_results[[i]] <- comb
+  print(i)
+}
+end.time <- Sys.time()
+
+(time.taken <- round(end.time - start.time,2))
+
+job_results_reform <- job_results %>%
+  map(., function(x) dplyr::mutate(x, TIMESTEP = paste0(as.character(date), "T00:00:00Z")))
+
+  
+# ADJUST COLUMN NUMBERS BASED ON NUMBER OF ECOREGIONS - LISTS 2 & 3 are the temperature lists
+job_results_reform[[2]][,1:3] <- job_results_reform[[2]][,1:3] - 273.15 #convert from kelvin to celsius (second list is tasmax) #CHECK HOW MANY ECOREGIONS
+job_results_reform[[3]][,1:3] <- job_results_reform[[3]][,1:3] - 273.15 #convert from kelvin to celsius (third list is tasmin)
+
+```
+
+
+```{r}
+#################################################################
+##### COMBINE CLIMATE VARIABLES AND FORMAT FOR EXCEL OUTPUT #####
+#################################################################
+
+# List (in order) names of headers from resulting data tables
+# and variable and units names (in order) 
+
+vnames <- c("V1", "V2", "V3") #change based on number of ecoregions 
+var_rows <- c("#ppt",
+              "#Tmax",
+              "#Tmin",
+              "#easting",
+              "#northing")
+units_means <- c("mm/d",
+                 "C",
+                 "C",
+                 "m/s",
+                 "m/s")
+units_variance <- c("mm/d^2",
+                    "C^2",
+                    "C^2", 
+                    "m/s^2",
+                    "m/s^2")
+
+ecoregions_names <- c("ecoregion1", "ecoregion2", "ecoregion3") #ecoregions names from geoknife, you can change these - reflect that in the ecoregion .txt file 
+#ecoregions_names_new <- boundary$region #ecoregion names in LANDIS
+statistic <- c('mean', 'sd', 'var')
+
+# # Previous variables (all)
+# #---------------------
+# #rewrite variables in the format the climate library needs
+# # this is sort of difficult using data.frames or tibbles, because 
+# # there are different kinds of data in each column -- so we'll do everything
+# # as character vectors then glue it together at the end.
+# var_rows <- c("#ppt",
+#               "#Tmax",
+#               "#Tmin",
+#               "#windspeed",
+#               "#winddirection",
+#               "#minRH",
+#               "#maxRH")
+# 
+# ecoregions_names <- c("point1", "point2", "point3","point4") #ecoregions names from geoknife, TODO change these
+# ecoregions_names_new <- boundary$region #ecoregion names in LANDIS
+# 
+# units_means <- c("mm/d",
+#                  "C",
+#                  "C",
+#                  "m/s",
+#                  "deg",
+#                  "%",
+#                  "%")
+# units_variance <- c("mm/d^2",
+#                     "C^2",
+#                     "C^2",
+#                     "m/s^2",
+#                     "deg^2",
+#                     "%^2",
+#                     "%^2")
+
+```
+
+########################################
+
+```{r}
+# Initialize empty lists, which will be appended in the for loop 
+# clim <- vector("list", length = length(job_results_reform))
+# headers <- vector("list", length = length(job_results_reform))
+# 
+# 
+# 
+# clim_with_headers <- vector("list", length = length(job_results_reform))
+# 
+# xxx <- c(var_rows[i], rep("", length(ecoregions_names)*3))
+
+# CORRECT (orders by statistic: i.e., MEAN, MEAN, MEAN, SD, SD, SD,...)
+start.time <- Sys.time()
+for(i in 1:length(job_results_reform)){
+  
+  clim[[i]] <- job_results_reform[[i]] %>%
+    dplyr::select(TIMESTEP, contains(statistic)) %>%
+    mutate(across(everything(), ~ replace(.x, .x == "NaN", "0")))
+  
+  headers[[i]] <- rbind(c(var_rows[i], rep("", length(ecoregions_names)*3)), 
+                       c("", rep(ecoregions_names, times = 3)), #ecoregions_names_new
+                       c("TIMESTEP", rep(c(paste0("MEAN(", units_means[i], ")"),
+                                           paste0("STD_DEV(", units_means[i], ")"),
+                                           paste0("VARIANCE(", units_variance[i], ")")), each = 3))) #should be no. ecoregions
+  
+  clim_with_headers[[i]] <- rbind(headers[[i]],clim[[i]], use.names=F)
+}
+end.time <- Sys.time()
+
+(time.taken <- round(end.time - start.time,2))
+
+clim_collapsed <- bind_rows(clim_with_headers)
+
+```
+
+
+```{r}
+write_csv(clim_collapsed, "C:/Users/lagoodal/Desktop/Dissertation Stuff/Future Climate Tables/MRI-CGCM3_RCP85.csv")
+
+```
+
+
+
+
+
+
+###############################################################################
+# INCORRECT (orders by ecoregion NOT statistic)
+for(i in 1:length(job_results_reform)){
+  
+  clim[[i]] <- job_results_reform[[i]] %>%
+    dplyr::select(TIMESTEP, starts_with(vnames)) %>%
+    mutate(across(everything(), ~ replace(.x, .x == "NaN", "0")))
+  
+  headers[[i]] <- rbind(c(var_rows[i], rep("", length(ecoregions_names)*3)), 
+                        c("", rep(ecoregions_names, each = 3)), #ecoregions_names_new
+                        c("TIMESTEP", rep(c(paste0("MEAN(", units_means[i], ")"),
+                                            paste0("STD_DEV(", units_means[i], ")"),
+                                            paste0("VARIANCE(", units_variance[i], ")")), times = 4))) 
+  clim_with_headers[[i]] <- rbind(headers[[i]],clim[[i]], use.names=F)
+}
+#----------------------------------------------------------------------------
+
+
+
+
+write.table(clim_collapsed,               # Write CSV file without dataframe headers
+            "./climate/bcc-csm-rcp85/bcc-csm-85-elev-regions.csv",
+            sep = ",",
+            col.names = FALSE,
+            row.names = FALSE,
+            quote = FALSE) # quote = false is important! Otherwise the CL can't read the file, 
+# but it won't be apparent looking at the data in Excel
+
+getwd()
+
+###################################################################################################################################
+
+
+
+
+
+
+
+
+
+
+
+
+##################################################################################################################################################
+##################################### SCRATCH PAD FOR EXTRACTING SUMMARY STATS FROM NETCDFS ######################################################
+##################################################################################################################################################
+
+```{r}
+nc <- terra::rast(ncs[2])
+#lyrs <- terra::rast(ncs[1])
+
+# Subset multiple layers
+# exact_extract function works as quickly on one layer as thousands (thankfully!)
+lyrs <- nc[[1:3]]
+
+# Create a vector of dates for "timestamp"
+dates <- time(lyrs)
+
+# Exract mean by ecoregion, transform it to a data table, and transpose the rows/columns 
+mean <- exact_extract(lyrs, boundary, fun='mean')
+dim(mean)
+setDT(mean)
+mean <- transpose(mean) # column names match order of ecoregion 
+colnames(mean) <- paste0(colnames(mean), "mean")
+
+#Repeat for sd and var
+sd <- exact_extract(lyrs, boundary, fun='stdev')
+dim(sd)
+setDT(sd)
+sd <- transpose(sd) 
+colnames(sd) <- paste0(colnames(sd), "sd")
+
+#Repeat for sd and var
+var <- exact_extract(lyrs, boundary, fun='variance')
+dim(var)
+setDT(var)
+var <- transpose(var) 
+colnames(var) <- paste0(colnames(var), "var")
+
+comb <- cbind(mean, sd, var)
+comb$timestep <- dates 
+
+#colnames(comb)
+#setcolorder(comb, c("timestep","V1mean","V2mean","V3mean","V4mean","V1sd","V2sd","V3sd","V4sd","V1var","V2var","V3var","V4var"))
+
+
+job_results <- list()
+job_results[[1]] <- comb
+job_results[[2]] <- comb
+
+# Visualize and check netcdf - use double brackets to access certain a day
+dev.off()
+plot(lyrs[[1]]) # first layer (day 1) 
+plot(boundary$geom, add=T)
+
+layer <- t1[[29219]] # 2099-12-30
+plot(layer)
+plot(boundary)
+plot(boundary$geom, add=T)
+
+# Test 'exact_extract' function on a single day
+# Extracts sequentially based on ecoregion value (1, 2, 3 ...)
+rhmin <- exact_extract(layer, boundary, fun='mean')
+
+# How many cells are in each ecoregion? 
+count <- exact_extract(layer, boundary, fun='count') # 28.345636 120.144547  66.420677   5.218469
+
+# Outputs a vector of the time / date ID's from the netcdf
+time(layer)
+
+
+# Subset multiple layers
+# exact_extract function works as quickly on one layer as thousands (thankfully!)
+lyrs <- t1[[1:3]]
+
+# Create a vector of dates for "timestamp"
+dates <- time(lyrs)
+
+# Exract mean by ecoregion, transform it to a data table, and transpose the rows/columns to be in long format
+mean <- exact_extract(lyrs, boundary, fun='mean')
+dim(mean)
+setDT(mean)
+mean <- transpose(mean) # column names match order of ecoregion 
+colnames(mean) <- paste0(colnames(mean), "mean")
+
+#Repeat for sd and var
+sd <- exact_extract(lyrs, boundary, fun='stdev')
+dim(sd)
+setDT(sd)
+sd <- transpose(sd) 
+colnames(sd) <- paste0(colnames(sd), "sd")
+
+#Repeat for sd and var
+var <- exact_extract(lyrs, boundary, fun='variance')
+dim(var)
+setDT(var)
+var <- transpose(var) 
+colnames(var) <- paste0(colnames(var), "var")
+
+comb <- cbind(mean, sd, var)
+comb$timestamp <- dates 
+comb %>% relocate(comb$timestamp)
+
+colnames(comb)
+setcolorder(comb, c("timestamp","V1mean","V2mean","V3mean","V4mean","V1sd","V2sd","V3sd","V4sd","V1var","V2var","V3var","V4var"))
+
+
+job_results <- list()
+job_results[[1]] <- comb
+job_results[[2]] <- comb
+
+job_results_reform <- job_results %>%
+  map(., function(x) dplyr::mutate(x, TIMESTEP = paste0(as.character(timestamp), "T00:00:00Z")))
+
+
+
+# For the entire netcdf (29220 days!)
+mean <- exact_extract(t1, boundary, fun='mean') # this function is so quick!!!!
+dim(mean)
+setDT(mean)
+transpose(mean)
+
+```
+
+#################################################################
+##### COMBINE CLIMATE VARIABLES AND FORMAT FOR EXCEL OUTPUT #####
+#################################################################
+
+# List (in order) names of headers from resulting data tables
+# and variable and units names (in order) 
+vnames <- c("V1", "V2", "V3", "v4")
+var_rows <- c("#minRH", "#minRH")
+units_means <- c("%", "%")
+units_variance <- c("%^2","%^2")
+
+
+# Initialize empty lists, which will be appended in the for loop 
+clim <- vector("list", length = length(job_results_reform))
+headers <- vector("list", length = length(job_results_reform))
+clim_with_headers <- vector("list", length = length(job_results_reform))
+
+
+for(i in 1:length(job_results_reform)){
+  
+  clim[[i]] <- job_results_reform[[i]] %>%
+    dplyr::select(TIMESTEP, starts_with(vnames))
+  
+  headers[[i]] <- rbind(c(var_rows[i], rep("", length(ecoregions_names)*3)), 
+                        c("", rep(ecoregions_names, each = 3)), #ecoregions_names_new
+                        c("TIMESTEP", rep(c(paste0("MEAN(", units_means[i], ")"),
+                                            paste0("STD_DEV(", units_means[i], ")"),
+                                            paste0("VARIANCE(", units_variance[i], ")")), times = 4))) 
+  clim_with_headers[[i]] <- rbind(headers[[i]],clim[[i]], use.names=F)
+}
+
+clim_collapsed <- bind_rows(clim_with_headers)
+##################################################################################################################################################
+
+#################### PREVIOUS CODE FOR GEOKNIFE ######################
+#-------------------------------------------------------
+setwd("C:/Users/ashanno/Desktop/4FRI/Boundaries/")
+
+#shapefile for study area
+boundary <- sf::st_read("./4FRI_clim_region.gpkg") %>% #Clim region based on prism 
+  group_by(region) %>%
+  sf::st_make_valid() %>%
+  dplyr::summarise(geometry = sf::st_union(geom)) %>%
+  dplyr::ungroup() %>%
+  sf::st_transform("EPSG:4326") #reproject to CRS that geoknife needs
+
+sf::st_write(boundary, "./geoknife/4FRI_ecoregions.shp", append = FALSE)
+
+#"stencil" is what geoknife uses for the extent of the data
+stencil <- simplegeom(as(boundary, Class = "Spatial"))
+
+
+webdatasets = query('webdata')
+webdatasets[grep("UofIMETDATA", webdatasets@group)]
+
+#this works a little differently from the USGS portal. Instead of one URL with
+#several variables, we have a URL for each variable. 
+vars_url <- c("pr", "tmmx", "tmmn", "vs", "th", "rmin", "rmax")
+urls <- paste0("http://thredds.northwestknowledge.net:8080/thredds/dodsC/macav2livneh_", vars_url, "_CCSM4_r6i1p1_rcp85_2006_2099_CONUS_daily_aggregated.nc")
+
+#               http://thredds.northwestknowledge.net:8080/thredds/dodsC/macav2livneh_  pr          _CCSM4_r6i1p1_rcp85_2006_2099_CONUS_daily_aggregated.nc
+
+
+
+fabric <- webdata(url = urls[7]) #choose one climate variable to start with
+
+query(fabric, 'variables')
+
+vars_long <- c("precipitation_amount", "daily_maximum_temperature", 
+               "daily_minimum_temperature", "daily_mean_wind_speed", 
+               "daily_mean_wind_direction", "daily_minimum_relative_humidity",
+               "daily_maximum_relative_humidity")
+
+# Check CCSM long variable names!!
+# Precipitation  
+# Daily Maximum Near-Surface Air Temperature
+# Daily Minimum Near-Surface Air Temperature
+# Daily Mean Near-Surface Wind Speed
+
+
+
+#what statistics do we want? These three are what we need for the LANDIS Climate Library
+summary_stats <- c("MEAN", "VARIANCE", "STD_DEV")
+# summary_stats <- c("MEAN")
+
+# set up the "knife" which tells the GeoData Portal what to do with the 
+# subset data. We want the mean, variance, and std_dev (specified above), 
+# averaged across the study area, 
+# and there are a few other arguments to give to the remote server, specified 
+# by the "knife" object:
+# wait = TRUE has R wait while job is processed
+# email =TRUE emails you when process is done. 
+knife <- webprocess(wait = TRUE, email = "ashano@ncsu.edu")
+query(knife, 'algorithms')
+
+# area grid statistics are the default, but we can change it if we  (we don't)
+algorithm(knife) <- list('Area Grid Statistics (weighted)' = 
+                           "gov.usgs.cida.gdp.wps.algorithm.FeatureWeightedGridStatisticsAlgorithm")
+
+#I think this is the best way to set it? The geoknife documentation isn't clear on
+# if there's a better way; might be a feature in development
+knife@processInputs$STATISTICS <- summary_stats #what statistics do we want?
+
+#-------------------------------------------------------------------------------
+# now to run it for the full set of data that we need
+# we just have one ecoregion for now, TODO figure out how to do several ecoregions
+
+# I had the job fail when I did all variables at once, so let's split them up into separate jobs
+# we can't submit several jobs at the same time, so we'll put them in a loop and
+# wait until one job is done before starting the next one.
+# This takes a variable amount of time -- sometimes 10 minutes or sometimes an hour-ish
+
+job_results <- list()
+
+for(i in 1:length(vars_long)){
+  #set the fabric for a new variable, but keep everything else the same (i.e. the stencil and knife)
+  fabric <- webdata(url = urls[i])
+  variables(fabric) <- vars_long[i]
+  print(vars_long[i])
+  job <- geoknife(stencil, fabric, knife)
+  if(error(job)){
+    break
+    check(job)
+  }
+  
+  job_results[[i]] <- result(job)
+}
+
+####HERE vvv
+
+#save your work!
+#saveRDS(job_results, file = "./geoknife/climate_raw_historical.RDS")
+saveRDS(job_results, file = "./geoknife/climate_raw_CCSM4_85.RDS")
+
+#The data are in a long format -- not quite what we want
+str(job_results[[1]]) 
+
+#check on one of our datasets
+ppt <- job_results[[1]]
+ppt$year <- format(as.Date(as.POSIXct(ppt$DateTime)), "%Y")
+test <- ppt %>% 
+  filter(statistic == "MEAN") %>%
+  group_by(year) %>%
+  summarise(MAP = sum(`1`)) #precip is in mm
+
+t <- job_results[2] # temps are in K
+
+#reshape the data into the format we need
+job_results_reform <- job_results %>% 
+  #widen data format
+  map(., function(x) tidyr::pivot_wider(data = x,
+                                        names_from = "statistic",
+                                        values_from = c("point1", "point2", "point3","point4"))) %>% #change this to the names of the ecoregions
+  #trim end dates -- this would be better done when selecting the fabric
+  map(., function(x) dplyr::filter(x, DateTime < as.POSIXct("2019-12-31", format = "%Y-%m-%d"))) %>%
+  #create a TIMESTEP column and add some formatting junk to the end of the date. 
+  # TODO figure out a better way to do this
+  map(., function(x) dplyr::mutate(x, TIMESTEP = paste0(as.character(DateTime), "T00:00:00Z")))
+
+# convert from cm to mm
+# job_results_reform[[1]]$MEAN <- job_results_reform[[1]]$MEAN * 10
+# job_results_reform[[1]]$VARIANCE <- job_results_reform[[1]]$VARIANCE * 100
+# job_results_reform[[1]]$STD_DEV <- job_results_reform[[1]]$STD_DEV * 10
+
+# job_results_reform[[2]]$MEAN <- job_results_reform[[2]]$MEAN - 273.15 #convert from kelvin to celsius
+# job_results_reform[[3]]$MEAN <- job_results_reform[[3]]$MEAN - 273.15 #convert from kelvin to celsius
+
+nums <- c(1:20)
+mean(nums)
+var(nums)
+sd(nums)
+
+t_nums <- nums - 200
+mean(t_nums)
+var(t_nums)
+sd(t_nums)
+
+#now we need to wrangle this list of data into the format needed by the climate library
+# I haven't figured this out in an elegant way yet TODO
+
+vars_long #remind us what the original var names were
+
+#rewrite variables in the format the climate library needs
+# this is sort of difficult using data.frames or tibbles, because 
+# there are different kinds of data in each column -- so we'll do everything
+# as character vectors then glue it together at the end.
+var_rows <- c("#ppt",
+              "#Tmax",
+              "#Tmin",
+              "#windspeed",
+              "#winddirection",
+              "#minRH",
+              "#maxRH")
+
+ecoregions_names <- c("point1", "point2", "point3","point4") #ecoregions names from geoknife, TODO change these
+ecoregions_names_new <- boundary$region #ecoregion names in LANDIS
+
+units_means <- c("mm/d",
+                 "C",
+                 "C",
+                 "m/s",
+                 "deg",
+                 "%",
+                 "%")
+units_variance <- c("mm/d^2",
+                    "C^2",
+                    "C^2",
+                    "m/s^2",
+                    "deg^2",
+                    "%^2",
+                    "%^2")
+
+clim_with_headers <- vector("list", length = length(job_results_reform))
+
+
+
+for(i in 1:length(job_results_reform)){
+  
+  clim_with_headers[[i]] <- job_results_reform[[i]] %>%
+    dplyr::select(TIMESTEP, starts_with(ecoregions_names)) %>%
+    rbind(c(var_rows[i], rep("", length(.)-1)), 
+          c("", rep(ecoregions_names_new, each = 3)),
+          c("TIMESTEP", rep(c(paste0("MEAN(", units_means[i], ")"),
+                              paste0("STD_DEV(", units_means[i], ")"),
+                              paste0("VARIANCE(", units_variance[i], ")")), times = 3)),
+          .) %>%
+    mutate(across(everything(), ~ replace(.x, .x == "NaN", "0")))
+}
+
+clim_collapsed <- bind_rows(clim_with_headers)
+
+write.table(clim_collapsed,               # Write CSV file without dataframe headers
+            "./geoknife/historical_gridmet.csv",
+            sep = ",",
+            col.names = FALSE,
+            row.names = FALSE,
+            quote = FALSE) # quote = false is important! Otherwise the CL can't read the file, 
+# but it won't be apparent looking at the data in Excel
+
+
+
+
+
+
+################################################################################################################
+##################################### SAM'S WORK IS BELOW ######################################################
+################################################################################################################
+
+#saveRDS(job_results, file = "./geoknife/climate_raw_historical.RDS")
+job_results <- readRDS("./Boundaries/geoknife/climate_raw_historical.RDS")
+
+
+
+#The data are in a long format -- not quite what we want
+str(job_results[[1]]) 
+
+#check on one of our datasets
+ppt <- job_results[[1]]
+ppt$year <- format(as.Date(as.POSIXct(ppt$DateTime)), "%Y")
+test <- ppt %>% 
+  filter(statistic == "MEAN") %>%
+  group_by(year) %>%
+  summarise(MAP = sum(`1`)) #precip is in mm
+
+t <- job_results[2] # temps are in K
+
+
+#reshape the data into the format we need
+job_results_reform <- job_results %>% 
+  #widen data format
+  map(., function(x) tidyr::pivot_wider(data = x,
+                                        names_from = "statistic",
+                                        values_from = c("point1", "point2", "point3","point4"))) %>% #change this to the names of the ecoregions
+  #trim end dates -- this would be better done when selecting the fabric
+  map(., function(x) dplyr::filter(x, DateTime < as.POSIXct("2019-12-31", format = "%Y-%m-%d"))) %>%
+  #create a TIMESTEP column and add some formatting junk to the end of the date. 
+  # TODO figure out a better way to do this
+  map(., function(x) dplyr::mutate(x, TIMESTEP = paste0(as.character(DateTime), "T00:00:00Z")))
+
+# convert from cm to mm
+# job_results_reform[[1]]$MEAN <- job_results_reform[[1]]$MEAN * 10
+# job_results_reform[[1]]$VARIANCE <- job_results_reform[[1]]$VARIANCE * 100
+# job_results_reform[[1]]$STD_DEV <- job_results_reform[[1]]$STD_DEV * 10
+
+# job_results_reform[[2]]$MEAN <- job_results_reform[[2]]$MEAN - 273.15 #convert from kelvin to celsius
+# job_results_reform[[3]]$MEAN <- job_results_reform[[3]]$MEAN - 273.15 #convert from kelvin to celsius
+
+
+#now we need to wrangle this list of data into the format needed by the climate library
+# I haven't figured this out in an elegant way yet TODO
+
+vars_long #remind us what the original var names were
+
+#rewrite variables in the format the climate library needs
+# this is sort of difficult using data.frames or tibbles, because 
+# there are different kinds of data in each column -- so we'll do everything
+# as character vectors then glue it together at the end.
+var_rows <- c("#ppt",
+              "#Tmax",
+              "#Tmin",
+              "#windspeed",
+              "#winddirection",
+              "#minRH",
+              "#maxRH")
+
+ecoregions_names <- c("point1", "point2", "point3","point4") #ecoregions names from geoknife, TODO change these
+ecoregions_names_new <- boundary$region #ecoregion names in LANDIS
+
+units_means <- c("mm/d",
+                 "C",
+                 "C",
+                 "m/s",
+                 "deg",
+                 "%",
+                 "%")
+units_variance <- c("mm/d^2",
+                    "C^2",
+                    "C^2",
+                    "m/s^2",
+                    "deg^2",
+                    "%^2",
+                    "%^2")
+
+clim_with_headers <- vector("list", length = length(job_results_reform))
+
+
+vnames <- c("V1", "V2", "V3", "v4")
+var_rows <- c("#minRH", "#minRH")
+units_means <- c("%", "%")
+units_variance <- c("%^2","%^2")
+
+# Attempt at restructuring code.... I don't know dpplyr that well..
+
+for(i in 1:length(job_results_reform)){
+  
+  clim_with_headers[[i]] <- job_results_reform[[i]] %>%
+    dplyr::select(TIMESTEP, starts_with(vnames)) %>% #ecoregion_names
+    rbind(c(var_rows[i], rep("", length(ecoregions_names)*3)), # length(.)-1
+          c("", rep(ecoregions_names, each = 3)), #ecoregions_names_new
+          c("TIMESTEP", rep(c(paste0("MEAN(", units_means[i], ")"),
+                              paste0("STD_DEV(", units_means[i], ")"),
+                              paste0("VARIANCE(", units_variance[i], ")")), times = 4)), # number of ecoregions
+          fill=T,
+          .) %>%
+    mutate(across(everything(), ~ replace(.x, .x == "NaN", "0")))
+}
+
+clim_collapsed <- bind_rows(clim_with_headers)
+
+
+
+
+

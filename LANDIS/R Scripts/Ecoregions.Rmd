@@ -1,0 +1,161 @@
+---
+title: "Ecoregions"
+output: pdf_document
+date: "2024-02-08"
+---
+
+
+```{r, message = FALSE, warning = FALSE}
+library(tidyverse)
+library(terra)
+library(tidyterra)
+library(sf)
+library(maps)
+```
+
+
+
+```{r}
+set.seed(33)
+# Create a get all .asc file function and then read them in to a list
+get_asc_files <- function(directory){
+  all_files <- list.files(path = directory, recursive = TRUE, full.names = TRUE)
+  asc_files <- all_files[grep("\\.asc$", all_files, ignore.case = TRUE)]
+  return(asc_files)
+}
+folder_path <- "C:/Users/lagoodal/Desktop/Dissertation Stuff/PRISM Data"
+asc_files <- get_asc_files(folder_path)
+read_raster_files <- function(file_path){
+  raster_list <- lapply(file_path, rast)
+  return(raster_list)
+}
+prismRast <- read_raster_files(asc_files)
+templateRaster <- rast("C:/Users/lagoodal/Desktop/All Raster Layers/Full Piedmont/MapCode_IC.tif")
+
+# Rework the rasers so that they are projected to resemble the other ratsers to be used in LANDIS
+extNC <- ext(-85, -75, 33, 37)
+prismRast <- lapply(prismRast, function(x){crop(x, extNC)})
+prismRast <- lapply(prismRast, function(x){project(x, templateRaster)})
+piedmontBoundary <- st_read("C:/Users/lagoodal/Desktop/nc_eco_l3/Piedmont UTM 17N.shp")
+prismRast <- lapply(prismRast, function(x){crop(x, piedmontBoundary[2])})
+prismRast <- lapply(prismRast, function(x){mask(x, piedmontBoundary[2])})
+prismRast <- lapply(prismRast, function(x){project(x, templateRaster)})
+tempRast <- list(prismRast[[1]], prismRast[[2]], prismRast[[3]], prismRast[[4]], prismRast[[5]], prismRast[[6]], prismRast[[7]])
+precipRast <- list(prismRast[[8]], prismRast[[9]], prismRast[[10]], prismRast[[11]], prismRast[[12]], prismRast[[13]], prismRast[[14]])
+
+# Calculate mean temp and total precipitation, to stack them we need to convert them to raster::raster (Raster Layer vs. SpatRaster)
+tempRasters <- lapply(tempRast, function(x){raster::raster(x)})
+tempStack <- raster::stack(tempRasters)
+tempMean <- raster::calc(tempStack, mean)
+precipRasters <- lapply(precipRast, function(x){raster::raster(x)})
+precipStack <- raster::stack(precipRasters)
+precipMean <- raster::calc(precipStack, sum)
+rasterStack <- raster::stack(precipMean, tempMean)
+
+# Set NAs to 0 so that when the clustering takes place it doesn't end up all weird
+rasterStack$layer.1[is.na(rasterStack$layer.1),] <- 0
+rasterStack$layer.2[is.na(rasterStack$layer.2),] <- 0
+
+# Scale the values and then perform k-means clustering
+scaleP <- scale(rasterStack$layer.1)
+scaleT <- scale(rasterStack$layer.2)
+scaleStack <- raster::stack(scaleP, scaleT)
+scaleDf <- as.data.frame(scaleStack)
+Classification <- kmeans(na.omit(scaleDf), 4, iter.max = 10, nstart = 25)
+# hist(Classification$cluster)
+cluster <- Classification$cluster
+outputMatrix <- matrix(cluster, nrow = nrow(precipMean), ncol = ncol(precipMean), byrow = TRUE)
+newoutputRaster <- raster::raster(outputMatrix, xmn = xmin(precipMean), ymn = ymin(precipMean), xmx = xmax(precipMean), ymx = ymax(precipMean), crs = "epsg:26917")
+ecoregionsTest <- rast(newoutputRaster)
+
+# Get NLCD data so that we can remove urban areas and water bodies from the ecoregion map
+nlcdNC <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/NLCD/Test/Piedmont_NLCD.tif")
+newCrsPiedmont <- st_transform(piedmontBoundary, crs = crs(nlcdNC))
+nlcdNC <- crop(nlcdNC, newCrsPiedmont[2])
+nlcdNC <- mask(nlcdNC, newCrsPiedmont[2])
+nlcdNC <- project(nlcdNC, templateRaster, method = "near")
+
+# Ifelse statement to isolate the values we are interested in for the mask
+maskedNLCD <- ifel(nlcdNC == "Barren Land", nlcdNC,
+          ifel(nlcdNC == "Deciduous Forest", nlcdNC,
+               ifel(nlcdNC == "Evergreen Forest", nlcdNC,
+                    ifel(nlcdNC == "Mixed Forest", nlcdNC,
+                         ifel(nlcdNC == "Shrub/Scrub", nlcdNC,
+                              ifel(nlcdNC == "Herbaceous", nlcdNC,
+                                   ifel(nlcdNC == "Hay/Pasture", nlcdNC,
+                                        ifel(nlcdNC == "Cultivated Crops", nlcdNC,
+                                             ifel(nlcdNC == "Woody Wetlands", nlcdNC,
+                                                  ifel(nlcdNC == "Emergent Herbaceous Wetlands", nlcdNC, NA))))))))))
+ecoregionsRast <- mask(ecoregionsTest, maskedNLCD)
+ecoregionsRast <- ifel(ecoregionsRast == 1, 1,
+     ifel(ecoregionsRast == 3, 2,
+          ifel(ecoregionsRast == 4, 3, NA)))
+
+plot(ecoregionsRast)
+
+# writeRaster(ecoregionsRast, "C:/Users/lagoodal/Desktop/All Raster Layers/ecoregions.tif")
+
+plot(nlcdNC)
+```
+
+
+
+
+```{r}
+treeMap <- rast("C:/Users/lagoodal/Desktop/Tree Map/Data/TreeMap2016.tif")
+piedmontBoundary <- st_read("C:/Users/lagoodal/Desktop/nc_eco_l3/Piedmont UTM 17N.shp") %>%
+  st_transform(crs = crs(treeMap))
+# crs(treeMap)
+# plot(treeMap)
+extent <- ext(1e6, 1.85e6, 1.2e6, 1.8e6)
+r <- crop(treeMap, extent)
+rm(treeMap)
+
+r <- crop(r, piedmontBoundary[2])
+r <- mask(r, piedmontBoundary[2])
+
+# Actrivate the FORTYPCD layer
+activeCat(r) <- 2
+
+rDf <- as.data.frame(r, xy = TRUE, na.rm = FALSE)
+
+rDf <- rDf %>% mutate(FORTYPCD = as.integer(paste0(FORTYPCD)))
+
+
+
+rDf$FORTYP <- ifelse(rDf$FORTYPCD %in% 100:199, "Softwoods",
+          ifelse(rDf$FORTYPCD %in% 400:499, "Oak-Pine",
+               ifelse(rDf$FORTYPCD %in% 500:599, "Oak-Hickory",
+                    ifelse(rDf$FORTYPCD %in% 600:699, "Oak-Gum-Cypress",
+                         ifelse(rDf$FORTYPCD %in% 700:799, "Elm-Ash-Cottonwood",
+                              ifelse(rDf$FORTYPCD %in% 800:899, "Maple-Beech-Birch",
+                                   ifelse(rDf$FORTYPCD %in% 900:950, "Aspen-Birch",
+                                          ifelse(rDf$FORTYPCD == "NA", NA, "Other"))))))))
+
+r <- as_spatraster(rDf[,c(1,2,4)], xycols = 1:2, crs = crs(r))
+
+r <- project(r, "epsg:26917", method = "near")
+
+plot(r, col = c("black", "black", "black", "pink", "yellow", "black", "forestgreen"))
+```
+
+
+treeMapDf <- data.table::fread("C:/Users/lagoodal/Desktop/Tree Map/Data/TreeMap2016_tree_table.csv")
+piedmontTMdf <- treeMapDf %>% filter(tm_id %in% values(r))
+rm(treeMapDf)
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
