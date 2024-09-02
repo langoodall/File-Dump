@@ -1,0 +1,133 @@
+---
+title: "Untitled"
+output: pdf_document
+date: "2024-08-27"
+---
+
+# Test Run 2
+
+```{r}
+# Harvested Biomass by Species, Management Area & prescription Type
+harvestSummary <- read_csv("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/LANDIS Outputs/Test 2/Data Frames/biomass-harvest-summary-log.csv")
+managementLabels <- c("1" = "Private Non-Corporate", "2" = "Private Corporate", "3" = "Public")
+prescriptionLabels <- c("LOB_PLANTATION" = "Loblolly", "OH_RESISTANCE" = "Oak-Hickory", "OP_RESISTANCE" = "Oak-Pine", "SOFT_RESISTANCE" = "Softwoods")
+harvestSummary[,c(1,2,3,38:67)] %>%
+  pivot_longer(cols = c("BiomassHarvestedMg_ACRU":"BiomassHarvestedMg_PIPA"), names_to = "Species", values_to = "Harvested_Biomass") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", ""),
+         Prescription = str_replace(Prescription, "\\s*\\([^)]*\\)", "")) %>%
+  ggplot(., aes(x = Time, y = Harvested_Biomass, col = Species, fill = Species)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  facet_grid(Prescription ~ ManagementArea,
+             labeller = labeller(ManagementArea = managementLabels, Prescription = prescriptionLabels)) +
+  scale_y_continuous(name = "Biomass in Millions (Mg)",
+                     breaks = c(0,1e6,2e6),
+                     labels = c(0,1,2)) +
+  labs(title = "Harvested Biomass in Millions (Mg) by Species, Management Area & Prescription")
+
+# Complete Cohorts Harvested by Species, Management Area & Prescription Type
+harvestSummary[,c(1,2,3,8:37)] %>%
+  pivot_longer(cols = c("CohortsHarvested_ACRU":"CohortsHarvested_PIPA"), names_to = "Species", values_to = "CohortsHarvested") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", ""),
+         Prescription = str_replace(Prescription, "\\s*\\([^)]*\\)", "")) %>%
+  ggplot(., aes(x = Time, y = CohortsHarvested, col = Species, fill = Species)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  facet_grid(Prescription ~ ManagementArea,
+             labeller = labeller(Prescription = prescriptionLabels, ManagementArea = managementLabels)) +
+  scale_y_continuous(name = "Cohorts Harvested (10000s)",
+                     breaks = c(0,2e5,4e5),
+                     labels = c(0,2,4)) +
+  labs(title = "Complete Cohorts Harvested by Species, Management Area & Prescription Type")
+```
+
+
+
+# Test Run 4
+
+```{r}
+# Harvested Biomass by Species, Management Area & prescription Type
+harvestSummary <- read_csv("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/LANDIS Outputs/Test 4/Data Frames/biomass-harvest-summary-log.csv")
+managementLabels <- c("1" = "Private Non-Corporate", "2" = "Private Corporate", "3" = "Public")
+prescriptionLabels <- c("LOB_PLANTATION" = "Loblolly", "OH_RESISTANCE" = "Oak-Hickory", "OP_RESISTANCE" = "Oak-Pine", "SOFT_RESISTANCE" = "Softwoods")
+harvestSummary[,c(1,2,3,38:67)] %>%
+  pivot_longer(cols = c("BiomassHarvestedMg_ACRU":"BiomassHarvestedMg_PIPA"), names_to = "Species", values_to = "Harvested_Biomass") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", ""),
+         Prescription = str_replace(Prescription, "\\s*\\([^)]*\\)", "")) %>%
+  ggplot(., aes(x = Time, y = Harvested_Biomass, col = Species, fill = Species)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  facet_grid(Prescription ~ ManagementArea,
+             labeller = labeller(ManagementArea = managementLabels, Prescription = prescriptionLabels)) +
+  scale_y_continuous(name = "Biomass in Millions (Mg)",
+                     breaks = c(0,1e6,2e6),
+                     labels = c(0,1,2)) +
+  labs(title = "Harvested Biomass in Millions (Mg) by Species, Management Area & Prescription")
+
+# Complete Cohorts Harvested by Species, Management Area & Prescription Type
+harvestSummary[,c(1,2,3,8:37)] %>%
+  pivot_longer(cols = c("CohortsHarvested_ACRU":"CohortsHarvested_PIPA"), names_to = "Species", values_to = "CohortsHarvested") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", ""),
+         Prescription = str_replace(Prescription, "\\s*\\([^)]*\\)", "")) %>%
+  ggplot(., aes(x = Time, y = CohortsHarvested, col = Species, fill = Species)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  facet_grid(Prescription ~ ManagementArea,
+             labeller = labeller(Prescription = prescriptionLabels, ManagementArea = managementLabels)) +
+  scale_y_continuous(name = "Cohorts Harvested (10000s)",
+                     breaks = c(0,2e5,4e5),
+                     labels = c(0,2,4)) +
+  labs(title = "Complete Cohorts Harvested by Species, Management Area & Prescription Type")
+```
+
+
+# Test Run 6
+
+```{r}
+# Harvested Biomass by Species, Management Area & prescription Type
+harvestSummary <- read_csv("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/LANDIS Outputs/Test 6 (New LAI)/Data Frames/biomass-harvest-summary-log.csv")
+managementLabels <- c("1" = "Private Non-Corporate", "2" = "Private Corporate", "3" = "Public")
+prescriptionLabels <- c("LOB_PLANTATION" = "Loblolly", "OH_RESISTANCE" = "Oak-Hickory", "OP_RESISTANCE" = "Oak-Pine", "SOFT_RESISTANCE" = "Softwoods")
+harvestSummary[,c(1,2,3,38:67)] %>%
+  pivot_longer(cols = c("BiomassHarvestedMg_ACRU":"BiomassHarvestedMg_PIPA"), names_to = "Species", values_to = "Harvested_Biomass") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", ""),
+         Prescription = str_replace(Prescription, "\\s*\\([^)]*\\)", "")) %>%
+  ggplot(., aes(x = Time, y = Harvested_Biomass, col = Species, fill = Species)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  facet_grid(Prescription ~ ManagementArea,
+             labeller = labeller(ManagementArea = managementLabels, Prescription = prescriptionLabels)) +
+  scale_y_continuous(name = "Biomass in Millions (Mg)",
+                     breaks = c(0,1e6,2e6),
+                     labels = c(0,1,2)) +
+  labs(title = "Harvested Biomass in Millions (Mg) by Species, Management Area & Prescription")
+
+# Complete Cohorts Harvested by Species, Management Area & Prescription Type
+harvestSummary[,c(1,2,3,8:37)] %>%
+  pivot_longer(cols = c("CohortsHarvested_ACRU":"CohortsHarvested_PIPA"), names_to = "Species", values_to = "CohortsHarvested") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", ""),
+         Prescription = str_replace(Prescription, "\\s*\\([^)]*\\)", "")) %>%
+  ggplot(., aes(x = Time, y = CohortsHarvested, col = Species, fill = Species)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  facet_grid(Prescription ~ ManagementArea,
+             labeller = labeller(Prescription = prescriptionLabels, ManagementArea = managementLabels)) +
+  scale_y_continuous(name = "Cohorts Harvested (10000s)",
+                     breaks = c(0,2e5,4e5),
+                     labels = c(0,2,4)) +
+  labs(title = "Complete Cohorts Harvested by Species, Management Area & Prescription Type")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+

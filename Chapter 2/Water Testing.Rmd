@@ -1,0 +1,142 @@
+---
+title: "Untitled"
+output: pdf_document
+date: "2024-08-22"
+---
+
+
+```{r, message = FALSE, warning = FALSE}
+library(tidyverse)
+library(terra)
+library(sf)
+```
+
+# Test 1
+
+```{r}
+# Available Water
+input_directory <- "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/LANDIS Outputs/Test 1/Available Water"
+AVWater_files <- list.files(input_directory, pattern = "\\.img$", full.names = TRUE)
+AVWater <- list()
+for (i in input_directory) {
+  AVWater[[i]] <- rast(AVWater_files)
+}
+
+AVWaterDf <- cbind(AVWater[[1]][[1]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+AVWater[[1]][[3]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+AVWater[[1]][[4]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+AVWater[[1]][[5]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+AVWater[[1]][[6]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+AVWater[[1]][[7]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+AVWater[[1]][[8]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+AVWater[[1]][[9]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+AVWater[[1]][[10]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+AVWater[[1]][[2]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1))) %>%
+  t() %>%
+  as.data.frame() %>%
+  mutate(Year = seq(10,100,10)) %>%
+  `colnames<-`(c("AVWater", "Year"))
+
+ggplot(AVWaterDf, aes(x = Year, y = AVWater)) +
+  geom_line(size = 1.5) +
+  theme_classic() +
+  ylim(0,1)
+
+
+```
+
+
+
+
+# Test 2 (Resistance) (Half run)
+
+```{r}
+# Available Water
+input_directory <- "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/LANDIS Outputs/Test 2/Available Water"
+AVWater_files <- list.files(input_directory, pattern = "\\.img$", full.names = TRUE)
+AVWater <- list()
+for (i in input_directory) {
+  AVWater[[i]] <- rast(AVWater_files)
+}
+
+AVWaterDf <- cbind(AVWater[[1]][[1]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+AVWater[[1]][[3]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+AVWater[[1]][[4]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+AVWater[[1]][[5]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+AVWater[[1]][[6]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+AVWater[[1]][[7]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+AVWater[[1]][[8]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+AVWater[[1]][[9]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+AVWater[[1]][[10]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+AVWater[[1]][[2]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1))) %>%
+  t() %>%
+  as.data.frame() %>%
+  mutate(Year = 1:nrow(.)) %>%
+  `colnames<-`(c("AVWater", "Year"))
+
+ggplot(AVWaterDf, aes(x = Year, y = AVWater)) +
+  geom_line(size = 1.5) +
+  theme_classic()
+
+
+# Water Budget
+input_directory <- "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/LANDIS Outputs/Test 2/Water Budget"
+WaterBudget_files <- list.files(input_directory, pattern = "\\.img$", full.names = TRUE)
+WaterBudget <- list()
+for (i in input_directory) {
+  WaterBudget[[i]] <- rast(WaterBudget_files)
+}
+
+WaterBudgetDf <- cbind(WaterBudget[[1]][[1]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+WaterBudget[[1]][[3]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+WaterBudget[[1]][[4]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+WaterBudget[[1]][[5]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+WaterBudget[[1]][[6]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+WaterBudget[[1]][[7]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+WaterBudget[[1]][[8]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+WaterBudget[[1]][[9]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+WaterBudget[[1]][[10]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+WaterBudget[[1]][[2]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1))) %>%
+  t() %>%
+  as.data.frame() %>%
+  mutate(Year = 1:nrow(.)) %>%
+  `colnames<-`(c("WaterBudget", "Year"))
+
+ggplot(WaterBudgetDf, aes(x = Year, y = WaterBudget)) +
+  geom_line(size = 1.5) +
+  theme_classic()
+
+
+
+WaterBudget
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

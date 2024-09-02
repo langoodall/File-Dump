@@ -1,0 +1,65 @@
+---
+title: "Untitled"
+output: pdf_document
+date: "2024-08-27"
+---
+
+
+```{r}
+input_directory <- "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/LANDIS Outputs/Test 6 (New LAI)/Harvest"
+Harvest_files <- list.files(input_directory, pattern = "\\.img$", full.names = TRUE)
+Harvest <- list()
+for (i in input_directory) {
+  Harvest[[i]] <- rast(Harvest_files)
+}
+
+plot(Harvest[[1]][[1]])
+plot(Harvest[[1]][[3]])
+plot(Harvest[[1]][[4]])
+plot(Harvest[[1]][[5]])
+plot(Harvest[[1]][[6]])
+plot(Harvest[[1]][[7]])
+plot(Harvest[[1]][[8]])
+plot(Harvest[[1]][[9]])
+plot(Harvest[[1]][[10]])
+plot(Harvest[[1]][[2]])
+
+
+
+
+plot(Harvest[[1]][[11]])
+plot(Harvest[[1]][[13]])
+plot(Harvest[[1]][[14]])
+plot(Harvest[[1]][[15]])
+plot(Harvest[[1]][[16]])
+plot(Harvest[[1]][[17]])
+plot(Harvest[[1]][[18]])
+plot(Harvest[[1]][[19]])
+plot(Harvest[[1]][[20]])
+plot(Harvest[[1]][[12]])
+```
+
+
+```{r}
+plot(LAI[[1]][[1]])
+plot(LAI[[1]][[3]])
+plot(LAI[[1]][[4]])
+plot(LAI[[1]][[5]])
+plot(LAI[[1]][[6]])
+plot(LAI[[1]][[7]])
+plot(LAI[[1]][[8]])
+plot(LAI[[1]][[9]])
+plot(LAI[[1]][[10]])
+plot(LAI[[1]][[2]])
+```
+
+
+
+
+
+
+
+
+
+
+

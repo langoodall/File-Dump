@@ -1,0 +1,396 @@
+---
+title: "Untitled"
+output: pdf_document
+date: "2024-08-22"
+---
+
+```{r, message = FALSE, warning = FALSE}
+library(tidyverse)
+library(terra)
+library(sf)
+```
+
+# Test 1 (Resilience)
+
+```{r}
+# SOMTC
+input_directory <- "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/LANDIS Outputs/Test 1/SOMTC"
+SOMTC_files <- list.files(input_directory, pattern = "\\.img$", full.names = TRUE)
+SOMTC <- list()
+for (i in input_directory) {
+  SOMTC[[i]] <- rast(SOMTC_files)
+}
+
+SOMTCDf <- cbind(SOMTC[[1]][[1]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+SOMTC[[1]][[3]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+SOMTC[[1]][[4]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+SOMTC[[1]][[5]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+SOMTC[[1]][[6]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+SOMTC[[1]][[7]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+SOMTC[[1]][[8]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+SOMTC[[1]][[9]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+SOMTC[[1]][[10]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+SOMTC[[1]][[2]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1))) %>%
+  t() %>%
+  as.data.frame() %>%
+  mutate(Year = 1:nrow(.)) %>%
+  `colnames<-`(c("SOMTC", "Year"))
+
+ggplot(SOMTCDf, aes(x = Year, y = SOMTC)) +
+  geom_line(size = 1.5) +
+  theme_classic() +
+  ylim(0,2000)
+
+
+# Soil N
+input_directory <- "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/LANDIS Outputs/Test 1/Soil N"
+SoilN_files <- list.files(input_directory, pattern = "\\.img$", full.names = TRUE)
+SoilN <- list()
+for (i in input_directory) {
+  SoilN[[i]] <- rast(SoilN_files)
+}
+
+SoilNDf <- cbind(SoilN[[1]][[1]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+SoilN[[1]][[3]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+SoilN[[1]][[4]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+SoilN[[1]][[5]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+SoilN[[1]][[6]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+SoilN[[1]][[7]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+SoilN[[1]][[8]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+SoilN[[1]][[9]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+SoilN[[1]][[10]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+SoilN[[1]][[2]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1))) %>%
+  t() %>%
+  as.data.frame() %>%
+  mutate(Year = 1:nrow(.)) %>%
+  `colnames<-`(c("SoilN", "Year"))
+
+ggplot(SoilNDf, aes(x = Year, y = SoilN)) +
+  geom_line(size = 1.5) +
+  theme_classic() +
+  ylim(0,4000)
+```
+
+
+
+# Test 2 (Resistance) (Half run)
+
+```{r}
+# Carbon
+logNECN <- read_csv("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/LANDIS Outputs/Test 2/Data Frames/NECN-succession-log.csv")
+logNECNCarbon <- logNECN[,c(1,3,6,25:28)]
+logNECNCarbon <- pivot_longer(logNECNCarbon, cols = SOMTC:C_SOM3, names_to = "Pool", values_to = "Carbon")
+ggplot(logNECNCarbon, aes(x = Time, y = Carbon, col = Pool)) +
+  geom_line(size = 1.5) +
+  theme_classic() +
+  facet_wrap(~ClimateRegionIndex)
+
+
+# Nitrogen
+logNECNNitrogen <- logNECN[,c(1,3,58,39:42)]
+logNECNNitrogen <- pivot_longer(logNECNNitrogen, cols = TotalSoilN:N_SOM3, names_to = "Pool", values_to = "Nitrogen")
+ggplot(logNECNNitrogen, aes(x = Time, y = Nitrogen, col = Pool)) +
+  geom_line(size = 1.5) +
+  theme_classic() +
+  facet_wrap(~ClimateRegionIndex)
+
+```
+
+# Test 3 Resilience (Full Run)
+
+```{r}
+# Carbon
+logNECN <- read_csv("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/LANDIS Outputs/Test 3/Data Frames/NECN-succession-log.csv")
+logNECNCarbon <- logNECN[,c(1,3,6,25:28)]
+logNECNCarbon <- pivot_longer(logNECNCarbon, cols = SOMTC:C_SOM3, names_to = "Pool", values_to = "Carbon")
+ggplot(logNECNCarbon, aes(x = Time, y = Carbon, col = Pool)) +
+  geom_line(size = 1.5) +
+  theme_classic() +
+  facet_wrap(~ClimateRegionIndex)
+
+
+# Nitrogen
+logNECNNitrogen <- logNECN[,c(1,3,58,39:42)]
+logNECNNitrogen <- pivot_longer(logNECNNitrogen, cols = TotalSoilN:N_SOM3, names_to = "Pool", values_to = "Nitrogen")
+ggplot(logNECNNitrogen, aes(x = Time, y = Nitrogen, col = Pool)) +
+  geom_line(size = 1.5) +
+  theme_classic() +
+  facet_wrap(~ClimateRegionIndex)
+
+```
+
+
+
+# Test 4 Resilience (90% N)
+
+```{r}
+# Carbon
+logNECN <- read_csv("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/LANDIS Outputs/Test 4/Data Frames/NECN-succession-log.csv")
+logNECNCarbon <- logNECN[,c(1,3,6,25:28)]
+logNECNCarbon <- pivot_longer(logNECNCarbon, cols = SOMTC:C_SOM3, names_to = "Pool", values_to = "Carbon")
+ggplot(logNECNCarbon, aes(x = Time, y = Carbon, col = Pool)) +
+  geom_line(size = 1.5) +
+  theme_classic() +
+  facet_wrap(~ClimateRegionIndex)
+
+
+# Nitrogen
+logNECNNitrogen <- logNECN[,c(1,3,58,39:42)]
+logNECNNitrogen <- pivot_longer(logNECNNitrogen, cols = TotalSoilN:N_SOM3, names_to = "Pool", values_to = "Nitrogen")
+ggplot(logNECNNitrogen, aes(x = Time, y = Nitrogen, col = Pool)) +
+  geom_line(size = 1.5) +
+  theme_classic() +
+  facet_wrap(~ClimateRegionIndex)
+
+```
+
+# Test 5 Resilience (80% N) (30 year Run)
+
+```{r}
+# Carbon
+logNECN <- read_csv("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/LANDIS Outputs/Test 5/Data Frames/NECN-succession-log.csv")
+logNECNCarbon <- logNECN[,c(1,3,6,25:28)]
+logNECNCarbon <- pivot_longer(logNECNCarbon, cols = SOMTC:C_SOM3, names_to = "Pool", values_to = "Carbon")
+ggplot(logNECNCarbon, aes(x = Time, y = Carbon, col = Pool)) +
+  geom_line(size = 1.5) +
+  theme_classic() +
+  facet_wrap(~ClimateRegionIndex)
+
+
+# Nitrogen
+logNECNNitrogen <- logNECN[,c(1,3,58,39:42)]
+logNECNNitrogen <- pivot_longer(logNECNNitrogen, cols = TotalSoilN:N_SOM3, names_to = "Pool", values_to = "Nitrogen")
+ggplot(logNECNNitrogen, aes(x = Time, y = Nitrogen, col = Pool)) +
+  geom_line(size = 1.5) +
+  theme_classic() +
+  facet_wrap(~ClimateRegionIndex)
+
+
+```
+
+
+# Test 6 Resilience (80% N)
+
+```{r}
+# Carbon
+logNECN <- read_csv("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/LANDIS Outputs/Test 6 (New LAI)/Data Frames/NECN-succession-log.csv")
+logNECNCarbon <- logNECN[,c(1,3,6,25:28)]
+logNECNCarbon <- pivot_longer(logNECNCarbon, cols = SOMTC:C_SOM3, names_to = "Pool", values_to = "Carbon")
+ggplot(logNECNCarbon, aes(x = Time, y = Carbon, col = Pool)) +
+  geom_line(size = 1.5) +
+  theme_classic() +
+  facet_wrap(~ClimateRegionIndex)
+
+
+# Nitrogen
+logNECNNitrogen <- logNECN[,c(1,3,58,39:42)]
+logNECNNitrogen <- pivot_longer(logNECNNitrogen, cols = TotalSoilN:N_SOM3, names_to = "Pool", values_to = "Nitrogen")
+ggplot(logNECNNitrogen, aes(x = Time, y = Nitrogen, col = Pool)) +
+  geom_line(size = 1.5) +
+  theme_classic() +
+  facet_wrap(~ClimateRegionIndex)
+
+
+```
+
+# Test 7 Resilience (50% N)
+
+```{r}
+# Carbon
+logNECN <- read_csv("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/LANDIS Outputs/Test 7/Data Frames/NECN-succession-log.csv")
+logNECNCarbon <- logNECN[,c(1,3,6,25:28)]
+logNECNCarbon <- pivot_longer(logNECNCarbon, cols = SOMTC:C_SOM3, names_to = "Pool", values_to = "Carbon")
+ggplot(logNECNCarbon, aes(x = Time, y = Carbon, col = Pool)) +
+  geom_line(size = 1.5) +
+  theme_classic() +
+  facet_wrap(~ClimateRegionIndex)
+
+
+# Nitrogen
+logNECNNitrogen <- logNECN[,c(1,3,58,39:42)]
+logNECNNitrogen <- pivot_longer(logNECNNitrogen, cols = TotalSoilN:N_SOM3, names_to = "Pool", values_to = "Nitrogen")
+ggplot(logNECNNitrogen, aes(x = Time, y = Nitrogen, col = Pool)) +
+  geom_line(size = 1.5) +
+  theme_classic() +
+  facet_wrap(~ClimateRegionIndex)
+
+
+```
+
+# TEst 8 (NEW SOILS)
+
+```{r}
+# Carbon
+logNECN <- read_csv("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/LANDIS Outputs/Test 8/Data Frames/NECN-succession-log.csv")
+logNECNCarbon <- logNECN[,c(1,3,6,25:28)]
+logNECNCarbon <- pivot_longer(logNECNCarbon, cols = SOMTC:C_SOM3, names_to = "Pool", values_to = "Carbon")
+ggplot(logNECNCarbon, aes(x = Time, y = Carbon, col = Pool)) +
+  geom_line(size = 1.5) +
+  theme_classic() +
+  facet_wrap(~ClimateRegionIndex)
+
+
+# Nitrogen
+logNECNNitrogen <- logNECN[,c(1,3,58,39:42)]
+logNECNNitrogen <- pivot_longer(logNECNNitrogen, cols = TotalSoilN:N_SOM3, names_to = "Pool", values_to = "Nitrogen")
+ggplot(logNECNNitrogen, aes(x = Time, y = Nitrogen, col = Pool)) +
+  geom_line(size = 1.5) +
+  theme_classic() +
+  facet_wrap(~ClimateRegionIndex)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+SOM1surfC <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/test2/Clipped Piedmont/SOM1surfC.tif")
+SOM1soilC <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/test2/Clipped Piedmont/SOM1soilC.tif")
+SOM2C <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/test2/Clipped Piedmont/SOM2C.tif")
+SOM3C <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/test2/Clipped Piedmont/SOM3C.tif")
+
+
+
+
+
+
+
+SOM1surfC <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/test1/Clipped Piedmont/SOM1surfC.tif")
+SOM1soilC <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/test1/Clipped Piedmont/SOM1soilC.tif")
+SOM2C <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/test1/Clipped Piedmont/SOM2C.tif")
+SOM3C <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/test1/Clipped Piedmont/SOM3C.tif")
+
+
+
+
+
+
+plot(SOM1surfC)
+plot(SOM1soilC)
+plot(SOM2C)
+plot(SOM3C)
+
+datatype(SOM1surfC)
+
+
+# Read in clipped landscape and the soil shapefile, transform and crop to clipped landscape
+landscape <- st_read("C:/Users/lagoodal/Desktop/All Raster Layers/standsraster/Clipped Shapefile/clippedHUC.shp")
+westSoil <- st_read("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/West_Soil_Carbon_1238/data/statsgo1poly/statsgo1poly.shp") %>%
+  st_transform(crs = crs(landscape)) %>%
+  st_crop(landscape)
+
+# Create new column for SOMTC
+westSoil$SOMTC <- westSoil$OC0_20cm + westSoil$OC20_40cm + westSoil$OC40_60cm + westSoil$OC60_80cm + westSoil$OC80_100cm
+st_write(westSoil,
+         "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/West_Soil_Carbon_1238/New Map/westSoil.shp",
+         overwrite = TRUE)
+westSoil <- st_read("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/West_Soil_Carbon_1238/New Map/westSoil.shp")
+
+# Rasterize and mask
+soilRast <- rasterize(westSoil, SOM1soilC, field = "SOMTC")
+soilRast <- soilRast %>% mask(landscape[1])
+
+SOM1surfC <- soilRast
+values(SOM1surfC) <- values(SOM1surfC) * 0.01
+SOM1surfN <- SOM1surfC
+values(SOM1surfN) <- values(SOM1surfC) * 0.1
+
+SOM1soilC <- soilRast
+values(SOM1soilC) <- values(SOM1soilC) * 0.02
+SOM1soilN <- SOM1soilC
+values(SOM1soilN) <- values(SOM1soilN) * 0.1
+
+SOM2C <- soilRast
+values(SOM2C) <- values(SOM2C) * 0.59
+SOM2N <- SOM2C
+values(SOM2N) <- values(SOM2C) * 0.04
+
+SOM3C <- soilRast
+values(SOM3C) <- values(SOM3C) * 0.38
+SOM3N <- SOM3C
+values(SOM3N) <- values(SOM3C) * 0.118
+
+
+plot(SOM1surfC)
+plot(SOM1soilC)
+plot(SOM2C)
+plot(SOM3C)
+plot(SOM1surfN)
+plot(SOM1soilN)
+plot(SOM2N)
+plot(SOM3N)
+
+names(SOM1surfC) <- "SOM1surfC"
+names(SOM1soilC) <- "SOM1soilC"
+names(SOM2C) <- "SOM2C"
+names(SOM3C) <- "SOM3C"
+names(SOM1surfN) <- "SOM1surfN"
+names(SOM1soilN) <- "SOM1soilN"
+names(SOM2N) <- "SOM2N"
+names(SOM3N) <- "SOM3N"
+
+soilRastList <- list(SOM1soilC, SOM1surfC, SOM2C, SOM3C, SOM1soilN, SOM1surfN, SOM2N, SOM3N)
+
+
+writeRaster(SOM2C,
+            filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/test1/Clipped Piedmont/SOM2C.tif",
+            overwrite = TRUE,
+            datatype = "FLT4S",
+            NAflag = 1.1)
+
+
+
+deadwood <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/test1/Clipped Piedmont/Deadwood.tif")
+deadroots <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/test1/Clipped Piedmont/DeadRoots.tif")
+
+plot(deadwood)
+plot(deadroots)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

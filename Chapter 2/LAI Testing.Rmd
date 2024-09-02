@@ -1,0 +1,372 @@
+---
+title: "Untitled"
+output: pdf_document
+date: "2024-08-22"
+---
+
+```{r, message = FALSE, warning = FALSE}
+library(tidyverse)
+library(terra)
+library(sf)
+```
+
+
+
+
+# LAI was calibrated to be around the values that can be found in Tang et al., 2016 (doi:10.5194/bg-13-239-2016)
+
+
+```{r}
+pad_with_na <- function(df, max_rows) {
+  if (nrow(df) < max_rows) {
+    # Calculate the number of rows to add
+    rows_to_add <- max_rows - nrow(df)
+    # Create a data frame with NA values
+    na_padding <- data.frame(matrix(NA, nrow = rows_to_add, ncol = ncol(df)))
+    colnames(na_padding) <- colnames(df)
+    # Bind the NA rows to the original data frame
+    df <- rbind(df, na_padding)
+  }
+  return(df)
+}
+```
+
+
+
+# Test 1
+
+```{r}
+# LAI
+input_directory <- "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/LANDIS Outputs/Test 1/LAI"
+LAI_files <- list.files(input_directory, pattern = "\\.img$", full.names = TRUE)
+LAI <- list()
+for (i in input_directory) {
+  LAI[[i]] <- rast(LAI_files)
+}
+
+LAIDf <- cbind(LAI[[1]][[1]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+LAI[[1]][[3]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+LAI[[1]][[4]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+LAI[[1]][[5]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+LAI[[1]][[6]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+LAI[[1]][[7]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+LAI[[1]][[8]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+LAI[[1]][[9]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+LAI[[1]][[10]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+LAI[[1]][[2]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1))) %>%
+  t() %>%
+  as.data.frame() %>%
+  mutate(Year = 1:nrow(.)) %>%
+  `colnames<-`(c("LAI", "Year"))
+
+ggplot(LAIDf, aes(x = Year, y = LAI)) +
+  geom_line() +
+  theme_classic()
+
+```
+
+
+
+```{r}
+# LAI
+input_directory <- "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/LANDIS Outputs/Test 2/LAI"
+LAI_files <- list.files(input_directory, pattern = "\\.img$", full.names = TRUE)
+LAI <- list()
+for (i in input_directory) {
+  LAI[[i]] <- rast(LAI_files)
+}
+
+LAIDf <- cbind(LAI[[1]][[1]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+LAI[[1]][[3]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+LAI[[1]][[4]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+LAI[[1]][[5]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1))) %>%
+  t() %>%
+  as.data.frame() %>%
+  mutate(Year = 1:nrow(.)) %>%
+  `colnames<-`(c("LAI", "Year"))
+
+ggplot(LAIDf, aes(x = Year, y = LAI)) +
+  geom_line() +
+  theme_classic()
+
+
+```
+
+# Test 3 Resilience (Full Run)
+
+```{r}
+# LAI
+input_directory <- "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/LANDIS Outputs/Test 3/LAI"
+LAI_files <- list.files(input_directory, pattern = "\\.img$", full.names = TRUE)
+LAI <- list()
+for (i in input_directory) {
+  LAI[[i]] <- rast(LAI_files)
+}
+
+LAIDf <- cbind(LAI[[1]][[1]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+LAI[[1]][[3]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+LAI[[1]][[4]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+LAI[[1]][[5]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+LAI[[1]][[6]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+LAI[[1]][[7]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+LAI[[1]][[8]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+LAI[[1]][[9]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+LAI[[1]][[10]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1)),
+LAI[[1]][[2]] %>% as.data.frame() %>% summarise(mean = mean(Layer_1))) %>%
+  t() %>%
+  as.data.frame() %>%
+  mutate(Year = 1:nrow(.)) %>%
+  `colnames<-`(c("LAI", "Year"))
+
+
+plot(LAI[[1]][[1]])
+plot(LAI[[1]][[3]])
+plot(LAI[[1]][[4]])
+plot(LAI[[1]][[5]])
+plot(LAI[[1]][[6]])
+plot(LAI[[1]][[7]])
+plot(LAI[[1]][[8]])
+plot(LAI[[1]][[9]])
+plot(LAI[[1]][[10]])
+plot(LAI[[1]][[2]])
+
+```
+
+# Test 4 (Resilience 90% N)
+
+```{r}
+# LAI
+input_directory <- "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/LANDIS Outputs/Test 4/LAI"
+LAI_files <- list.files(input_directory, pattern = "\\.img$", full.names = TRUE)
+LAI <- list()
+for (i in input_directory) {
+  LAI[[i]] <- rast(LAI_files)
+}
+
+plot(LAI[[1]][[1]])
+plot(LAI[[1]][[3]])
+plot(LAI[[1]][[4]])
+plot(LAI[[1]][[5]])
+plot(LAI[[1]][[6]])
+plot(LAI[[1]][[7]])
+plot(LAI[[1]][[8]])
+plot(LAI[[1]][[9]])
+plot(LAI[[1]][[10]])
+plot(LAI[[1]][[2]])
+
+LAI1 <- LAI[[1]][[1]] %>% as.data.frame() %>% filter(Layer_1 > 0) %>% `colnames<-`(1) 
+LAI2 <- LAI[[1]][[3]] %>% as.data.frame() %>% filter(Layer_1 > 0) %>% `colnames<-`(2) 
+LAI3 <- LAI[[1]][[4]] %>% as.data.frame() %>% filter(Layer_1 > 0) %>% `colnames<-`(3) 
+LAI4 <- LAI[[1]][[5]] %>% as.data.frame() %>% filter(Layer_1 > 0) %>% `colnames<-`(4) 
+LAI5 <- LAI[[1]][[6]] %>% as.data.frame() %>% filter(Layer_1 > 0) %>% `colnames<-`(5) 
+LAI6 <- LAI[[1]][[7]] %>% as.data.frame() %>% filter(Layer_1 > 0) %>% `colnames<-`(6) 
+LAI7 <- LAI[[1]][[8]] %>% as.data.frame() %>% filter(Layer_1 > 0) %>% `colnames<-`(7) 
+LAI8 <- LAI[[1]][[9]] %>% as.data.frame() %>% filter(Layer_1 > 0) %>% `colnames<-`(8) 
+LAI9 <- LAI[[1]][[10]] %>% as.data.frame() %>% filter(Layer_1 > 0) %>% `colnames<-`(9)
+LAI10 <- LAI[[1]][[2]] %>% as.data.frame() %>% filter(Layer_1 > 0) %>% `colnames<-`(10)
+
+
+max_rows <- max(nrow(LAI1),nrow(LAI2),nrow(LAI3),nrow(LAI4),nrow(LAI5),nrow(LAI6),nrow(LAI7),nrow(LAI8),nrow(LAI9),nrow(LAI10))
+
+LAI1 <- pad_with_na(LAI1, max_rows)
+LAI2 <- pad_with_na(LAI2, max_rows)
+LAI3 <- pad_with_na(LAI3, max_rows)
+LAI4 <- pad_with_na(LAI4, max_rows)
+LAI5 <- pad_with_na(LAI5, max_rows)
+LAI6 <- pad_with_na(LAI6, max_rows)
+LAI7 <- pad_with_na(LAI7, max_rows)
+LAI8 <- pad_with_na(LAI8, max_rows)
+LAI9 <- pad_with_na(LAI9, max_rows)
+LAI10 <- pad_with_na(LAI10, max_rows)
+
+LAIbox <- cbind(LAI1,LAI2,LAI3,LAI4,LAI5,LAI6,LAI7,LAI8,LAI9,LAI10)
+
+LAIbox <- LAIbox %>%
+  pivot_longer(cols = 1:10, names_to = "LAI", values_to = "value")
+LAIbox$LAI <- factor(LAIbox$LAI, levels = 1:10)
+
+ggplot(LAIbox, aes(x = LAI, y = value)) +
+  geom_boxplot() +
+  theme_classic()
+```
+
+
+
+# Test 6 (Resilience 80% N) (New LAI)
+
+```{r}
+# LAI
+input_directory <- "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/LANDIS Outputs/Test 6 (New LAI)/LAI"
+LAI_files <- list.files(input_directory, pattern = "\\.img$", full.names = TRUE)
+LAI <- list()
+for (i in input_directory) {
+  LAI[[i]] <- rast(LAI_files)
+}
+
+plot(LAI[[1]][[1]])
+plot(LAI[[1]][[3]])
+plot(LAI[[1]][[4]])
+plot(LAI[[1]][[5]])
+plot(LAI[[1]][[6]])
+plot(LAI[[1]][[7]])
+plot(LAI[[1]][[8]])
+plot(LAI[[1]][[9]])
+plot(LAI[[1]][[10]])
+plot(LAI[[1]][[2]])
+
+LAI1 <- LAI[[1]][[1]] %>% as.data.frame() %>% filter(Layer_1 > 0) %>% `colnames<-`(1) 
+LAI2 <- LAI[[1]][[3]] %>% as.data.frame() %>% filter(Layer_1 > 0) %>% `colnames<-`(2) 
+LAI3 <- LAI[[1]][[4]] %>% as.data.frame() %>% filter(Layer_1 > 0) %>% `colnames<-`(3) 
+LAI4 <- LAI[[1]][[5]] %>% as.data.frame() %>% filter(Layer_1 > 0) %>% `colnames<-`(4) 
+LAI5 <- LAI[[1]][[6]] %>% as.data.frame() %>% filter(Layer_1 > 0) %>% `colnames<-`(5) 
+LAI6 <- LAI[[1]][[7]] %>% as.data.frame() %>% filter(Layer_1 > 0) %>% `colnames<-`(6) 
+LAI7 <- LAI[[1]][[8]] %>% as.data.frame() %>% filter(Layer_1 > 0) %>% `colnames<-`(7) 
+LAI8 <- LAI[[1]][[9]] %>% as.data.frame() %>% filter(Layer_1 > 0) %>% `colnames<-`(8) 
+LAI9 <- LAI[[1]][[10]] %>% as.data.frame() %>% filter(Layer_1 > 0) %>% `colnames<-`(9)
+LAI10 <- LAI[[1]][[2]] %>% as.data.frame() %>% filter(Layer_1 > 0) %>% `colnames<-`(10)
+
+
+max_rows <- max(nrow(LAI1),nrow(LAI2),nrow(LAI3),nrow(LAI4),nrow(LAI5),nrow(LAI6),nrow(LAI7),nrow(LAI8),nrow(LAI9),nrow(LAI10))
+
+LAI1 <- pad_with_na(LAI1, max_rows)
+LAI2 <- pad_with_na(LAI2, max_rows)
+LAI3 <- pad_with_na(LAI3, max_rows)
+LAI4 <- pad_with_na(LAI4, max_rows)
+LAI5 <- pad_with_na(LAI5, max_rows)
+LAI6 <- pad_with_na(LAI6, max_rows)
+LAI7 <- pad_with_na(LAI7, max_rows)
+LAI8 <- pad_with_na(LAI8, max_rows)
+LAI9 <- pad_with_na(LAI9, max_rows)
+LAI10 <- pad_with_na(LAI10, max_rows)
+
+LAIbox <- cbind(LAI1,LAI2,LAI3,LAI4,LAI5,LAI6,LAI7,LAI8,LAI9,LAI10)
+
+LAIbox <- LAIbox %>%
+  pivot_longer(cols = 1:10, names_to = "LAI", values_to = "value")
+LAIbox$LAI <- factor(LAIbox$LAI, levels = 1:10)
+
+ggplot(LAIbox, aes(x = LAI, y = value)) +
+  geom_boxplot() +
+  theme_classic()
+```
+
+# Test 7
+
+```{r}
+# LAI
+input_directory <- "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/LANDIS Outputs/Test 7/LAI"
+LAI_files <- list.files(input_directory, pattern = "\\.img$", full.names = TRUE)
+LAI <- list()
+for (i in input_directory) {
+  LAI[[i]] <- rast(LAI_files)
+}
+
+plot(LAI[[1]][[1]])
+plot(LAI[[1]][[2]])
+plot(LAI[[1]][[3]])
+plot(LAI[[1]][[4]])
+plot(LAI[[1]][[5]])
+plot(LAI[[1]][[6]])
+plot(LAI[[1]][[7]])
+
+
+
+LAI1 <- LAI[[1]][[1]] %>% as.data.frame() %>% filter(Layer_1 > 0) %>% `colnames<-`(1) 
+LAI2 <- LAI[[1]][[2]] %>% as.data.frame() %>% filter(Layer_1 > 0) %>% `colnames<-`(2) 
+LAI3 <- LAI[[1]][[3]] %>% as.data.frame() %>% filter(Layer_1 > 0) %>% `colnames<-`(3) 
+LAI4 <- LAI[[1]][[4]] %>% as.data.frame() %>% filter(Layer_1 > 0) %>% `colnames<-`(4) 
+LAI5 <- LAI[[1]][[5]] %>% as.data.frame() %>% filter(Layer_1 > 0) %>% `colnames<-`(5) 
+LAI6 <- LAI[[1]][[6]] %>% as.data.frame() %>% filter(Layer_1 > 0) %>% `colnames<-`(6) 
+LAI7 <- LAI[[1]][[7]] %>% as.data.frame() %>% filter(Layer_1 > 0) %>% `colnames<-`(7)
+
+
+max_rows <- max(nrow(LAI1),nrow(LAI2),nrow(LAI3),nrow(LAI4),nrow(LAI5),nrow(LAI6),nrow(LAI7),nrow(LAI8),nrow(LAI9),nrow(LAI10))
+
+LAI1 <- pad_with_na(LAI1, max_rows)
+LAI2 <- pad_with_na(LAI2, max_rows)
+LAI3 <- pad_with_na(LAI3, max_rows)
+LAI4 <- pad_with_na(LAI4, max_rows)
+LAI5 <- pad_with_na(LAI5, max_rows)
+LAI6 <- pad_with_na(LAI6, max_rows)
+LAI7 <- pad_with_na(LAI7, max_rows)
+
+LAIbox <- cbind(LAI1,LAI2,LAI3,LAI4,LAI5,LAI6,LAI7)
+
+LAIbox <- LAIbox %>%
+  pivot_longer(cols = 1:7, names_to = "LAI", values_to = "value")
+LAIbox$LAI <- factor(LAIbox$LAI, levels = 1:7)
+
+ggplot(LAIbox, aes(x = LAI, y = value)) +
+  geom_boxplot() +
+  theme_classic()
+```
+
+# Test 8
+
+```{r}
+# LAI
+input_directory <- "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/LANDIS Outputs/Test 6 (New LAI)/LAI"
+LAI_files <- list.files(input_directory, pattern = "\\.img$", full.names = TRUE)
+LAI <- list()
+for (i in input_directory) {
+  LAI[[i]] <- rast(LAI_files)
+}
+
+plot(LAI[[1]][[1]])
+plot(LAI[[1]][[3]])
+plot(LAI[[1]][[4]])
+plot(LAI[[1]][[5]])
+plot(LAI[[1]][[6]])
+plot(LAI[[1]][[7]])
+plot(LAI[[1]][[8]])
+plot(LAI[[1]][[9]])
+plot(LAI[[1]][[10]])
+plot(LAI[[1]][[2]])
+
+LAI1 <- LAI[[1]][[1]] %>% as.data.frame() %>% filter(Layer_1 > 0) %>% `colnames<-`(1) 
+LAI2 <- LAI[[1]][[3]] %>% as.data.frame() %>% filter(Layer_1 > 0) %>% `colnames<-`(2) 
+LAI3 <- LAI[[1]][[4]] %>% as.data.frame() %>% filter(Layer_1 > 0) %>% `colnames<-`(3) 
+LAI4 <- LAI[[1]][[5]] %>% as.data.frame() %>% filter(Layer_1 > 0) %>% `colnames<-`(4) 
+LAI5 <- LAI[[1]][[6]] %>% as.data.frame() %>% filter(Layer_1 > 0) %>% `colnames<-`(5) 
+LAI6 <- LAI[[1]][[7]] %>% as.data.frame() %>% filter(Layer_1 > 0) %>% `colnames<-`(6) 
+LAI7 <- LAI[[1]][[8]] %>% as.data.frame() %>% filter(Layer_1 > 0) %>% `colnames<-`(7) 
+LAI8 <- LAI[[1]][[9]] %>% as.data.frame() %>% filter(Layer_1 > 0) %>% `colnames<-`(8) 
+LAI9 <- LAI[[1]][[10]] %>% as.data.frame() %>% filter(Layer_1 > 0) %>% `colnames<-`(9)
+LAI10 <- LAI[[1]][[2]] %>% as.data.frame() %>% filter(Layer_1 > 0) %>% `colnames<-`(10)
+
+
+max_rows <- max(nrow(LAI1),nrow(LAI2),nrow(LAI3),nrow(LAI4),nrow(LAI5),nrow(LAI6),nrow(LAI7),nrow(LAI8),nrow(LAI9),nrow(LAI10))
+
+LAI1 <- pad_with_na(LAI1, max_rows)
+LAI2 <- pad_with_na(LAI2, max_rows)
+LAI3 <- pad_with_na(LAI3, max_rows)
+LAI4 <- pad_with_na(LAI4, max_rows)
+LAI5 <- pad_with_na(LAI5, max_rows)
+LAI6 <- pad_with_na(LAI6, max_rows)
+LAI7 <- pad_with_na(LAI7, max_rows)
+LAI8 <- pad_with_na(LAI8, max_rows)
+LAI9 <- pad_with_na(LAI9, max_rows)
+LAI10 <- pad_with_na(LAI10, max_rows)
+
+LAIbox <- cbind(LAI1,LAI2,LAI3,LAI4,LAI5,LAI6,LAI7,LAI8,LAI9,LAI10)
+
+LAIbox <- LAIbox %>%
+  pivot_longer(cols = 1:10, names_to = "LAI", values_to = "value")
+LAIbox$LAI <- factor(LAIbox$LAI, levels = 1:10)
+
+ggplot(LAIbox, aes(x = LAI, y = value)) +
+  geom_violin() +
+  # geom_boxplot() +
+  theme_classic() +
+  geom_hline(yintercept = 5, linetype = "dashed")
+```
+
+
+
+
+
+
+
+
+
+

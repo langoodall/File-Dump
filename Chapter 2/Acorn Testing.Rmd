@@ -1,0 +1,78 @@
+---
+title: "Untitled"
+output: pdf_document
+date: "2024-08-22"
+---
+
+```{r}
+library(tidyverse)
+library(readxl)
+library(terra)
+options(scipen = 999)
+```
+
+
+
+```{r}
+# read in and trim the data frame
+REF_SPECIES <- readxl::read_xlsx("C:/Users/lagoodal/Desktop/Dissertation Stuff/REF_SPECIES.xlsx")
+sppBiomass <- read_csv("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/LANDIS Outputs/Test 1/Data Frames/spp-biomass-log.csv")
+sppBiomass <- sppBiomass[-c(1, seq(4, nrow(sppBiomass), by = 3)), ]
+sppBiomass <- sppBiomass[,c(1,2,3,7,11,23)]
+
+
+# TODO find how many cells actually have these species in them
+# Get ecoregions so I can then determine how many active SPP cells fall into each ecoregion
+ecoregions <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/test1/Clipped Piedmont/ecoregions.tif")
+ecoregionsDf <- ecoregions %>% as.data.frame()
+
+# QUAL
+cellsQUAL <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/LANDIS Outputs/Test 1/Biomass/bio-QUAL-100.img")
+cellCountQUAL <- cbind(cellsQUAL %>% as.data.frame(), ecoregionsDf) %>%
+  `colnames<-`(c("QUAL", "Ecoregions"))
+cellCountQUALeco1 <- cellCountQUAL %>% filter(QUAL > 0, Ecoregions == 1) %>% nrow()
+cellCountQUALeco2 <- cellCountQUAL %>% filter(QUAL > 0, Ecoregions == 2) %>% nrow()
+
+
+
+
+sppBiomass <- sppBiomass %>%
+  mutate(CAT06 = AboveGroundBiomass_CATO6 * 5000,
+         JUNI = AboveGroundBiomass_JUNI * 5000,
+         kgQUAL = ((AboveGroundBiomass_QUAL * 5000) / 1000) * ifelse(EcoName == "ecoregion1", cellCountQUALeco1,
+                                                          ifelse(EcoName == "ecoregion2", cellCountQUALeco2, 1)))
+
+
+sppBiomass %>%
+  mutate(dbhQUAL = exp((log(kgQUAL - -2.0705))/ 2.4410),
+         acornsQUALlog = 0.71155 + (0.06346*dbhQUAL) - (0.00034290*(dbhQUAL^2)),
+         acornsQUAL = 10^acornsQUALlog)
+
+REF_SPECIES %>% filter(SPCD == 802)
+
+
+```
+
+
+
+
+
+```{r}
+SOM1soil <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/test1/Clipped Piedmont/SOM1soilN.tif")
+plot(SOM1soil)
+
+
+values(SOM1soil) <- values(SOM1soil) * 0.5
+
+writeRaster(SOM1soil,
+            filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/test2/Clipped Piedmont/SOM1soilN50.tif",
+            datatype = "FLT4S",
+            NAflag = NA,
+            overwrite = TRUE)
+```
+
+
+
+
+
+
