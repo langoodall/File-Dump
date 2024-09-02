@@ -1,0 +1,15 @@
+LandisData "Climate Config"				
+		
+ClimateTimeSeries			Daily_SequencedYears
+ClimateFile				    "./Future Climate Tables/Clipped/climate_data_calibration_eco2.csv"
+ClimateFileFormat			Daily_Temp-C_Precip-mmDay
+
+SpinUpClimateTimeSeries			Daily_SequencedYears
+SpinUpClimateFile			    "./Future Climate Tables/Clipped/climate_data_calibration_eco2.csv"
+SpinUpClimateFileFormat			Daily_Temp-C_Precip-mmDay
+
+
+UsingFireClimate			no
+RelativeHumiditySlopeAdjust             77.68
+SpringStart				30
+WinterStart				320
