@@ -1,0 +1,163 @@
+# Received file fall 2022 w/ last modification noted as: 31 May 2019 by Kelsey Ruckert <klr324@psu.edu>.
+# Last modified 03 May 2023 by Kate Jones <kejones8@ncsu.edu>.
+
+Bootstrap: debootstrap
+OSVersion: focal
+MirrorURL: http://us.archive.ubuntu.com/ubuntu/
+From: ubuntu:20.04
+
+%post
+chmod -R 777 /root
+
+# Upgrade packages in base image and install additional packages
+apt-get -y update
+DEBIAN_FRONTEND=noninteractive apt-get install -y git wget software-properties-common
+apt-get install unzip
+
+# Install .NET
+wget -q https://packages.microsoft.com/config/ubuntu/16.04/packages-microsoft-prod.deb
+dpkg -i packages-microsoft-prod.deb
+add-apt-repository universe
+apt-get install -y apt-transport-https
+apt-get update
+apt-get install -y dotnet-sdk-2.1
+apt-get clean
+rm packages-microsoft-prod.deb
+
+# LANDIS
+wget https://github.com/langoodall/Core-Model-v7-LINUX/archive/refs/tags/v7.zip # Changes made by Louis
+# wget https://github.com/LANDIS-II-Foundation/Core-Model-v7-LINUX/archive/refs/tags/v7.zip
+# wget https://github.com/kejones8/Core-Model-v7-LINUX/archive/refs/tags/v7.zip #made some necessary changes in core model instructions
+unzip v7.zip
+pwd
+ls
+echo "About to build in Tool-Console/src"
+cd /Core-Model-v7-LINUX-7/Tool-Console/src/; dotnet build -c Release
+echo "installing gdal dep"
+apt-get install -y libjpeg62
+apt-get install -y libpng16-16
+
+#cd /Core-Model-v7-LINUX-7/; git clone https://github.com/LANDIS-II-Foundation/Support-Library-Dlls-v7.git
+cd /Core-Model-v7-LINUX-7/; git clone https://github.com/langoodall/Support-Library-Dlls-v7
+cd /Core-Model-v7-LINUX-7/; cp /Core-Model-v7-LINUX-7/Support-Library-Dlls-v7/* /Core-Model-v7-LINUX-7/build/extensions/
+cd /Core-Model-v7-LINUX-7/; git clone https://github.com/langoodall/Support-Library-Dlls-v8
+cd /Core-Model-v7-LINUX-7/; cp /Core-Model-v7-LINUX-7/Support-Library-Dlls-v8/* /Core-Model-v7-LINUX-7/build/extensions/
+
+# GET EXTENSIONS
+#cd /Core-Model-v7-LINUX-7/; wget https://github.com/LANDIS-II-Foundation/Extension-Base-BDA/archive/v4.0.zip
+#cd /Core-Model-v7-LINUX-7/; wget https://github.com/LANDIS-II-Foundation/Extension-Base-Fire/archive/v4.0.zip
+#cd /Core-Model-v7-LINUX-7/; wget https://github.com/LANDIS-II-Foundation/Extension-Biomass-Harvest/archive/v4.1.zip
+#cd /Core-Model-v7-LINUX-7/; wget https://github.com/langoodall/Extension-Biomass-Harvest-HPC-Test/archive/refs/tags/v6.0.zip
+cd /Core-Model-v7-LINUX-7/; wget https://github.com/langoodall/Extension-Biomass-Harvest-HPC/archive/refs/tags/v4.5.zip
+#cd /Core-Model-v7-LINUX-7/; wget https://github.com/LANDIS-II-Foundation/Extension-LinearWind/archive/v2.0.zip
+#cd /Core-Model-v7-LINUX-7/; wget https://github.com/kejones8/Extension-LinearWind/archive/refs/tags/v2.0.zip
+#cd /Core-Model-v7-LINUX-7/; wget https://github.com/LANDIS-II-Foundation/Extension-Local-Habitat-Suitability-Output/archive/v2.0.zip
+cd /Core-Model-v7-LINUX-7/; wget https://github.com/langoodall/Extension-NECN-Succession-HPC-Test/archive/refs/tags/v7.0.2.zip
+#cd /Core-Model-v7-LINUX-7/; wget https://github.com/kejones8/Extension-NECN-Succession-test/archive/refs/tags/v6.9.zip
+#cd /Core-Model-v7-LINUX-7/; wget https://github.com/kejones8/Extension-SCRPPLE-mods/archive/refs/tags/v3.2.zip
+cd /Core-Model-v7-LINUX-7/; wget https://github.com/langoodall/Extension-Base-Harvest-HPC/archive/refs/tags/v5.2.zip
+cd /Core-Model-v7-LINUX-7/; wget https://github.com/langoodall/Extension-Output-Biomass-HPC/archive/refs/tags/v3.0.zip 
+#cd /Core-Model-v7-LINUX-7/; wget https://github.com/LANDIS-II-Foundation/Extension-Output-Biomass/archive/refs/tags/v3.0.zip
+#cd /Core-Model-v7-LINUX-7/; wget https://github.com/LANDIS-II-Foundation/Extension-Output-Biomass-By-Age/archive/v3.0.zip
+cd /Core-Model-v7-LINUX-7/; wget https://github.com/langoodall/Extension-Output-Biomass-By-Age-HPC/archive/refs/tags/v3.0.zip
+#cd /Core-Model-v7-LINUX-7/; wget https://github.com/LANDIS-II-Foundation/Extension-Output-Biomass-Community/archive/v2.0.zip
+#cd /Core-Model-v7-LINUX-7/; wget https://github.com/kejones8/Extension-Output-Biomass-Community/archive/refs/tags/v2.0.zip
+#cd /Core-Model-v7-LINUX-7/; wget https://github.com/LANDIS-II-Foundation/Extension-Output-Biomass-Reclass/archive/v3.0.zip
+cd /Core-Model-v7-LINUX-7/; wget https://github.com/langoodall/Extension-Output-Biomass-Reclass-HPC/archive/refs/tags/v3.0.zip 
+
+cd /Core-Model-v7-LINUX-7/; unzip v4.5.zip # BIOMASS HARVEST
+cd /Core-Model-v7-LINUX-7/; unzip v7.0.2.zip # NECN SUCCESSION
+#cd /Core-Model-v7-LINUX-7/; unzip v5.2.zip # BASE HARVEST
+cd /Core-Model-v7-LINUX-7/; unzip v3.0.zip # OUTPUT BIOMASS  
+cd /Core-Model-v7-LINUX-7/; unzip v3.0.zip.1 # OUTPUT BIOMASS BY AGE
+#cd /Core-Model-v7-LINUX-7/; unzip v2.0.zip # OUTPUT BIOMASS COMMUNITY 
+cd /Core-Model-v7-LINUX-7/; unzip v3.0.zip.2 # OUTPUT BIOMASS RECLASS
+
+###if ever use commented out ones, i'll need to change all Support-Library-Dlls to v8!
+
+#cd /Core-Model-v7-LINUX-7/Extension-Base-Fire-4.0/src; sed -i -e 's/lib\\Landis.Library/..\\..\\Support-Library-Dlls-v7\\Landis.Library/g' base-fire.csproj
+#cd /Core-Model-v7-LINUX-7/Extension-Base-Fire-4.0/src; dotnet build -c Release
+#cd /Core-Model-v7-LINUX-7/Extension-Base-Fire-4.0/deploy/installer; dotnet /Core-Model-v7-LINUX-7/build/Release/Landis.Extensions.dll add "Base Fire 4.0.txt"
+#cp /Core-Model-v7-LINUX-7/Extension-Base-Fire-4.0/src/obj/Release/netstandard2.0/Landis.Extension.BaseFire-v4.dll /Core-Model-v7-LINUX-7/build/extensions/.
+
+#can comment out to avoid including extension in the image
+# BASE WIND
+#cd /Core-Model-v7-LINUX-7/Extension-Base-Wind-3.0/src; sed -i -e 's/lib\\Landis.Library/..\\..\\Support-Library-Dlls-v7\\Landis.Library/g' base-wind.csproj 
+#cd /Core-Model-v7-LINUX-7/Extension-Base-Wind-3.0/src; sed -i -e 's/Landis.Library.Landis.Library.Cohorts-v2.dll/Landis.Library.Cohorts-v2.dll/g' base-wind.csproj 
+#cd /Core-Model-v7-LINUX-7/Extension-Base-Wind-3.0/src; dotnet build -c Release 
+#cd /Core-Model-v7-LINUX-7/Extension-Base-Wind-3.0/deploy/installer; dotnet /Core-Model-v7-LINUX-7/build/Release/Landis.Extensions.dll add "Base Wind 3.0.txt" 
+#cp /Core-Model-v7-LINUX-7/Extension-Base-Wind-3.0/src/obj/Release/netstandard2.0/Landis.Extension.BaseWind-v3.dll /Core-Model-v7-LINUX-7/build/extensions/.
+
+# BIOMASS HARVEST
+cd /Core-Model-v7-LINUX-7/Extension-Biomass-Harvest-HPC-4.5/src; sed -i -e 's/lib\\Landis.Library/..\\..\\Support-Library-Dlls-v7\\Landis.Library/g' biomass-harvest-ext.csproj 
+cd /Core-Model-v7-LINUX-7/Extension-Biomass-Harvest-HPC-4.5/src; dotnet build -c Release
+cd /Core-Model-v7-LINUX-7/Extension-Biomass-Harvest-HPC-4.5/deploy/installer; dotnet /Core-Model-v7-LINUX-7/build/Release/Landis.Extensions.dll add "Biomass Harvest 4.5.txt"
+#cp /Core-Model-v7-LINUX-7/Extension-Biomass-Harvest-HPC-Test-6.0/src/lib/support_libs_download.ps1 /Core-Model-v7-LINUX-7/build/extensions/. # THIS BUILDS BUT ENCOUNTERS AN ERROR
+cp /Core-Model-v7-LINUX-7/Extension-Biomass-Harvest-HPC-4.5/src/obj/Release/Landis.Extension.BiomassHarvest-v4.dll /Core-Model-v7-LINUX-7/build/extensions/.
+
+# NECN SUCCESSION v7.0.1
+cd /Core-Model-v7-LINUX-7/Extension-NECN-Succession-HPC-Test-7.0.2/src; sed -i -e 's/lib\\Landis.Library/..\\..\\Support-Library-Dlls-v7\\Landis.Library/g' NECN-succession.csproj 
+cd /Core-Model-v7-LINUX-7/Extension-NECN-Succession-HPC-Test-7.0.2/src; sed -i -e 's/Landis.Library.Succession-InputAGB.dll/Landis.Library.Succession-v8.dll/g' NECN-succession.csproj 
+cd /Core-Model-v7-LINUX-7/Extension-NECN-Succession-HPC-Test-7.0.2/src; dotnet build -c Release NECN-succession.csproj 
+cd /Core-Model-v7-LINUX-7/Extension-NECN-Succession-HPC-Test-7.0.2/deploy/installer; dotnet /Core-Model-v7-LINUX-7/build/Release/Landis.Extensions.dll add "NECN_Succession 7.txt" 
+#cp /Core-Model-v7-LINUX-7/Extension-NECN-Succession-6.9/src/obj/Release/Landis.Extension.Succession.NECN-v6.* /Core-Model-v7-LINUX-7/build/extensions/. #added this
+
+#SCRPPLE
+#cd /Core-Model-v7-LINUX-7/Extension-SCRPPLE-mods-3.2/src; sed -i -e 's/lib\\Landis.Library/..\\..\\Support-Library-Dlls-v7\\Landis.Library/g' scrapple.csproj 
+#cd /Core-Model-v7-LINUX-7/Extension-SCRPPLE-mods-3.2/src; sed -i -e 's/lib\\Ether/..\\..\\Support-Library-Dlls-v7\\Ether/g' scrapple.csproj 
+#cd /Core-Model-v7-LINUX-7/Extension-SCRPPLE-mods-3.2/src; sed -i -e 's/Landis.Library.Climate-v3.dll/Landis.Library.Climate-v4.dll/g' scrapple.csproj 
+#cd /Core-Model-v7-LINUX-7/Extension-SCRPPLE-mods-3.2/src; dotnet build -c Release scrapple.csproj 
+#cd /Core-Model-v7-LINUX-7/Extension-SCRPPLE-mods-3.2/deploy/installer; dotnet /Core-Model-v7-LINUX-7/build/Release/Landis.Extensions.dll add "Scrapple 3.2.txt" 
+
+# BASE HARVEST -- WAS ORIGINALLY DLLS-v8, BUT CHANGED TO v7 FOR NOW
+#cd /Core-Model-v7-LINUX-7/Extension-Base-Harvest-HPC-5.2/src; sed -i -e 's/lib\\Landis.Library/..\\..\\Support-Library-Dlls-v7\\Landis.Library/g' base-harvest.csproj 
+#cd /Core-Model-v7-LINUX-7/Extension-Base-Harvest-HPC-5.2/src; dotnet build -c Release 
+#cd /Core-Model-v7-LINUX-7/Extension-Base-Harvest-HPC-5.2/deploy/installer; dotnet /Core-Model-v7-LINUX-7/build/Release/Landis.Extensions.dll add "Base Harvest 5.2.txt" 
+#cp /Core-Model-v7-LINUX-7/Extension-Base-Harvest-HPC-5.2/src/obj/Debug/Landis.Extension.BaseHarvest-v5.dll /Core-Model-v7-LINUX-7/build/extensions/.
+
+# OUTPUT BIOMASS
+cd /Core-Model-v7-LINUX-7/Extension-Output-Biomass-HPC-3.0/src; sed -i -e 's/lib\\Landis.Library/..\\..\\Support-Library-Dlls-v7\\Landis.Library/g' output-biomass.csproj 
+cd /Core-Model-v7-LINUX-7/Extension-Output-Biomass-HPC-3.0/src; dotnet build -c Release 
+cd /Core-Model-v7-LINUX-7/Extension-Output-Biomass-HPC-3.0/deploy/installer; dotnet /Core-Model-v7-LINUX-7/build/Release/Landis.Extensions.dll add "Output Biomass 3.0.txt" 
+cp /Core-Model-v7-LINUX-7/Extension-Output-Biomass-HPC-3.0/src/lib/support_libs_download.ps1 /Core-Model-v7-LINUX-7/build/extensions/.
+
+# OUTPUT BIOMASS BY AGE
+cd /Core-Model-v7-LINUX-7/Extension-Output-Biomass-By-Age-HPC-3.0/src; sed -i -e 's/lib\\Landis.Library/..\\..\\Support-Library-Dlls-v7\\Landis.Library/g' output-biomass-by-age.csproj 
+cd /Core-Model-v7-LINUX-7/Extension-Output-Biomass-By-Age-HPC-3.0/src; dotnet build -c Release 
+cd /Core-Model-v7-LINUX-7/Extension-Output-Biomass-By-Age-HPC-3.0/deploy/installer; dotnet /Core-Model-v7-LINUX-7/build/Release/Landis.Extensions.dll add "Output Biomass-by-Age 3.0.txt" 
+cp /Core-Model-v7-LINUX-7/Extension-Output-Biomass-By-Age-HPC-3.0/src/lib/support_libs_download.ps1 /Core-Model-v7-LINUX-7/build/extensions/.
+
+# OUTPUT BIOMASS COMMUNITY
+#cd /Core-Model-v7-LINUX-7/Extension-Output-Biomass-Community-2.0/src; sed -i -e 's/lib\\Landis.Library/..\\..\\Support-Library-Dlls-v7\\Landis.Library/g' output-biomass-community.csproj 
+#cd /Core-Model-v7-LINUX-7/Extension-Output-Biomass-Community-2.0/src; dotnet build -c Release 
+#cd /Core-Model-v7-LINUX-7/Extension-Output-Biomass-Community-2.0/deploy/installer; dotnet /Core-Model-v7-LINUX-7/build/Release/Landis.Extensions.dll add "Output Biomass Community 2.0.txt" 
+#cp /Core-Model-v7-LINUX-7/Extension-Output-Biomass-Community-2.0/src/lib/support_libs_download.ps1 /Core-Model-v7-LINUX-7/build/extensions/.
+
+# OUTPUT BIOMASS RECLASS
+cd /Core-Model-v7-LINUX-7/Extension-Output-Biomass-Reclass-HPC-3.0/src; sed -i -e 's/lib\\Landis.Library/..\\..\\Support-Library-Dlls-v7\\Landis.Library/g' output-biomass.csproj 
+cd /Core-Model-v7-LINUX-7/Extension-Output-Biomass-Reclass-HPC-3.0/src; dotnet build -c Release 
+cd /Core-Model-v7-LINUX-7/Extension-Output-Biomass-Reclass-HPC-3.0/deploy/installer; dotnet /Core-Model-v7-LINUX-7/build/Release/Landis.Extensions.dll add "Output Biomass Reclass 3.0.txt" 
+cp /Core-Model-v7-LINUX-7/Extension-Output-Biomass-Reclass-HPC-3.0/src/lib/support_libs_download.ps1 /Core-Model-v7-LINUX-7/build/extensions/.
+
+# OUTPUT COHORT STATISTICS
+#cd /Core-Model-v7-LINUX-7/Extension-Output-Cohort-Statistics-3.0.1-rc1/src; sed -i -e 's/lib\\Landis.Library/..\\..\\Support-Library-Dlls-v7\\Landis.Library/g' output-cohort-stats.csproj 
+#cd /Core-Model-v7-LINUX-7/Extension-Output-Cohort-Statistics-3.0.1-rc1/src; dotnet build -c Release 
+#cd /Core-Model-v7-LINUX-7/Extension-Output-Cohort-Statistics-3.0.1-rc1/deploy/installer; dotnet /Core-Model-v7-LINUX-7/build/Release/Landis.Extensions.dll add "Output Cohort Statistics 3.0.txt" 
+#cp /Core-Model-v7-LINUX-7/Extension-Output-Cohort-Statistics-3.0.1-rc1/src/obj/Release/netstandard2.0/Landis.Extension.Output.CohortStats-v3.dll /Core-Model-v7-LINUX-7/build/extensions/.
+
+# Set up some nice directories relevant to ACI. -p setting must be specified
+mkdir -p /storage/home
+mkdir -p /storage/work
+mkdir -p /gpfs/group
+mkdir -p /gpfs/scratch
+mkdir -p /var/spool/torque
+
+# Create the /landis directory for binding the scenario folder (specific to running landis)
+# to bind a folder on ACI the folder must be created and
+# must have the -p setting otherwise the folder will not 
+# bind and the run will fail.
+mkdir -p /landis
+
+%runscript
+cd /landis
+dotnet /Core-Model-v7-LINUX-7/build/Release/Landis.Console.dll "$@"
