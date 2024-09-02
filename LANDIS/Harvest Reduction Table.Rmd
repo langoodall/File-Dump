@@ -1,5 +1,5 @@
 ---
-title: "Harvest Reduction Table"
+title: "Harvest Implementation Table"
 output: pdf_document
 date: "2024-05-07"
 ---
@@ -8,6 +8,7 @@ date: "2024-05-07"
 ```{r, message = FALSE, warning = FALSE}
 library(tidyverse)
 library(terra)
+library(tidyterra)
 library(sf)
 ```
 
@@ -121,9 +122,17 @@ IC2MapCodes <- IC2Df %>% select(MapCode, FORTYP) %>% unique()
 IC3MapCodes <- IC3Df %>% select(MapCode, FORTYP) %>% unique()
 
 
-# NEED TO IFEL/RECLASSIFY THE MAPCODE VALUES TO FORTYP VALUES
-```
-
+# Create a reclassified plot of all the FORTYPs in the Piedmont
+# Get xy coord data and the corresponding MapCode and bind FORTYP into the dataframe
+IC1MapDf <- as.data.frame(IC1, xy = TRUE)
+IC1MapDf <- IC1MapDf %>% left_join(IC1MapCodes, by = c("MapCode_IC" = "MapCode"))
+IC2MapDf <- as.data.frame(IC2, xy = TRUE)
+IC2MapDf <- IC2MapDf %>% left_join(IC2MapCodes, by = c("MapCode_IC" = "MapCode"))
+IC3MapDf <- as.data.frame(IC3, xy = TRUE)
+IC3MapDf <- IC3MapDf %>% left_join(IC3MapCodes, by = c("MapCode_IC" = "MapCode"))
+fortypMap <- rbind(IC1MapDf, IC2MapDf, IC3MapDf)
+fortypMap <- as_spatraster(fortypMap[,c(1,2,4)])
+plot(fortypMap)
 
 
 # Calculate how many active and inactive cells are in each management area
@@ -148,18 +157,62 @@ mgmt2Inactive <- (totalCells - outsideNAs - 22087 - totalMgmt1 - totalMgmt3 - mg
 mgmt3Inactive <- (totalCells - outsideNAs - 22087 - totalMgmt1 - totalMgmt2 - mgmt3Active)
 
 
+# Coded way of calculating the Harvest Implementation Table values
+mgmt1HarvestTimeDf <- c("Loblolly", "Oak-Hickory", "Oak-Pine", "Softwoods") %>% # Add prescription families
+  as.data.frame() %>%
+  mutate(Timestep = 10) %>%                                                     # Timestep value for the simulation
+  `colnames<-`(c("FORTYP", "Timestep")) %>%
+  mutate(Resistance = c(35,40,40,35),                                           # Add in the minimum rotation time for that prescription family
+         perResistance = Resistance / Timestep,                                 # How many timesteps fit into one rotation
+         Resilience = c(35,50,50,40),                                           # Repeat for remaining prescription families
+         perResilience = Resilience / Timestep,
+         Transition = c(35,60,60,50),
+         perTransition = Transition / Timestep,
+         activeCells = c(160116, 238965, 169924, 42603),                        # Calculated by subtracting NAs from each mgmt area
+         "%" = activeCells / mgmt1Active * 100,                                 # What percent of the mgmt do they represent
+         "% Resistance" = `%` / perResistance,                                  # percent to be applied per timestep
+         "% Resilience" = `%` / perResilience,
+         "% Transition" = `%` / perTransition,
+         mgmtArea = 1) %>%
+  select(FORTYP, mgmtArea, `%`, `% Resistance`, `% Resilience`, `% Transition`)
 
-plot(clippedHUC.shp)
-# NumclippedHUC.Shp# Number of time steps per rotation
-# FORTYP    Rotation    Timesteps/Rotation
-# Loblolly  35          3
-# Oak-H     40          4
-# Oak-P     40          4
-# Soft      40          4
+mgmt2HarvestTimeDf <- c("Loblolly", "Oak-Hickory", "Oak-Pine", "Softwoods") %>%
+  as.data.frame() %>%
+  mutate(Timestep = 10) %>%
+  `colnames<-`(c("FORTYP", "Timestep")) %>%
+  mutate(Resistance = c(35,40,40,35),
+         perResistance = Resistance / Timestep,
+         Resilience = c(35,50,50,40),
+         perResilience = Resilience / Timestep,
+         Transition = c(35,60,60,50),
+         perTransition = Transition / Timestep,
+         activeCells = c(24344, 36470, 25931, 6443),
+         "%" = activeCells / mgmt2Active * 100,
+         "% Resistance" = `%` / perResistance,
+         "% Resilience" = `%` / perResilience,
+         "% Transition" = `%` / perTransition,
+         mgmtArea = 2) %>%
+  select(FORTYP, mgmtArea, `%`, `% Resistance`, `% Resilience`, `% Transition`)
 
+mgmt3HarvestTimeDf <- c("Loblolly", "Oak-Hickory", "Oak-Pine", "Softwoods") %>%
+  as.data.frame() %>%
+  mutate(Timestep = 10) %>%
+  `colnames<-`(c("FORTYP", "Timestep")) %>%
+  mutate(Resistance = c(35,40,40,35),
+         perResistance = Resistance / Timestep,
+         Resilience = c(35,50,50,40),
+         perResilience = Resilience / Timestep,
+         Transition = c(35,60,60,50),
+         perTransition = Transition / Timestep,
+         activeCells = c(9905, 14341, 10122, 2581),
+         "%" = activeCells / mgmt3Active * 100,
+         "% Resistance" = `%` / perResistance,
+         "% Resilience" = `%` / perResilience,
+         "% Transition" = `%` / perTransition,
+         mgmtArea = 3) %>%
+  select(FORTYP, mgmtArea, `%`, `% Resistance`, `% Resilience`, `% Transition`)
 
-plot(mgmtRast)
-plot(clippedHUC.shp, add = TRUE, col = NA)
+harvestImplementationTable <- rbind(mgmt1HarvestTimeDf, mgmt2HarvestTimeDf, mgmt3HarvestTimeDf)
 
 ```
 

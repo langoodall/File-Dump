@@ -18,7 +18,7 @@ library(data.table)
 
 ```{r}
 NC_FIA <- readFIA("C:/Users/lagoodal/Desktop/Dissertation Stuff/NC FIA")
-Piedmont_coords <- read_csv("C:/Users/lagoodal/Downloads/Level 4 Piedmont Co-ordinates.csv")
+Piedmont_coords <- read_csv("C:/Users/lagoodal/Desktop/Dissertation Stuff/Level 4 Piedmont Co-ordinates.csv")
 
 TREE <- NC_FIA$TREE %>% inner_join(Piedmont_coords, by = c("COUNTYCD", "PLOT"))
 COND <- NC_FIA$COND %>% inner_join(Piedmont_coords, by = c("COUNTYCD", "PLOT"))

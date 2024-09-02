@@ -1,0 +1,283 @@
+---
+title: "Untitled"
+output: pdf_document
+date: "2024-05-31"
+---
+
+
+```{r, warning = FALSE, message = FALSE}
+library(tidyverse)
+library(terra)
+library(sf)
+library(rFIA)
+```
+
+# OG Data
+
+```{r}
+# Read in the LANDIS output data
+harvestDf <- read_csv("C:/Users/lagoodal/Desktop/Dissertation Stuff/LANDIS Data/Resistance BNU45/Biomass Harvest Data/biomass-harvest-summary-log.csv")
+
+
+harvestDf <- harvestDf %>% mutate(Prescription = str_replace_all(Prescription, "\\(.*?\\)", ""))
+
+piedmontBoundary <- st_read("C:/Users/lagoodal/Desktop/nc_eco_l3/Piedmont UTM 17N.shp")
+
+
+
+
+harvestDf %>%
+  group_by(Time, Prescription) %>%
+  summarise(HarvestedSites = sum(HarvestedSites),
+            TotalCohortsCompleteHarvest = sum(TotalCohortsCompleteHarvest),
+            TotalCohortsPartialHarvest = sum(TotalCohortsPartialHarvest),
+            TotalBiomassHarvested = sum(TotalBiomassHarvested)) %>%
+  ggplot(., aes(x = Time, y = TotalBiomassHarvested, col = Prescription, fill = Prescription)) +
+  #geom_line(size = 1.5) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  scale_y_continuous(breaks = c(0,1e6,2e6,3e6,4e6,5e6,6e6,7e6,8e6),
+                     labels = c(0,1,2,3,4,5,6,7,8)) +
+  labs(x = "Time", y = "Total Harvested Biomass in Millions (Mg)", title = "Total Biomass Harvested by Prescription Type")
+
+harvestDf %>%
+  group_by(Time, ManagementArea, Prescription) %>%
+  summarise(HarvestedSites = sum(HarvestedSites),
+            TotalCohortsCompleteHarvest = sum(TotalCohortsCompleteHarvest),
+            TotalCohortsPartialHarvest = sum(TotalCohortsPartialHarvest),
+            TotalBiomassHarvested = sum(TotalBiomassHarvested)) %>%
+  ggplot(., aes(x = Time, y = TotalBiomassHarvested, col = Prescription)) +
+  geom_line(size = 1.5, alpha = 1) +
+  # geom_smooth(method = "lm") +
+  theme_classic() +
+  facet_wrap(~ManagementArea) +
+  scale_y_continuous(breaks = c(0,1e6,2e6,3e6),
+                     labels = c(0,1,2,3)) +
+  labs(x = "Time", y = "Harvested Biomass in Millions (Mg)", title = "Harvested Biomass by Prescription & Management Area")
+
+
+harvestDf[,c(1,2,3,39:69)] %>%
+  pivot_longer(c("BiomassHarvestedMg_ACRU":"BiomassHarvestedMg_PIPA"), names_to = "Species", values_to = "BiomassHarvestedMg") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  ggplot(., aes(x = Time, y = BiomassHarvestedMg, col = Species)) +
+  geom_line() +
+  theme_classic() +
+  facet_grid(Prescription~ManagementArea) +
+  scale_y_continuous(breaks = c(0,0.5e6,1e6,1.5e6),
+                     labels = c(0,0.5,1,1.5)) +
+  labs(x = "Time", y = "Harvested Biomass in Millions (Mg)", title = "Harvested Biomass by Species, Management Area and Prescription") +
+  ylim(0,200000)
+
+
+maListNames <- c(`1` = "Private Non-Corporate",`2` = "Private Corporate", `3` = "Public")
+prListNames <- c("LOB_PLANTATION" = "Loblolly", "OH_RESISTANCE" = "Oak-Hikcory", "OP_RESISTANCE" = "Oak-Pine", "SOFT_RESISTANCE" = "Softwoods")
+
+harvestDf[,c(1,2,3,39:69)] %>%
+  pivot_longer(c("BiomassHarvestedMg_ACRU":"BiomassHarvestedMg_PIPA"), names_to = "Species", values_to = "BiomassHarvestedMg") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  ggplot(., aes(x = Time, y = BiomassHarvestedMg, col = Species, fill = Species)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  facet_grid(Prescription~ManagementArea,
+             labeller = labeller(ManagementArea = maListNames, Prescription = prListNames)) +
+  scale_y_continuous(breaks = c(0,1e6,2e6,3e6),
+                     labels = c(0,1,2,3)) +
+  labs(x = "Time", y = "Harvested Biomass in Millons (Mg)", title = "Harvested Biomass by Species, Management Area & Prescription")
+
+
+# NC_FIA <- readFIA(dir = "C:/Users/lagoodal/Desktop/FIA_NC_2021/All")
+# 
+# x <- growMort(db = NC_FIA,
+#          polys = piedmontBoundary[2],
+#          treeType = "all",
+#          method = "sma")
+```
+
+# Test data
+
+```{r}
+harvestDf <- read_csv("C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/test1/Harvest/biomass-event-log.csv")
+harvestDf <- harvestDf %>% mutate(Prescription = str_replace_all(Prescription, "\\(.*?\\)", ""))
+
+harvestDf %>%
+  group_by(Time, Prescription) %>%
+  summarise(HarvestedSites = sum(HarvestedSites),
+            MgBiomassRemoved = sum(MgBiomassRemoved)) %>%
+  ggplot(., aes(x = Time, y = MgBiomassRemoved, col = Prescription, fill = Prescription)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  theme_classic() +
+  scale_y_continuous(breaks = c(0,2e6,4e6,6e6),
+                     labels = c(0,2,4,6)) +
+  labs(x = "Time", y = "Harvested Biomass in Millions (Mg)")
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+# Removed Biomass
+raster_directory <- "C:/Users/lagoodal/Desktop/Dissertation Stuff/LANDIS Data/Resistance BNU45/Biomass Harvest Rasters"
+all_files <- list.files(raster_directory, full.names = TRUE)
+removed_files <- all_files[grep("removed", all_files)]
+raster_list <- list()
+for (i in seq_along(removed_files)) {
+  raster_list[[i]] <- rast(removed_files[i])
+}
+plot(raster_list[[1]])
+plot(raster_list[[4]])
+plot(raster_list[[5]])
+plot(raster_list[[6]])
+plot(raster_list[[8]])
+plot(raster_list[[9]])
+plot(raster_list[[10]])
+plot(raster_list[[11]])
+plot(raster_list[[12]])
+plot(raster_list[[2]])
+
+# Harvest prescriptions
+raster_directory <- "C:/Users/lagoodal/Desktop/Dissertation Stuff/LANDIS Data/Resistance BNU45/Biomass Harvest Rasters"
+all_files <- list.files(raster_directory, full.names = TRUE)
+harvest_files <- all_files[grep("harvest", all_files)]
+raster_list <- list()
+for (i in seq_along(harvest_files)) {
+  raster_list[[i]] <- rast(harvest_files[i])
+}
+plot(raster_list[[1]])
+plot(raster_list[[4]])
+plot(raster_list[[5]])
+plot(raster_list[[6]])
+plot(raster_list[[8]])
+plot(raster_list[[9]])
+plot(raster_list[[10]])
+plot(raster_list[[11]])
+plot(raster_list[[12]])
+plot(raster_list[[2]])
+
+# output_directory <- "C:/Users/lagoodal/Desktop/Raster Dump"
+# 
+# for (i in seq_along(raster_list)) {
+#   file_name <- paste0("raster_", i, ".tif")
+#   file_path <- file.path(output_directory, file_name)
+#   writeRaster(raster_list[[i]], file_path, overwrite = TRUE)
+# }
+
+
+# PITA
+raster_directory <- "C:/Users/lagoodal/Desktop/Dissertation Stuff/LANDIS Data/Resistance BNU45/output"
+all_files <- list.files(raster_directory, full.names = TRUE)
+PITA_files <- all_files[grep("PITA", all_files)]
+raster_list <- list()
+for (i in seq_along(PITA_files)) {
+  raster_list[[i]] <- rast(PITA_files[i])
+}
+plot(raster_list[[1]])
+plot(raster_list[[2]])
+plot(raster_list[[4]])
+plot(raster_list[[5]])
+plot(raster_list[[6]])
+plot(raster_list[[7]])
+plot(raster_list[[8]])
+plot(raster_list[[9]])
+plot(raster_list[[10]])
+plot(raster_list[[3]])
+
+# LITU
+raster_directory <- "C:/Users/lagoodal/Desktop/Dissertation Stuff/LANDIS Data/Resistance BNU45/output"
+all_files <- list.files(raster_directory, full.names = TRUE)
+LITU_files <- all_files[grep("LITU", all_files)]
+raster_list <- list()
+for (i in seq_along(LITU_files)) {
+  raster_list[[i]] <- rast(LITU_files[i])
+}
+plot(raster_list[[1]])
+plot(raster_list[[2]])
+plot(raster_list[[4]])
+plot(raster_list[[5]])
+plot(raster_list[[6]])
+plot(raster_list[[7]])
+plot(raster_list[[8]])
+plot(raster_list[[9]])
+plot(raster_list[[10]])
+plot(raster_list[[3]])
+
+##################################################
+# FROM test1  RUNS
+# LAI
+raster_directory <- "C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/test1/NECN"
+all_files <- list.files(raster_directory, full.names = TRUE)
+LAI_files <- all_files[grep("LAI", all_files)]
+raster_list <- list()
+for (i in seq_along(LAI_files)) {
+  raster_list[[i]] <- rast(LAI_files[i])
+}
+plot(raster_list[[1]])
+plot(raster_list[[2]])
+plot(raster_list[[4]])
+plot(raster_list[[5]])
+plot(raster_list[[6]])
+plot(raster_list[[7]])
+plot(raster_list[[8]])
+plot(raster_list[[9]])
+plot(raster_list[[10]])
+plot(raster_list[[3]])
+
+
+##################################################
+# FROM OAK TESTING  RUNS
+# LAI
+raster_directory <- "C:/Users/lagoodal/Desktop/TESTING FOR OAK GROWTH/NECN"
+all_files <- list.files(raster_directory, full.names = TRUE)
+LAI_files <- all_files[grep("LAI", all_files)]
+raster_list <- list()
+for (i in seq_along(LAI_files)) {
+  raster_list[[i]] <- rast(LAI_files[i])
+}
+plot(raster_list[[1]])
+plot(raster_list[[2]])
+plot(raster_list[[4]])
+plot(raster_list[[5]])
+plot(raster_list[[6]])
+plot(raster_list[[7]])
+plot(raster_list[[8]])
+plot(raster_list[[9]])
+plot(raster_list[[10]])
+plot(raster_list[[3]])
+```
+```
+
+
+
+
+
+
+
+```{r}
+
+sppBiomass <- read_csv("C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/test1/spp-biomass-log.csv")
+
+
+
+```
+
+
+
+
+
+
+
+

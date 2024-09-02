@@ -10,6 +10,7 @@ library(tidyverse)
 library(terra)
 library(tidyterra)
 library(sf)
+library(maps)
 ```
 
 
@@ -96,10 +97,6 @@ plot(ecoregionsRast)
 
 plot(nlcdNC)
 ```
-
-
-
-
 
 
 

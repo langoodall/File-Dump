@@ -1,0 +1,269 @@
+---
+title: "Untitled"
+output: pdf_document
+date: "2024-08-05"
+---
+
+```{r}
+library(terra)
+library(sf)
+library(tidyverse)
+options(scipen = 999)
+```
+
+
+
+# Old Stands
+
+```{r}
+eventLog <- read_csv("C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/test1/Harvest/biomass-event-log.csv")
+harvestSummary <- read_csv("C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/test1/Harvest/biomass-harvest-summary-log.csv") %>%
+  select(-`...68`)
+
+
+eventLogDf1 <- eventLog %>%
+  mutate(HectaresHarvested = HarvestedSites * 0.5) %>%
+  group_by(ManagementArea, Prescription) %>%
+  summarise(HectaresHarvested = mean(HectaresHarvested))
+
+hvstDf1Spp <- harvestSummary[,c(1,2,3,38:67)] %>%
+  pivot_longer(cols = c("BiomassHarvestedMg_ACRU":"BiomassHarvestedMg_PIPA"), names_to = "Species", values_to = "Biomass") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", ""))
+
+
+hvstDf1 <- harvestSummary[,c(1,2,3,38:67)] %>%
+  pivot_longer(cols = c("BiomassHarvestedMg_ACRU":"BiomassHarvestedMg_PIPA"), names_to = "Species", values_to = "Biomass") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  inner_join(., eventLogDf1, by = c("ManagementArea", "Prescription")) %>%
+  group_by(ManagementArea, Prescription, Time) %>%
+  summarise(Biomass_Mg_Ha = Biomass / HectaresHarvested)
+
+
+ggplot(x, aes(x = Time, y = Biomass_Mg_Ha)) +
+  geom_bar(stat = "identity") +
+  theme_classic()
+
+
+x <- harvestSummary[,c(1,2,3,38:67)] %>%
+  pivot_longer(cols = c("BiomassHarvestedMg_ACRU":"BiomassHarvestedMg_PIPA"), names_to = "Species", values_to = "Biomass") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  inner_join(., eventLogDf1, by = c("ManagementArea", "Prescription")) %>%
+  group_by(ManagementArea, Prescription, Time) %>%
+  summarise(Biomass_Mg_Ha = sum(Biomass / HectaresHarvested))
+
+
+harvestSummary[,c(1,2,3,4,38:67)] %>%
+  mutate(HarvestedSites = HarvestedSites * 0.5) %>%
+  pivot_longer(cols = c("BiomassHarvestedMg_ACRU":"BiomassHarvestedMg_PIPA"), names_to = "Species", values_to = "Biomass") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", ""),
+         Biomass_Ha = Biomass / HarvestedSites) %>%
+  group_by(ManagementArea, Prescription, Time) %>%
+  summarise(Biomass_Ha = sum(Biomass_Ha)) %>%
+  ggplot(., aes(x = Time, y = Biomass_Ha)) +
+  geom_bar(stat = "identity") +
+  theme_classic()
+
+```
+
+# RESISTANCE
+## New Stands
+### 20 Year Run
+```{r}
+eventLog <- read_csv("C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/test1/Harvest/biomass-event-log.csv")
+harvestSummary <- read_csv("C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/test1/Harvest/biomass-harvest-summary-log.csv") %>%
+  select(-`...68`)
+
+# Event Log
+eventLogDf2 <- eventLog %>%
+  mutate(HectaresHarvested = HarvestedSites * 0.5) %>%
+  group_by(ManagementArea, Prescription) %>%
+  summarise(HectaresHarvested = mean(HectaresHarvested))
+
+# Total landscape harvest by species
+hvstDf2Spp <- harvestSummary[,c(1,2,3,38:67)] %>%
+  pivot_longer(cols = c("BiomassHarvestedMg_ACRU":"BiomassHarvestedMg_PIPA"), names_to = "Species", values_to = "Biomass_Mg") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", ""))
+
+# Biomass/Ha by Time, Management Area and Prescription Type
+hvstDf2 <- harvestSummary[,c(1,2,3,4,38:67)] %>%
+  mutate(Total = rowSums(.[,c(5:34)]),
+         HarvestedSites = HarvestedSites * 0.5,
+         Biomass_Ha = Total / HarvestedSites) %>%
+  select(Time, ManagementArea, Prescription, Biomass_Ha)
+
+# Plot of Biomass per Hectare by Prescription
+p1 <- ggplot(hvstDf2, aes(x = Time, y = Biomass_Ha)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  facet_grid(~Prescription)
+
+# Plot of Biomass per Hectare by Management Area
+p2 <- ggplot(hvstDf2, aes(x = Time, y = Biomass_Ha)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  facet_grid(~ManagementArea)
+
+p1
+p2
+```
+
+### 30 Year Run 1
+#### File = HvstResistance30Yr1
+```{r}
+eventLog <- read_csv("C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/test1/Harvest/biomass-event-log.csv")
+harvestSummary <- read_csv("C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/test1/Harvest/biomass-harvest-summary-log.csv") %>%
+  select(-`...68`)
+
+# Event Log
+eventLogDf3 <- eventLog %>%
+  mutate(HectaresHarvested = HarvestedSites * 0.5) %>%
+  group_by(ManagementArea, Prescription) %>%
+  summarise(HectaresHarvested = mean(HectaresHarvested))
+
+# Total landscape harvest by species
+hvstDf3Spp <- harvestSummary[,c(1,2,3,38:67)] %>%
+  pivot_longer(cols = c("BiomassHarvestedMg_ACRU":"BiomassHarvestedMg_PIPA"), names_to = "Species", values_to = "Biomass_Mg") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", ""),
+         Prescription = str_replace(Prescription, "\\s*\\([^)]*\\)", ""))
+
+# Biomass/Ha by Time, Management Area and Prescription Type
+hvstDf3 <- harvestSummary[,c(1,2,3,4,38:67)] %>%
+  mutate(Total = rowSums(.[,c(5:34)]),
+         HarvestedSites = HarvestedSites * 0.5,
+         Biomass_Ha = Total / HarvestedSites,
+         Prescription = str_replace(Prescription, "\\s*\\([^)]*\\)", "")) %>%
+  select(Time, ManagementArea, Prescription, Biomass_Ha)
+
+# Plot of Biomass per Hectare by Prescription
+p3 <- ggplot(hvstDf3, aes(x = Time, y = Biomass_Ha)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  facet_grid(~Prescription)
+
+# Plot of Biomass per Hectare by Management Area
+p4 <- ggplot(hvstDf3, aes(x = Time, y = Biomass_Ha)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  facet_grid(~ManagementArea)
+
+p3
+p4
+```
+
+### 30 Year Run 2
+#### File = HvstResistance30Yr2
+```{r}
+eventLog <- read_csv("C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/test1/Harvest/biomass-event-log.csv")
+harvestSummary <- read_csv("C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/test1/Harvest/biomass-harvest-summary-log.csv") %>%
+  select(-`...68`)
+
+# Event Log
+eventLogDf4 <- eventLog %>%
+  mutate(HectaresHarvested = HarvestedSites * 0.5) %>%
+  group_by(ManagementArea, Prescription) %>%
+  summarise(HectaresHarvested = mean(HectaresHarvested))
+
+# Total landscape harvest by species
+hvstDf4Spp <- harvestSummary[,c(1,2,3,38:67)] %>%
+  pivot_longer(cols = c("BiomassHarvestedMg_ACRU":"BiomassHarvestedMg_PIPA"), names_to = "Species", values_to = "Biomass_Mg") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", ""),
+         Prescription = str_replace(Prescription, "\\s*\\([^)]*\\)", ""))
+
+# Biomass/Ha by Time, Management Area and Prescription Type
+hvstDf4 <- harvestSummary[,c(1,2,3,4,38:67)] %>%
+  mutate(Total = rowSums(.[,c(5:34)]),
+         HarvestedSites = HarvestedSites * 0.5,
+         Biomass_Ha = Total / HarvestedSites,
+         Prescription = str_replace(Prescription, "\\s*\\([^)]*\\)", "")) %>%
+  select(Time, ManagementArea, Prescription, Biomass_Ha)
+
+# Plot of Biomass per Hectare by Prescription
+p5 <- ggplot(hvstDf4, aes(x = Time, y = Biomass_Ha)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  facet_grid(~Prescription)
+
+# Plot of Biomass per Hectare by Management Area
+p6 <- ggplot(hvstDf4, aes(x = Time, y = Biomass_Ha)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  facet_grid(~ManagementArea)
+
+p5
+p6
+```
+
+### 30 Year Run 3
+#### File = HvstResistance30Yr3
+```{r}
+
+
+```
+
+
+
+
+# RESILIENCE
+## New Stands
+### 30 Year Run
+#### File = HvstResilience30Yr1
+```{r}
+eventLog <- read_csv("C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/test1/Harvest/biomass-event-log.csv")
+harvestSummary <- read_csv("C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/test1/Harvest/biomass-harvest-summary-log.csv") %>%
+  select(-`...68`)
+
+# Event Log
+eventLogDf6 <- eventLog %>%
+  mutate(HectaresHarvested = HarvestedSites * 0.5) %>%
+  group_by(ManagementArea, Prescription) %>%
+  summarise(HectaresHarvested = mean(HectaresHarvested))
+
+# Total landscape harvest by species
+hvstDf6Spp <- harvestSummary[,c(1,2,3,38:67)] %>%
+  pivot_longer(cols = c("BiomassHarvestedMg_ACRU":"BiomassHarvestedMg_PIPA"), names_to = "Species", values_to = "Biomass_Mg") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", ""),
+         Prescription = str_replace(Prescription, "\\s*\\([^)]*\\)", ""))
+
+# Biomass/Ha by Time, Management Area and Prescription Type
+hvstDf6 <- harvestSummary[,c(1,2,3,4,38:67)] %>%
+  mutate(Total = rowSums(.[,c(5:34)]),
+         HarvestedSites = HarvestedSites * 0.5,
+         Biomass_Ha = Total / HarvestedSites,
+         Prescription = str_replace(Prescription, "\\s*\\([^)]*\\)", "")) %>%
+  select(Time, ManagementArea, Prescription, Biomass_Ha)
+
+# Plot of Biomass per Hectare by Prescription
+p9 <- ggplot(hvstDf6, aes(x = Time, y = Biomass_Ha)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  facet_grid(~Prescription)
+
+# Plot of Biomass per Hectare by Management Area
+p10 <- ggplot(hvstDf6, aes(x = Time, y = Biomass_Ha)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  facet_grid(~ManagementArea)
+
+p9
+p10
+```
+
+### 30 Year Run
+#### File = HvstResilience30Yr2
+```{r}
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+

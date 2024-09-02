@@ -7,8 +7,9 @@ date: "2024-04-23"
 ```{r, message = FALSE, warning = FALSE}
 library(tidyverse)
 library(rFIA)
-library
-install.packages("fitdistrplus")
+library(fitdistrplus)
+library(nls2)
+library(minpack.lm)
 ```
 
 
@@ -16,7 +17,7 @@ install.packages("fitdistrplus")
 
 
 ```{r}
-# states_FIA <- readFIA(dir = "C:/Users/lagoodal/Desktop/Dissertation Stuff/5 States LAI")
+states_FIA <- readFIA(dir = "C:/Users/lagoodal/Desktop/Dissertation Stuff/5 States LAI/LAI")
 trees <- states_FIA$TREE
 seedlings <- states_FIA$SEEDLING
 sp_ref <- read_csv("C:/Users/lagoodal/Desktop/Dissertation Stuff/USDA Plant Codes.csv")
@@ -116,6 +117,8 @@ for (i in 1:length(spp_to_use)){
   SPCD.needed <- spcd_to_use[i]
   barplot(height = SAPPS.histogram[,SP.needed], names.arg = SAPPS.histogram$max, main = SP.needed, xlab = "LAI",ylab="Seedlings/plot")
 }
+
+
 ```
 
 
@@ -142,17 +145,314 @@ map2(.x = weibull_models$weibull,
                      xlab = "LAI"))
 dev.off()
 
-weibull_params <- weibull_models %>%
+
+
+
+
+# Fit Weibull distributions using fitdist from fitdistrplus
+weibull_models <- SAPPS.PLOT.TOTAL.LEAFAREA %>%
+  pivot_longer(cols = all_of(spp_to_use),
+               names_to = "Species",
+               values_to = "Count") %>%
+  group_by(Species) %>%
+  filter(Count > 0) %>%
+  mutate(PLOT.LAI = ifelse(PLOT.LAI < 0.01, 0.01, PLOT.LAI)) %>%
+  summarise(weibull = list(fitdist(PLOT.LAI, "weibull")))
+
+
+# Plot the histogram and Weibull fit for each species
+pdf(file = "Weibull LAI distribution by species.pdf")
+map2(.x = weibull_models$weibull, 
+     .y = weibull_models$Species, 
+     .f = ~ denscomp(.x, 
+                     main = .y,
+                     xlab = "LAI"))
+dev.off()
+
+weibull_params
+
+
+weibull_models %>%
   mutate(shape = map_dbl(.x = .$weibull, .f = ~ pluck(.x, "estimate", "shape")),
-         scale = map_dbl(.x = .$weibull, .f = ~ pluck(.x, "estimate", "scale"))) %>%
+         scale = map_dbl(.x = .$weibull, .f = ~ pluck(.x, "estimate", "scale")),
+         location = map_dbl(.x = .$weibull, .f = ~ pluck(.x, "estimate", "location"))) %>%
   dplyr::select(-c(weibull))
 
 
+weibull_models %>%
+  mutate(shape = map_dbl(.x = .$weibull, .f = ~ pluck(.x, "estimate", "shape")),
+         scale = map_dbl(.x = .$weibull, .f = ~ pluck(.x, "estimate", "scale"))) %>%
+  dplyr::select(-c(weibull))
+```
 
 
 
+```{r}
+states_FIA <- readFIA(dir = "C:/Users/lagoodal/Desktop/Dissertation Stuff/5 States LAI/LAI")
+trees <- states_FIA$TREE
+plot <- states_FIA$PLOT
+cond <- states_FIA$COND
+seedlings <- states_FIA$SEEDLING
+sp_ref <- read_csv("C:/Users/lagoodal/Desktop/Dissertation Stuff/USDA Plant Codes.csv")
+sp_ref <- sp_ref %>% mutate(`Synonym Symbol` = ifelse(is.na(`Synonym Symbol`), Symbol, `Synonym Symbol`))
+
+rm(states_FIA)
+gc()
+
+# Filter the plots that we will need
+cond_to_use <- cond %>%
+  filter(!(DSTRBCD1 %in% c(30,31,32,46,53,54,80)),
+         !(DSTRBCD2 %in% c(30,31,32,46,53,54,80)),
+         !(DSTRBCD3 %in% c(30,31,32,46,53,54,80)),
+         TRTCD1 == 0 | is.na(TRTCD1),
+         TRTCD2 == 0 | is.na(TRTCD2),
+         TRTCD3 == 0 | is.na(TRTCD3)) %>%
+  mutate(IS_FOREST = ifelse(FORTYPCD %in%(c(1:998)), 1, 0)) %>%
+  group_by(PLT_CN) %>%
+  summarise(total_cond = sum(CONDPROP_UNADJ),
+            natural = sum(STDORGCD, na.rm = TRUE),
+            treatment = sum(TRTCD1, na.rm = TRUE),
+            proportion_forest = sum(CONDPROP_UNADJ * IS_FOREST)) %>%
+  filter(total_cond > 0.95,
+         proportion_forest > 0.95)
+plots_to_use <- plot %>%
+  dplyr::filter(PLOT_STATUS_CD == 1) %>%
+  left_join(cond_to_use, by = c("CN" = "PLT_CN")) %>%
+  dplyr::select(CN, proportion_forest)
+
+#------------------------------------------------
+# Crosswalk LANDIS and FIA species codes
+#------------------------------------------------
+
+func_table <- read_csv("C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/test1/clippedTest_NECN_Functional_Table.csv")
+sp_table <- read_csv("C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/test1/speciesParameters.csv") %>%
+  left_join(func_table, by = "FunctionalGroupIndex")
+
+# sp_table$SpeciesCode <- c("JUVI","QUPH","ULAL","ULAM","PIST","ACRU","LITU","QUMO4","PIVI2","PITA","CAGL8","PIEC","BENI","CATO6","FAGR","FRAM2","FRPE","JUNI","LIST","NYSY","OXAR","PLOC","PRSE2","QUAL","QUCO2","QUFA","QURU","QUST","QUVE","PIPA2")
+
+#we need to assign each species group a value for KLAI and MaximumLAI
+spgrp_lai <- data.frame(SPGRPCD = unique(trees$SPGRPCD),
+                        FunctionalGroupIndex = numeric(length(unique(trees$SPGRPCD)))) %>%
+  arrange(SPGRPCD) %>%
+  mutate(FunctionalGroupIndex = ifelse(SPGRPCD %in% c(1:24), 1, FunctionalGroupIndex))%>%
+  mutate(FunctionalGroupIndex = ifelse(SPGRPCD %in% c(25:47), 2, FunctionalGroupIndex))%>%
+  mutate(FunctionalGroupIndex = ifelse(SPGRPCD %in% c(17,18), 4, FunctionalGroupIndex))%>%
+  mutate(FunctionalGroupIndex = ifelse(SPGRPCD %in% c(48), 3, FunctionalGroupIndex)) %>%
+  left_join(func_table %>% dplyr::select(FunctionalGroupIndex, KLAI, MaximumLAI))
+
+SpeciesCode <- c("JUVI","QUPH","ULAL","ULAM","PIST","ACRU","LITU","QUMO4","PIVI2","PITA","CAGL8","PIEC","BENI","CATO6","FAGR","FRAM2","FRPE","JUNI","LIST","NYSY","OXAR","PLOC","PRSE2","QUAL","QUCO2","QUFA","QURU","QUST","QUVE","PIPA")
+SPCD <- c(68,831,971,972,129,316,621,832,132,131,403,110,373,409,531,541,544,602,611,693,711,731,762,802,806,812,833,835,837,122)
+spp_crosswalk <- as.data.frame(SpeciesCode) %>% cbind(., as.data.frame(SPCD))
+
+
+
+
+fitdist()
 
 ```
+
+
+# Thats just a regression model to estimate age from diameter. I dont think the models I have will work for you, since theyre species-specific.
+# Id recommend starting with log(age) ~ log(diam) + (1|species) for starters; that will give you a power-law relationship with a random effect for the coefficient and a shared exponent. But other functional forms might work better for your species.
+
+
+
+
+spp_to_use <- spp_crosswalk$SpeciesCode
+spcd_to_use <- spp_crosswalk$SPCD
+all_spcd <- unique(trees$SPCD)
+
+
+
+trees <- trees %>%
+  mutate(PLOT.YEAR = paste(PLT_CN, INVYR, sep=".")) %>%
+  right_join(., plots_to_use, by = c("PLT_CN" = "CN")) %>%
+    dplyr::mutate(DIA_cm = DIA * 2.54,
+                  HT_m = HT / 3.3808,
+                  PLOT.YEAR = paste(PLT_CN, INVYR, sep=".")) %>%
+    dplyr::filter(STATUSCD == 1) %>%
+    dplyr::left_join(spgrp_lai)
+
+
+sort(names(trees))
+
+age_model <- lme4::lmer(log(TOTAGE) ~ log(DIA) + (1|species), data = trees[!is.na(trees$DIA) & !is.na(trees$TOTAGE), ])
+age_model2 <- lm(log(TOTAGE) ~ poly(log(DIA), 3), data = trees[!is.na(trees$DIA) & !is.na(trees$TOTAGE), ])
+
+
+install.packages("lme4")
+
+
+sp_ref %>% filter(`Common Name` == "longleaf pine")
+
+
+
+
+
+
+
+```{r}
+states_FIA <- readFIA(dir = "C:/Users/lagoodal/Desktop/Dissertation Stuff/5 States LAI/LAI")
+trees <- states_FIA$TREE
+plot <- states_FIA$PLOT
+cond <- states_FIA$COND
+seedlings <- states_FIA$SEEDLING
+sp_ref <- read_csv("C:/Users/lagoodal/Desktop/Dissertation Stuff/USDA Plant Codes.csv")
+sp_ref <- sp_ref %>% mutate(`Synonym Symbol` = ifelse(is.na(`Synonym Symbol`), Symbol, `Synonym Symbol`))
+
+rm(states_FIA)
+gc()
+
+# Filter out plots that have been recently treated or not in the forest anymore
+cond_to_use <- cond %>%
+  filter(!(DSTRBCD1 %in% c(30,31,32,46,53,54,80)),
+         !(DSTRBCD2 %in% c(30,31,32,46,53,54,80)),
+         !(DSTRBCD3 %in% c(30,31,32,46,53,54,80)),
+         TRTCD1 == 0 | is.na(TRTCD1),
+         TRTCD2 == 0 | is.na(TRTCD2),
+         TRTCD3 == 0 | is.na(TRTCD3)) %>%
+  mutate(IS_FOREST = ifelse(FORTYPCD %in%(c(1:998)), 1, 0)) %>%
+  group_by(PLT_CN) %>%
+  summarise(total_cond = sum(CONDPROP_UNADJ),
+            natural = sum(STDORGCD, na.rm = TRUE),
+            treatment = sum(TRTCD1, na.rm = TRUE),
+            proportion_forest = sum(CONDPROP_UNADJ * IS_FOREST)) %>%
+  filter(total_cond > 0.95,
+         proportion_forest > 0.95)
+
+plots_to_use <- plot %>%
+  filter(PLOT_STATUS_CD == 1) %>%
+  left_join(cond_to_use, by = c("CN" = "PLT_CN")) %>%
+  dplyr::select(CN, proportion_forest)
+
+
+group_ref_shade <- read_csv("C:/Users/lagoodal/Desktop/Dissertation Stuff/5 States LAI/REF_SPECIES_GROUP_SHADE.csv")
+
+# Calculate leaf area
+trees <- trees %>%
+  right_join(., plots_to_use, by = c("PLT_CN" = "CN")) %>%
+  dplyr::mutate(DIA_cm = DIA * 2.54,
+                HT_m = HT / 3.3808,
+                PLOT.YEAR = paste(PLT_CN, INVYR, sep=".")) %>%
+  dplyr::filter(STATUSCD == 1) %>%
+  dplyr::left_join((group_ref_shade %>% dplyr::select(SPGRPCD, ShadeCoef_iTree))) %>%
+  #shade factor equation from iTree
+  dplyr::mutate(ShadeFactor = 0.0617 * log(DIA_cm) + 0.615 + ShadeCoef_iTree,
+                CrownHeight = HT_m * CR/100,
+                CrownWidth =  0.8304 + 27.82 * (DIA_cm/100) - 10.68 * ((DIA_cm/100)^2),
+                CrownWidth = ifelse(DIA_cm > 100, 20, CrownWidth),
+                HWR = CrownHeight / CrownWidth) %>% 
+  # equation for crown width from Coombes, A., J. Martin, and D. Slater. 2019. Defining the allometry of stem and crown diameter of urban trees. Urban Forestry & Urban Greening 44:126421.
+  # capped at 20 m because the quadratic shape doesn't play well after that
+  dplyr::mutate(LEAF.AREA = exp( -4.3309 + 0.2942 * CrownHeight + 0.7312 * CrownWidth + 
+                                   5.7217 * ShadeFactor + 
+                                   -0.0148 * pi * CrownWidth*(CrownHeight + CrownWidth)/2)) %>%
+  #gotta do something special if the trees are too big or too small, following the iTree equations
+  #sorry this code is pretty clumsy
+  dplyr::mutate(LEAF.AREA = ifelse(HWR > 2.0, 
+                                   exp( -4.3309 + 0.2942 * CrownHeight + 0.7312 * (CrownHeight/2) + 
+                                          5.7217 * ShadeFactor + 
+                                          -0.0148 * pi * (CrownHeight/2)*(CrownHeight + (CrownHeight/2))/2) *
+                                     HWR/2.0,
+                                   LEAF.AREA)) %>%
+  dplyr::mutate(LEAF.AREA = ifelse(HWR < 0.5,
+                                   exp( -4.3309 + 0.2942 * CrownHeight + 0.7312 * (CrownHeight*2) + 
+                                          5.7217 * ShadeFactor + 
+                                          -0.0148 * pi * (CrownHeight*2)*(CrownHeight + (CrownHeight*2))/2) *
+                                     0.5/HWR,
+                                   LEAF.AREA))
+
+# Now leaf area per plot
+plot_leaf_area <- trees %>%
+  group_by(PLOT.YEAR) %>%
+  #m2 per tree * trees per acre * acre per m2 = meters squared leaf area per meter squared ground
+  summarise(LAI = sum(LEAF.AREA*TPA_UNADJ/4046, na.rm = TRUE)) %>% 
+  filter(!is.na(LAI) & !is.infinite(LAI)) %>%
+  filter(LAI < 20)
+
+mean(plot_leaf_area$LAI)
+hist(plot_leaf_area$LAI)
+mean_lai_desired <- 3
+plot_leaf_area <- plot_leaf_area %>%
+  mutate(LAI = LAI * mean_lai_desired/mean(LAI, na.rm = TRUE))
+hist(plot_leaf_area$LAI)
+
+# Get Seedlings
+seedlings <- seedlings %>%
+  mutate(PLOT.YEAR = paste(PLT_CN, INVYR, sep="."),
+         TPA_UNADJ = ifelse(is.na(TPA_UNADJ), 0, TPA_UNADJ)) %>%
+  filter(PLOT.YEAR %in% plot_leaf_area$PLOT.YEAR) %>%
+  # filter(TOTAGE <= 5) %>% #only useful in RMRS zone, and only collected fora  subset of trees
+  group_by(PLOT.YEAR) %>%
+  mutate(SEEDLING_COUNT = sum(TPA_UNADJ)) %>%
+  slice_head(n = 1)
+
+# Species that we want to model
+SpeciesCode <- c("JUVI","QUPH","ULAL","ULAM","PIST","ACRU","LITU","QUMO4","PIVI2","PITA","CAGL8","PIEC","BENI","CATO6","FAGR","FRAM2","FRPE","JUNI","LIST","NYSY","OXAR","PLOC","PRSE2","QUAL","QUCO2","QUFA","QURU","QUST","QUVE")
+SPCD <- c(68,831,971,972,129,316,621,832,132,131,403,110,373,409,531,541,544,602,611,693,711,731,762,802,806,812,833,835,837)
+spp_crosswalk <- as.data.frame(SpeciesCode) %>% cbind(., as.data.frame(SPCD))
+spp_to_use <- spp_crosswalk$SpeciesCode
+
+# Find how many seedlings are in each plot
+for (i in 1:nrow(spp_crosswalk)){
+  SPCD <- spp_crosswalk[[i, "SPCD"]][[1]]
+  Table <- seedlings[seedlings$SPCD %in% SPCD,]
+  
+  if(nrow(Table) == 0) next #this breaks the rest of the code, because further down expects a column for every species
+  
+  Sums <- aggregate(Table$TREECOUNT, by=list(PLOT.YEAR = Table$PLOT.YEAR), FUN=sum)
+  Sums$x <- ifelse(is.na(Sums$x), 0, Sums$x)
+  
+  colnames(Sums) <- c("PLOT.YEAR", spp_to_use[i])
+  plot_leaf_area <- left_join(plot_leaf_area, Sums, by = "PLOT.YEAR")
+}
+
+plot_leaf_area <- plot_leaf_area %>%
+  mutate(across(where(is.numeric), ~ ifelse(is.na(.), 0, .)))
+
+n_seedlings <- plot_leaf_area %>%
+               tidyr::pivot_longer(cols = all_of(spp_to_use),
+                        names_to = "Species",
+                        values_to = "Count") %>%
+  group_by(Species) %>%
+  summarize(total = sum(Count))
+
+# this is more appropriate as a method -- we want to fit p(seedling | LAI),
+# so we need to standardize by the number of plots in each LAI bin
+
+#make histogram for proportion
+nBins <- 20
+minLAI <- 0.1
+plot_seedling_histogram <- plot_leaf_area %>%
+  tidyr::pivot_longer(cols = all_of(spp_to_use),
+                      names_to = "Species",
+                      values_to = "Count") %>%
+  mutate(LAI = ifelse(LAI < minLAI, minLAI, LAI)) %>%
+  mutate(lai_bin = base::cut(LAI, breaks = nBins),
+         present = ifelse(Count>0, 1, 0)) %>%
+  group_by(Species, lai_bin) %>%
+  summarise(n_present = sum(present),
+            n_plots_bin = n(),
+            prop_present = n_present / n_plots_bin) %>%
+  ungroup() %>%
+  group_by(Species) %>%
+  mutate(prop_present = prop_present / sum(prop_present)) %>% #proportion of plots in the bin with seedlings
+  mutate(lai = strsplit(as.character(lai_bin), split = ",") %>% #calculate the midpoint of the bin
+           map(., .f = ~gsub("\\(|\\]", "", .)) %>%
+           map(pluck(1)) %>% #actually, we should use the left side of the bin, not zero -- otherwise
+                              # we all the distributions having no regen at LAI = 0
+           # map(., .f = ~mean(as.numeric(.))) %>%
+           unlist() %>%
+           as.numeric())
+```
+
+
+
+
+
+
+
+
 
 
 

@@ -72,31 +72,31 @@ for (i in 1:length(projectedRasters)){
 
 # Change NaNs to numbers, just in case that is what is making the simulation weird
 # Baseflow
-#projectedRasters[[1]] <- ifel(is.nan(projectedRasters[[1]]), 0.2512304, projectedRasters[[1]])
+projectedRasters[[1]] <- ifel(is.nan(projectedRasters[[1]]), 0.2512304, projectedRasters[[1]])
 writeRaster(projectedRasters[[1]],
             filename = "C:/Users/lagoodal/Desktop/All Raster Layers/Clipped Piedmont/Baseflow.tif",
             datatype = "FLT4S",
             overwrite = TRUE)
 # Clay
-#projectedRasters[[2]] <- ifel(is.nan(projectedRasters[[2]]), 0.1, projectedRasters[[2]])
+projectedRasters[[2]] <- ifel(is.nan(projectedRasters[[2]]), 0.1, projectedRasters[[2]])
 writeRaster(projectedRasters[[2]],
             filename = "C:/Users/lagoodal/Desktop/All Raster Layers/Clipped Piedmont/ClayPercentage.tif",
             datatype = "FLT4S",
             overwrite = TRUE)
 # Deadroots
-#projectedRasters[[4]] <- ifel(is.nan(projectedRasters[[4]]), 3.444304, projectedRasters[[4]])
+projectedRasters[[4]] <- ifel(is.nan(projectedRasters[[4]]), 3.444304, projectedRasters[[4]])
 writeRaster(projectedRasters[[4]],
             filename = "C:/Users/lagoodal/Desktop/All Raster Layers/Clipped Piedmont/DeadRoots.tif",
             datatype = "FLT4S",
             overwrite = TRUE)
 # Deadwood
-#projectedRasters[[5]] <- ifel(is.nan(projectedRasters[[5]]), 10.33291, projectedRasters[[5]])
+projectedRasters[[5]] <- ifel(is.nan(projectedRasters[[5]]), 10.33291, projectedRasters[[5]])
 writeRaster(projectedRasters[[5]],
             filename = "C:/Users/lagoodal/Desktop/All Raster Layers/Clipped Piedmont/Deadwood.tif",
             datatype = "FLT4S",
             overwrite = TRUE)
 # Soil Drainage
-#projectedRasters[[6]] <- ifel(is.nan(projectedRasters[[6]]), 0.14, projectedRasters[[6]])
+projectedRasters[[6]] <- ifel(is.nan(projectedRasters[[6]]), 0.14, projectedRasters[[6]])
 writeRaster(projectedRasters[[6]],
             filename = "C:/Users/lagoodal/Desktop/All Raster Layers/Clipped Piedmont/Drainage.tif",
             datatype = "FLT4S",
@@ -121,87 +121,88 @@ writeRaster(projectedRasters[[7]],
             datatype = "FLT4S",
             overwrite = TRUE)
 # Flood Frequency
-#projectedRasters[[8]] <- ifel(is.nan(projectedRasters[[8]]), 0, projectedRasters[[8]])
+projectedRasters[[8]] <- ifel(is.nan(projectedRasters[[8]]), 0, projectedRasters[[8]])
 writeRaster(projectedRasters[[8]],
             filename = "C:/Users/lagoodal/Desktop/All Raster Layers/Clipped Piedmont/FloodFrequency.tif",
             datatype = "FLT4S",
             overwrite = TRUE)
 # Initial Communities
-#projectedRasters[[10]] <- ifel(is.nan(projectedRasters[[10]]), 0.0, projectedRasters[[10]])
+projectedRasters[[10]] <- ifel(is.nan(projectedRasters[[10]]), 0.0, projectedRasters[[10]])
 writeRaster(projectedRasters[[10]],
             filename = "C:/Users/lagoodal/Desktop/All Raster Layers/Clipped Piedmont/MapCode_IC.tif",
             datatype = "INT4S",
             overwrite = TRUE,
             NAflag = 0)
 # Sand
-#projectedRasters[[11]] <- ifel(is.nan(projectedRasters[[11]]), 0.1, projectedRasters[[11]])
+projectedRasters[[11]] <- ifel(is.nan(projectedRasters[[11]]), 0.1, projectedRasters[[11]])
 writeRaster(projectedRasters[[11]],
             filename = "C:/Users/lagoodal/Desktop/All Raster Layers/Clipped Piedmont/SandPercentage.tif",
             datatype = "FLT4S",
             overwrite = TRUE)
 # Soil Depth
 # SOIL DEPTH IS QUITE LOW BUT FOR NOW WILL KEEP AT MIN OF 1
-#projectedRasters[[12]] <- ifel(is.nan(projectedRasters[[12]]), 1, projectedRasters[[12]])
+projectedRasters[[12]] <- ifel(is.nan(projectedRasters[[12]]), 1, projectedRasters[[12]])
+projectedRasters[[12]] <- ifel(projectedRasters[[12]] <= 10, 10, projectedRasters[[12]])
 writeRaster(projectedRasters[[12]],
             filename = "C:/Users/lagoodal/Desktop/All Raster Layers/Clipped Piedmont/SoilDepth.tif",
             datatype = "FLT4S",
             overwrite = TRUE)
 # SOM1soilC
-#projectedRasters[[13]] <- ifel(is.nan(projectedRasters[[13]]), 1.429840, projectedRasters[[13]])
+projectedRasters[[13]] <- ifel(is.nan(projectedRasters[[13]]), 1.429840, projectedRasters[[13]])
 writeRaster(projectedRasters[[13]],
             filename = "C:/Users/lagoodal/Desktop/All Raster Layers/Clipped Piedmont/SOM1soilC.tif",
             datatype = "FLT4S",
             overwrite = TRUE)
 # SOM1soilN
-#projectedRasters[[14]] <- ifel(is.nan(projectedRasters[[14]]), 1.100000, projectedRasters[[14]])
+projectedRasters[[14]] <- ifel(is.nan(projectedRasters[[14]]), 1.100000, projectedRasters[[14]])
 writeRaster(projectedRasters[[14]],
             filename = "C:/Users/lagoodal/Desktop/All Raster Layers/Clipped Piedmont/SOM1soilN.tif",
             datatype = "FLT4S",
             overwrite = TRUE)
 # SOM1surfC
-#projectedRasters[[15]] <- ifel(is.nan(projectedRasters[[15]]), 55.000, projectedRasters[[15]])
+projectedRasters[[15]] <- ifel(is.nan(projectedRasters[[15]]), 55.000, projectedRasters[[15]])
 writeRaster(projectedRasters[[15]],
             filename = "C:/Users/lagoodal/Desktop/All Raster Layers/Clipped Piedmont/SOM1surfC.tif",
             datatype = "FLT4S",
             overwrite = TRUE)
 # SOM1surfN
-#projectedRasters[[16]] <- ifel(is.nan(projectedRasters[[16]]), 1.1000, projectedRasters[[16]])
+projectedRasters[[16]] <- ifel(is.nan(projectedRasters[[16]]), 1.1000, projectedRasters[[16]])
 writeRaster(projectedRasters[[16]],
             filename = "C:/Users/lagoodal/Desktop/All Raster Layers/Clipped Piedmont/SOM1surfN.tif",
             datatype = "FLT4S",
             overwrite = TRUE)
 # SOM2C
-#projectedRasters[[17]] <- ifel(is.nan(projectedRasters[[17]]), 527.2535, projectedRasters[[17]])
+projectedRasters[[17]] <- ifel(is.nan(projectedRasters[[17]]), 527.2535, projectedRasters[[17]])
 writeRaster(projectedRasters[[17]],
             filename = "C:/Users/lagoodal/Desktop/All Raster Layers/Clipped Piedmont/SOM2C.tif",
             datatype = "FLT4S",
             overwrite = TRUE)
 # SOM2N
-#projectedRasters[[18]] <- ifel(is.nan(projectedRasters[[18]]), 10.54507, projectedRasters[[18]])
+projectedRasters[[18]] <- ifel(is.nan(projectedRasters[[18]]), 10.54507, projectedRasters[[18]])
 writeRaster(projectedRasters[[18]],
             filename = "C:/Users/lagoodal/Desktop/All Raster Layers/Clipped Piedmont/SOM2N.tif",
             datatype = "FLT4S",
             overwrite = TRUE)
 # SOM3C
-#projectedRasters[[19]] <- ifel(is.nan(projectedRasters[[19]]), 339.587, projectedRasters[[19]])
+projectedRasters[[19]] <- ifel(is.nan(projectedRasters[[19]]), 339.587, projectedRasters[[19]])
 writeRaster(projectedRasters[[19]],
             filename = "C:/Users/lagoodal/Desktop/All Raster Layers/Clipped Piedmont/SOM3C.tif",
             datatype = "FLT4S",
             overwrite = TRUE)
 # SOM3N
-#projectedRasters[[20]] <- ifel(is.nan(projectedRasters[[20]]), 40.07127, projectedRasters[[20]])
+projectedRasters[[20]] <- ifel(is.nan(projectedRasters[[20]]), 40.07127, projectedRasters[[20]])
 writeRaster(projectedRasters[[20]],
             filename = "C:/Users/lagoodal/Desktop/All Raster Layers/Clipped Piedmont/SOM3N.tif",
             datatype = "FLT4S",
             overwrite = TRUE)
 # Stormflow
-#projectedRasters[[21]] <- ifel(is.nan(projectedRasters[[21]]), 0.01, projectedRasters[[21]])
+projectedRasters[[21]] <- ifel(is.nan(projectedRasters[[21]]), 0.01, projectedRasters[[21]])
 writeRaster(projectedRasters[[21]],
             filename = "C:/Users/lagoodal/Desktop/All Raster Layers/Clipped Piedmont/Stormflow.tif",
             datatype = "FLT4S",
             overwrite = TRUE)
 # Wiltpoint
-#projectedRasters[[22]] <- ifel(is.nan(projectedRasters[[22]]), 0.0001335432, projectedRasters[[22]])
+projectedRasters[[22]] <- ifel(is.nan(projectedRasters[[22]]), 0.0001335432, projectedRasters[[22]])
 projectedRasters[[22]] <- ifel(projectedRasters[[22]] < 0.15, 0.15, projectedRasters[[22]]) # Make minimum value 0.1
 writeRaster(projectedRasters[[22]],
             filename = "C:/Users/lagoodal/Desktop/All Raster Layers/Clipped Piedmont/Wiltpoint.tif",
@@ -215,180 +216,11 @@ writeRaster(projectedRasters[[7]],
             overwrite = TRUE)
 
 
-wiltPDf <- values(projectedRasters[[22]]) %>% as.data.frame() %>% drop_na()
-fieldCDf <- values(projectedRasters[[7]]) %>% as.data.frame() %>% drop_na()
-
-wiltPDf
-fieldCDf
 
 
 
 ```
 
-# Check to see if all filed capacity values are above wiltpoint
-# They are but when I run the simulation it isn't having it
-plot(projectedRasters[[22]] > projectedRasters[[7]])
-
-
-
-wiltPoint <- rast("C:/Users/lagoodal/Desktop/All Raster Layers/Clipped Piedmont/Wiltpoint.tif")
-fieldCapacity <- rast("C:/Users/lagoodal/Desktop/All Raster Layers/Clipped Piedmont/FieldCapacity.tif")
-
-plot(wiltPoint)
-plot(fieldCapacity)
-
-plot(wiltPoint > fieldCapacity)
-
-
-#Wiltpoint <-  ifel(Wiltpoint > Field Capacity, FieldCapacity - 0.01, Wiltpoint)
-
-```
-
-
-
-
-plot(projectedRasters[[22]])
-
-plot(projectedRasters[[7]])
-
-
-
-fieldCDf <- values(projectedRasters[[7]]) %>% as.data.frame() %>% drop_na()
-wiltPDf <- values(projectedRasters[[22]]) %>% as.data.frame() %>% drop_na()
-
-hist(wiltPDf$Wiltpoint)
-
-hist(fieldCDf$FieldCapacity)
-
-
-
-p
-
-
-
-```
-
-
-plot(ecoregionsClipped)
-
-fakeEcoregions <- ecoregionsClipped
-
-
-fakeEcoregions[47,1114]
-
-projectedRasters[[1]][47,1114]
-projectedRasters[[2]][47,1114]
-projectedRasters[[3]][47,1114]
-projectedRasters[[4]][47,1114]
-projectedRasters[[5]][47,1114]
-projectedRasters[[6]][47,1114]
-projectedRasters[[7]][47,1114]
-projectedRasters[[8]][47,1114]
-projectedRasters[[9]][47,1114]
-projectedRasters[[10]][47,1114]
-projectedRasters[[11]][47,1114]
-projectedRasters[[12]][47,1114]
-projectedRasters[[13]][47,1114]
-projectedRasters[[14]][47,1114]
-projectedRasters[[15]][47,1114]
-projectedRasters[[16]][47,1114]
-projectedRasters[[17]][47,1114]
-projectedRasters[[18]][47,1114]
-projectedRasters[[19]][47,1114]
-projectedRasters[[20]][47,1114]
-projectedRasters[[21]][47,1114]
-projectedRasters[[22]][47,1114]
-
-
-
-
-fieldCapacity <- projectedRasters[[7]]
-wiltPoint <- projectedRasters[[22]]
-
-values(fieldCapacity) <- 0.30
-values(wiltPoint) <- 0.15
-
-
-values(projectedRasters[[7]])
-
-
-writeRaster(wiltPoint,
-            filename = "C:/Users/lagoodal/Desktop/All Raster Layers/Clipped Piedmont/Wiltpoint.tif",
-            datatype = "FLT4S",
-            overwrite = TRUE)
-
-writeRaster(fieldCapacity,
-            filename = "C:/Users/lagoodal/Desktop/All Raster Layers/Clipped Piedmont/FieldCapacity.tif",
-            datatype = "FLT4S",
-            overwrite = TRUE)
-```
-
-
-
-
-
-
-
-
-##############################
-
-
-#plot(ecoregionsClipped)
-
-
-testEcoregions <- ecoregionsClipped
-
-#plot(testEcoregions)
-
-values(testEcoregions) <- 0
-testEcoregions[100,600] <- 1
-testEcoregions[101,600] <- 2
-
-
-writeRaster(testEcoregions,
-            filename = "C:/Users/lagoodal/Desktop/All Raster Layers/testEcoregions.tif",
-            datatype = "INT4S",
-            overwrite = TRUE,
-            NAflag = 0)
-
-
-projectedRasters[[12]]
-
-
-plot(projectedRasters[[12]])
-x <- values(projectedRasters[[12]]) %>%
-  as.data.frame() %>%
-  drop_na()
-
-hist(x$SoilDepth)
-
-
-
-testSoilDepth <- projectedRasters[[12]]
-
-values(testSoilDepth) <- 100
-
-writeRaster(testSoilDepth,
-            filename = "C:/Users/lagoodal/Desktop/All Raster Layers/testSoilDepth.tif",
-            datatype = "INT4S",
-            overwrite = TRUE,
-            NAflag = 0)
-
-
-plot(testEcoregions, col = c("gray", "red", "blue"))
-plot(projectedRasters[[10]])
-
-plot(projectedRasters[[1]])
-
-values(projectedRasters[[1]])
-```
-
-
-
-
-
-
-```
 
 
 
