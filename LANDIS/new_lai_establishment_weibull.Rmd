@@ -23,9 +23,10 @@ seedlings <- states_FIA$SEEDLING
 sp_ref <- read_csv("C:/Users/lagoodal/Desktop/Dissertation Stuff/USDA Plant Codes.csv")
 sp_ref <- sp_ref %>%
   mutate(`Synonym Symbol` = ifelse(is.na(`Synonym Symbol`), Symbol, `Synonym Symbol`))
+```
 
 
-
+```{r}
 hardwoods <- seq(25,43,1)
 softwoods <- seq(1,9,1)
 hardwood.S <- c(0.75,0.81,0.74,0.77,0.77,0.83,0.86,0.83,0.88,0.82,0.83,0.82,0.795,0.88,0.9,0.91,0.861,0.78,0.833)
@@ -62,8 +63,8 @@ SAPPS.PLOT.TOTAL.LEAFAREA$PLOT.LAI <- SAPPS.PLOT.TOTAL.LEAFAREA$TOTAL.LEAFAREA /
 seedlings$PLOT.YEAR <- paste(seedlings$PLT_CN, seedlings$INVYR, sep=".")
 
 # Species that we want
-spp_to_use <- c("ACRU","BENI","CAGL8","CATO6","FAGR","FRAM2","FRPE","JUNI","JUVI","LIST","LITU","NYSY","OXAR","PIEC","PIST","PITA","PIVI2","PLOC","PRSE2","QUAL","QUCO2","QUFA","QUMO4","QUPH","QURU","QUST","QUVE","ULAL","ULAM","PIEL","PIPA")
-spcd_to_use <- c(316,373,403,409,531,541,544,602,68,611,621,693,711,110,129,131,132,731,762,802,806,812,832,831,833,835,837,971,972,111,121)
+spp_to_use <- c("ACRU","BENI","CAGL8","CATO6","FAGR","FRAM2","FRPE","JUNI","JUVI","LIST","LITU","NYSY","OXAR","PIEC","PIST","PITA","PIVI2","PLOC","PRSE2","QUAL","QUCO2","QUFA","QUMO4","QUPH","QURU","QUST","QUVE","ULAL","ULAM","PIEL","PIPA","QUNI","QULA3","TAAS","TADI2")
+spcd_to_use <- c(316,373,403,409,531,541,544,602,68,611,621,693,711,110,129,131,132,731,762,802,806,812,832,831,833,835,837,971,972,111,121,820,827,221,222)
 
 for (i in 1:length(spcd_to_use)){
   SPCD <- spcd_to_use[i]
@@ -136,6 +137,13 @@ weibull_models <- SAPPS.PLOT.TOTAL.LEAFAREA %>%
   summarise(weibull = list(fitdistr(PLOT.LAI, "weibull")))
 
 
+weibull_models %>%
+  mutate(shape = map_dbl(.x = .$weibull, .f = ~ pluck(.x, "estimate", "shape")),
+         scale = map_dbl(.x = .$weibull, .f = ~ pluck(.x, "estimate", "scale"))) %>%
+  dplyr::select(-c(weibull))
+
+
+
 #plot the histogram and weibull fit for each species
 pdf(file = "Weibull LAI distribution by species.pdf")
 map2(.x = weibull_models$weibull, 
@@ -144,8 +152,6 @@ map2(.x = weibull_models$weibull,
                      main = .y,
                      xlab = "LAI"))
 dev.off()
-
-
 
 
 
@@ -169,20 +175,18 @@ map2(.x = weibull_models$weibull,
                      xlab = "LAI"))
 dev.off()
 
-weibull_params
-
-
-weibull_models %>%
-  mutate(shape = map_dbl(.x = .$weibull, .f = ~ pluck(.x, "estimate", "shape")),
-         scale = map_dbl(.x = .$weibull, .f = ~ pluck(.x, "estimate", "scale")),
-         location = map_dbl(.x = .$weibull, .f = ~ pluck(.x, "estimate", "location"))) %>%
-  dplyr::select(-c(weibull))
-
 
 weibull_models %>%
   mutate(shape = map_dbl(.x = .$weibull, .f = ~ pluck(.x, "estimate", "shape")),
          scale = map_dbl(.x = .$weibull, .f = ~ pluck(.x, "estimate", "scale"))) %>%
   dplyr::select(-c(weibull))
+
+
+
+x <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/Small Landscape/Clipped Piedmont/ecoregions.tif")
+plot(x)
+x <- ifel(x == 2, x, NA)
+plot(x)
 ```
 
 

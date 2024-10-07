@@ -32,6 +32,7 @@ read_raster_files <- function(file_path){
 prismRast <- read_raster_files(asc_files)
 templateRaster <- rast("C:/Users/lagoodal/Desktop/All Raster Layers/Full Piedmont/MapCode_IC.tif")
 
+
 # Rework the rasers so that they are projected to resemble the other ratsers to be used in LANDIS
 extNC <- ext(-85, -75, 33, 37)
 prismRast <- lapply(prismRast, function(x){crop(x, extNC)})
@@ -43,60 +44,113 @@ prismRast <- lapply(prismRast, function(x){project(x, templateRaster)})
 tempRast <- list(prismRast[[1]], prismRast[[2]], prismRast[[3]], prismRast[[4]], prismRast[[5]], prismRast[[6]], prismRast[[7]])
 precipRast <- list(prismRast[[8]], prismRast[[9]], prismRast[[10]], prismRast[[11]], prismRast[[12]], prismRast[[13]], prismRast[[14]])
 
-# Calculate mean temp and total precipitation, to stack them we need to convert them to raster::raster (Raster Layer vs. SpatRaster)
-tempRasters <- lapply(tempRast, function(x){raster::raster(x)})
-tempStack <- raster::stack(tempRasters)
-tempMean <- raster::calc(tempStack, mean)
-precipRasters <- lapply(precipRast, function(x){raster::raster(x)})
-precipStack <- raster::stack(precipRasters)
-precipMean <- raster::calc(precipStack, sum)
-rasterStack <- raster::stack(precipMean, tempMean)
+
+# # Calculate mean temp and total precipitation, to stack them we need to convert them to raster::raster (Raster Layer vs. SpatRaster)
+# tempRasters <- lapply(tempRast, function(x){raster::raster(x)})
+# tempStack <- raster::stack(tempRasters)
+# tempMean <- raster::calc(tempStack, mean)
+# precipRasters <- lapply(precipRast, function(x){raster::raster(x)})
+# precipStack <- raster::stack(precipRasters)
+# precipSum <- raster::calc(precipStack, sum)
+# rasterStack <- raster::stack(precipMean, tempMean)
+
+
+
+tempStack <- c(tempRast[[1]], tempRast[[2]], tempRast[[3]], tempRast[[4]], tempRast[[5]], tempRast[[6]], tempRast[[7]])
+precipStack <- c(precipRast[[1]], precipRast[[2]], precipRast[[3]], precipRast[[4]], precipRast[[5]], precipRast[[6]], precipRast[[7]])
+
+
+tempMean <- app(tempStack, mean)
+precipSum <- app(precipStack, sum)
+
+rasterStack <- c(precipSum, tempMean)
+
+
 
 # Set NAs to 0 so that when the clustering takes place it doesn't end up all weird
-rasterStack$layer.1[is.na(rasterStack$layer.1),] <- 0
-rasterStack$layer.2[is.na(rasterStack$layer.2),] <- 0
+rasterStack$sum[is.na(rasterStack$sum),] <- 0
+rasterStack$mean[is.na(rasterStack$mean),] <- 0
 
 # Scale the values and then perform k-means clustering
-scaleP <- scale(rasterStack$layer.1)
-scaleT <- scale(rasterStack$layer.2)
-scaleStack <- raster::stack(scaleP, scaleT)
+scaleP <- scale(rasterStack$sum)
+scaleT <- scale(rasterStack$mean)
+scaleStack <- c(scaleP, scaleT)
 scaleDf <- as.data.frame(scaleStack)
 Classification <- kmeans(na.omit(scaleDf), 4, iter.max = 10, nstart = 25)
 # hist(Classification$cluster)
-cluster <- Classification$cluster
+cluster <- as.integer(Classification$cluster)
 outputMatrix <- matrix(cluster, nrow = nrow(precipMean), ncol = ncol(precipMean), byrow = TRUE)
-newoutputRaster <- raster::raster(outputMatrix, xmn = xmin(precipMean), ymn = ymin(precipMean), xmx = xmax(precipMean), ymx = ymax(precipMean), crs = "epsg:26917")
-ecoregionsTest <- rast(newoutputRaster)
 
-# Get NLCD data so that we can remove urban areas and water bodies from the ecoregion map
-nlcdNC <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/NLCD/Test/Piedmont_NLCD.tif")
-newCrsPiedmont <- st_transform(piedmontBoundary, crs = crs(nlcdNC))
-nlcdNC <- crop(nlcdNC, newCrsPiedmont[2])
-nlcdNC <- mask(nlcdNC, newCrsPiedmont[2])
-nlcdNC <- project(nlcdNC, templateRaster, method = "near")
+# newoutputRaster <- raster::raster(outputMatrix, xmn = xmin(precipMean), ymn = ymin(precipMean), xmx = xmax(precipMean), ymx = ymax(precipMean), crs = "epsg:26917")
 
-# Ifelse statement to isolate the values we are interested in for the mask
-maskedNLCD <- ifel(nlcdNC == "Barren Land", nlcdNC,
-          ifel(nlcdNC == "Deciduous Forest", nlcdNC,
-               ifel(nlcdNC == "Evergreen Forest", nlcdNC,
-                    ifel(nlcdNC == "Mixed Forest", nlcdNC,
-                         ifel(nlcdNC == "Shrub/Scrub", nlcdNC,
-                              ifel(nlcdNC == "Herbaceous", nlcdNC,
-                                   ifel(nlcdNC == "Hay/Pasture", nlcdNC,
-                                        ifel(nlcdNC == "Cultivated Crops", nlcdNC,
-                                             ifel(nlcdNC == "Woody Wetlands", nlcdNC,
-                                                  ifel(nlcdNC == "Emergent Herbaceous Wetlands", nlcdNC, NA))))))))))
-ecoregionsRast <- mask(ecoregionsTest, maskedNLCD)
-ecoregionsRast <- ifel(ecoregionsRast == 1, 1,
-     ifel(ecoregionsRast == 3, 2,
-          ifel(ecoregionsRast == 4, 3, NA)))
+# This one is all good
+ecoregionsTest <- rast(outputMatrix, extent = ext(templateRaster), crs = crs(templateRaster))
 
-plot(ecoregionsRast)
 
-# writeRaster(ecoregionsRast, "C:/Users/lagoodal/Desktop/All Raster Layers/ecoregions.tif")
+# Read in treeMap to use as template for non-forest/forest cells
+ecoregionTemplate <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/treeMap/Clipped Piedmont/finalTreeMap.tif")
 
-plot(nlcdNC)
+# Make all active cells 1 and non-active 0
+# Still integers here
+ecoregionTemplate <- terra::classify(ecoregionTemplate,
+                     matrix(c(0,0,0,1,99999,1), ncol = 3, byrow = TRUE))
+
+
+# Read in clipped landscape to clip the full Piedmont
+clippedPiedmont.shp <- st_read("C:/Users/lagoodal/Desktop/All Raster Layers/standsraster/Clipped Shapefile/clippedHUC.shp")
+
+
+# Project and then crop and mask the climate/ecoregions
+# Still good here
+ecoregions <- project(ecoregionsTest, ecoregionTemplate, method = "near")
+ecoregions <- crop(ecoregions, clippedPiedmont.shp) %>% mask(., clippedPiedmont.shp)
+ecoregions <- mask(ecoregions, ecoregionTemplate, maskvalue = 0)
+# values(ecoregions) %>% as.data.frame() %>% drop_na() %>% group_by(lyr.1) %>% summarise(n = n())
+
+ecoregions <- ifel(ecoregions == is.nan(ecoregions), 0,
+          ifel(ecoregions == 3, 2,
+               ifel(ecoregions == 2, 0, ecoregions)))
+
+plot(ecoregions)
+
+
+# writeRaster(ecoregions,
+#             filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/treeMap/Clipped Piedmont/ecoregions.tif",
+#             datatype = "INT1U",
+#             NAflag = 0,
+#             overwrite = TRUE)
+
 ```
+
+# Create a ecoregions map to be used foe testing harvesting
+
+```{r}
+# Bring in the normal ecoregions map and the management areas map
+ecoregionsHarvest <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/treeMap/Clipped Piedmont/ecoregions.tif")
+managementAreasRast <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/treeMap/Harvest/managementAreas.tif")
+
+plot(ecoregionsHarvest)
+plot(managementAreasRast)
+# Make all the values 0 and then make all the ones that we are intersted in 1
+values(ecoregionsHarvest) <- 0
+ecoregionsHarvest[540:639,1150:1249] <- 1
+plot(ecoregionsHarvest)
+
+writeRaster(ecoregionsHarvest,
+            filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/treeMap/Biomass Testing/ecoregionsHarvest.tif",
+            datatype = "INT1U",
+            overwrite = TRUE,
+            NAflag = NA)
+
+test <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/treeMap/Biomass Testing/ecoregionsHarvest.tif")
+plot(test)
+test2 <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/Small Landscape/Clipped Piedmont/ecoregionsHarvest.tif")
+plot(test2)
+```
+
+
+
+
 
 
 

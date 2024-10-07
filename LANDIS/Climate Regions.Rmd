@@ -6,8 +6,30 @@ date: "2023-11-22"
 
 
 ```{r}
+x <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/treeMap/Clipped Piedmont/finalTreeMap.tif")
+
+datatype(x)
+
+writeRaster(x,
+            filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/treeMap/Clipped Piedmont/finalTreeMap2.tif",
+            datatype = "INT4S",
+            overwrite = TRUE,
+            NAflag = 0)
 
 
+df <- read_csv("C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/treeMap/finalMapCodeDf.csv")
+
+
+
+
+
+df %>% filter(MapCode == 49725)
+
+
+values(x) %>%
+  as.data.frame() %>%
+  drop_na() %>%
+  filter(tl_id == 49725)
 ```
 
 
