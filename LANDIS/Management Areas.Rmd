@@ -46,6 +46,8 @@ piedmontOwnership <- focal(piedmontOwnership, w=9, fun = modal, na.policy = "onl
 #             overwrite = TRUE)
 ```
 
+
+
 ```{r}
 # Read in the HUC12 watershed data to serve as initial stand boundaries
 Random <- brewer.pal(13, "Set3")
@@ -68,45 +70,39 @@ piedmontStands <- terra::project(piedmontStands, piedmontOwnership, method = "ne
 plot(piedmontStands, col = rep(Random, 500))
 
 
-writeRaster(piedmontStands,
-            filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/treeMap/Storage/largePiedmontStands.tif",
-            datatype = "INT4U",
-            overwrite = TRUE,
-            NAflag = NA)
+# writeRaster(piedmontStands,
+#             filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/treeMap/Storage/largePiedmontStands.tif",
+#             datatype = "INT4U",
+#             overwrite = TRUE,
+#             NAflag = NA)
 ```
 
-huc12StandsRast <- rast(huc12Stands[,c(1,2,5)], extent = ext(piedmontOwnership), crs = crs(piedmontOwnership), type = "xyz")
 
-ext(piedmontOwnership) == ext(huc12Stands)
+```{r}
+# Polygonize the larger stands raster
+standPolygon <- as.polygons(piedmontStands) %>% st_as_sf(.)
 
+# use st_intersection to cookie cutter the stands polygon that we made from NC rivers and roads in QGIS
+unionStands <- st_read("C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/treeMap/Storage/Stands Polygon/qgisPolygon.shp") %>%
+  st_intersection(., clippedPiedmont.shp) %>%
+  st_intersection(., standPolygon)
 
-x <- as_spatraster(huc12Stands[,c(1,2,5)], xycols = c(1,2), crs = crs(piedmontOwnership))
+# Convert stand numbers to their row ID and then rasterize
+unionStands <- unionStands  %>% mutate(Stand = row_number())
+smallStandsRast <- rasterize(unionStands, piedmontOwnership, field = "Stand", touchers = TRUE)
 
-plot(x, col = rep(Random, 500))
+# plot(smallStandsRast, col = rep(Random, 500))
 
-plot(huc12Rast, col = rep(Random, 500))
-
-
-
-
-test <- rast("C:/Users/lagoodal/Desktop/All Raster Layers/standsRaster/huc12Stands.tif")  %>% crop(., clippedPiedmont.shp) %>% mask(., clippedPiedmont.shp)
-plot(test, col = rep(Random, 500))
-plot(x, col = rep(Random, 500))
-
-
-huc12Df <- as.data.frame(huc12Rast, xy = TRUE)
-ownershipDf <- as.data.frame(piedmontOwnership, xy = TRUE)
-huc12Stands <- right_join(huc12Df, ownershipDf, by = c("x", "y"))
-huc12Stands <- huc12Stands %>% mutate(Stand = paste0(forest_own1, ObjectID))
-huc12StandsRast <- rast(huc12Stands[,c(1,2,5)], extent = ext(piedmontOwnership), crs = crs(piedmontOwnership), type = "xyz")
-plot(huc12StandsRast, col = rep(Random, 500))
-
-
+# writeRaster(smallStandsRast,
+#             filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/treeMap/Harvest/standsRast.tif",
+#             datatype = "INT4U",
+#             overwrite = TRUE,
+#             NAflag = NA)
 ```
 
 
 
-
+# THIS SECTION IS FOR CLEANING THE STAND RASTER
 
 ```{r}
 Random <- brewer.pal(13, "Set3")
