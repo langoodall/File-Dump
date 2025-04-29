@@ -1,0 +1,4 @@
+﻿Agent,Archetype,Goals,Goal focal values,Goal importance,Goal value range
+FM1,ForestManager,G1|G2,G1<50>|G2<20000000>,G1<100;50>|G2<80;100>,G1<0;100>|G2<0;50000000>
+FM2,ForestManager,G2|G1,G2<20000000>|G1<50>,G2<100;120>|G1<50;30>,G2<0;50000000>|G1<0;100>
+FM3,ForestManager,G3,G3<20000000>,G3<100>,G3<0;50000000>

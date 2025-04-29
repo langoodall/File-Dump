@@ -1,0 +1,6 @@
+Agent,VariableName,VariableType,VariableValue
+FM1,MaturityPercent,ManageAreaMaturityPercent,50
+FM1,Harvest,ManageAreaHarvested,20000000
+FM2,MaturityPercent,ManageAreaMaturityPercent,50
+FM2,Harvest,ManageAreaHarvested,20000000
+FM3,Harvest,ManageAreaHarvested,20000000
