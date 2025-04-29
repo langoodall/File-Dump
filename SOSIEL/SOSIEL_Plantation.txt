@@ -1,0 +1,33 @@
+ManagementAreas		./Harvest/ManagementAreas4.tif
+Stands			./Harvest/standRast.tif
+
+>> PLANTATION PRESCRIPTIONS
+Prescription	MM30-1_DO1 << Plantation
+	StandRanking Economic		
+	>>Species	EconomicRank	MinimumAge
+	>>——————————————————————
+	PITA			100			30
+	MinimumAge		30
+	ForestTypeTable << LoblollyPine
+	>> InclusionRule ageRange percentCells species
+	          Required	10-300	50	PITA PIPA2 PIEC2
+	          SiteSelection Complete
+	          CohortsRemoved ClearCut
+	          Plant PITA PIPA2 PIEC2
+
+>>——————————————————————————
+HarvestImplementations
+>> MgmtArea Descriptions:
+
+>>ma		presc			target%		start	stop	COMMENTS
+4		MM30-1_DO1		100%		0	100
+
+
+
+
+>> OUTPUTS
+
+PrescriptionMaps	Harvest/biomass-harvest-prescripts-PLANTATION-{timestep}.img
+BiomassMaps		Harvest/biomass-removed-PLANTATION-{timestep}.img
+EventLog		Harvest/biomass-event-log-PLANTATION-.csv
+SummaryLog		Harvest/biomass-harvest-summary-log-PLANTATION-.csv

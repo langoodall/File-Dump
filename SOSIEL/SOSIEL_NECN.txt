@@ -1,0 +1,207 @@
+LandisData	"NECN Succession"
+
+Timestep  10
+
+SeedingAlgorithm  WardSeedDispersal
+
+InitialCommunities      "./SOSIEL_initial_communities_spinup.txt"
+InitialCommunitiesMap   "./Rasters/treeMapTC.tif"
+ClimateConfigFile 	"./SOSIEL_climate-generator-baseline.txt"	
+
+SoilDepthMapName				"./Rasters/SoilDepth.tif"
+SoilDrainMapName				"./Rasters/SoilDrain.tif" << Original
+SoilBaseFlowMapName				"./Rasters/Baseflow.tif"
+SoilStormFlowMapName				"./Rasters/Stormflow.tif"
+SoilFieldCapacityMapName			"./Rasters/FieldCapacity.tif"
+SoilWiltingPointMapName				"./Rasters/Wiltpoint.tif"
+SoilPercentSandMapName				"./Rasters/SandPercent.tif"
+SoilPercentClayMapName				"./Rasters/ClayPercent.tif"
+InitialSOM1CsurfMapName				"./Rasters/SOM1surfC.tif"
+InitialSOM1NsurfMapName				"./Rasters/SOM1surfN.tif"
+InitialSOM1CsoilMapName				"./Rasters/SOM1soilC.tif"
+InitialSOM1NsoilMapName				"./Rasters/SOM1soilN.tif"
+InitialSOM2CMapName				"./Rasters/SOM2C.tif"
+InitialSOM2NMapName				"./Rasters/SOM2N.tif"
+InitialSOM3CMapName				"./Rasters/SOM3C.tif"
+InitialSOM3NMapName				"./Rasters/SOM3N.tif"
+InitialDeadWoodSurfaceMapName			"./Rasters/CWD.tif" << Original
+InitialDeadCoarseRootsMapName			"./Rasters/rootRast.tif" << Original
+
+
+CalibrateMode no
+SmokeModelOutputs no
+WaterDecayFunction Ratio <<Linear or Ratio
+
+
+ProbabilityEstablishAdjust 		1.0
+InitialMineralN				3.5
+InitialFineFuels 			0.1   << a fraction 0-1.0 of dead wood.
+AtmosphericNSlope			0.04 << 0.006 OG Louis
+AtmosphericNIntercept			0.3 << 0.28 OG Louis
+Latitude				36.0
+DenitrificationRate			0.07 << 0.013 OG Louis
+DecayRateSurf				0.5 << 1.34
+DecayRateSOM1				0.3 << 2
+DecayRateSOM2				0.2
+DecayRateSOM3				0.0000001
+ 
+SpeciesParameters	"./speciesParameters.csv"
+
+FunctionalGroupParameters	"./NECN_Functional_Table.csv"
+
+FireReductionParameters
+>>	BLANK
+
+HarvestReductionParameters
+>>					WoodLitter	Litter	SOM		CohortWood	CohortLeaf
+>> Name					Reduct		Reduct	Reduction	Removal		Removal
+>> -----------				----------	------	---------	----------	----------	
+	MM1-1_DO1			0.5		0.5	0.5		0.5		0.5
+	MM1-1_DO2			0.5		0.5	0.5		0.5		0.5
+	MM1-1_DO3			0.5		0.5	0.5		0.5		0.5
+	MM1-1_DO4			0.5		0.5	0.5		0.5		0.5
+	MM1-1_DO5			0.5		0.5	0.5		0.5		0.5
+	MM2-1_DO1			0.5		0.5	0.5		0.5		0.5
+	MM2-1_DO2			0.5		0.5	0.5		0.5		0.5
+	MM2-1_DO3			0.5		0.5	0.5		0.5		0.5
+	MM2-1_DO4			0.5		0.5	0.5		0.5		0.5
+	MM2-1_DO5			0.5		0.5	0.5		0.5		0.5
+	MM3-1_DO1			0.5		0.5	0.5		0.5		0.5
+	MM3-1_DO2			0.5		0.5	0.5		0.5		0.5
+	MM3-1_DO3			0.5		0.5	0.5		0.5		0.5
+	MM3-1_DO4			0.5		0.5	0.5		0.5		0.5
+	MM3-1_DO5			0.5		0.5	0.5		0.5		0.5
+	MM4-1_DO1			0.5		0.5	0.5		0.5		0.5
+	MM4-1_DO2			0.5		0.5	0.5		0.5		0.5
+	MM4-1_DO3			0.5		0.5	0.5		0.5		0.5
+	MM4-1_DO4			0.5		0.5	0.5		0.5		0.5
+	MM4-1_DO5			0.5		0.5	0.5		0.5		0.5
+	MM5-1_DO1			0.5		0.5	0.5		0.5		0.5
+	MM5-1_DO2			0.5		0.5	0.5		0.5		0.5
+	MM5-1_DO3			0.5		0.5	0.5		0.5		0.5
+	MM5-1_DO4			0.5		0.5	0.5		0.5		0.5
+	MM5-1_DO5			0.5		0.5	0.5		0.5		0.5
+	MM6-1_DO1			0.5		0.5	0.5		0.5		0.5
+	MM6-1_DO2			0.5		0.5	0.5		0.5		0.5
+	MM6-1_DO3			0.5		0.5	0.5		0.5		0.5
+	MM6-1_DO4			0.5		0.5	0.5		0.5		0.5
+	MM6-1_DO5			0.5		0.5	0.5		0.5		0.5
+	MM7-1_DO1			0.5		0.5	0.5		0.5		0.5
+	MM7-1_DO2			0.5		0.5	0.5		0.5		0.5
+	MM7-1_DO3			0.5		0.5	0.5		0.5		0.5
+	MM7-1_DO4			0.5		0.5	0.5		0.5		0.5
+	MM7-1_DO5			0.5		0.5	0.5		0.5		0.5
+	MM8-1_DO1			0.5		0.5	0.5		0.5		0.5
+	MM8-1_DO2			0.5		0.5	0.5		0.5		0.5
+	MM8-1_DO3			0.5		0.5	0.5		0.5		0.5
+	MM8-1_DO4			0.5		0.5	0.5		0.5		0.5
+	MM8-1_DO5			0.5		0.5	0.5		0.5		0.5
+	MM9-1_DO1			0.5		0.5	0.5		0.5		0.5
+	MM9-1_DO2			0.5		0.5	0.5		0.5		0.5
+	MM9-1_DO3			0.5		0.5	0.5		0.5		0.5
+	MM9-1_DO4			0.5		0.5	0.5		0.5		0.5
+	MM9-1_DO5			0.5		0.5	0.5		0.5		0.5
+	MM10-1_DO1			0.5		0.5	0.5		0.5		0.5
+	MM10-1_DO2			0.5		0.5	0.5		0.5		0.5
+	MM10-1_DO3			0.5		0.5	0.5		0.5		0.5
+	MM10-1_DO4			0.5		0.5	0.5		0.5		0.5
+	MM10-1_DO5			0.5		0.5	0.5		0.5		0.5
+	MM11-1_DO1			0.5		0.5	0.5		0.5		0.5
+	MM11-1_DO2			0.5		0.5	0.5		0.5		0.5
+	MM11-1_DO3			0.5		0.5	0.5		0.5		0.5
+	MM11-1_DO4			0.5		0.5	0.5		0.5		0.5
+	MM11-1_DO5			0.5		0.5	0.5		0.5		0.5
+	MM12-1_DO1			0.5		0.5	0.5		0.5		0.5
+	MM12-1_DO2			0.5		0.5	0.5		0.5		0.5
+	MM12-1_DO3			0.5		0.5	0.5		0.5		0.5
+	MM12-1_DO4			0.5		0.5	0.5		0.5		0.5
+	MM12-1_DO5			0.5		0.5	0.5		0.5		0.5
+	MM13-1_DO1			0.5		0.5	0.5		0.5		0.5
+	MM13-1_DO2			0.5		0.5	0.5		0.5		0.5
+	MM13-1_DO3			0.5		0.5	0.5		0.5		0.5
+	MM13-1_DO4			0.5		0.5	0.5		0.5		0.5
+	MM13-1_DO5			0.5		0.5	0.5		0.5		0.5
+	MM14-1_DO1			0.5		0.5	0.5		0.5		0.5
+	MM14-1_DO2			0.5		0.5	0.5		0.5		0.5
+	MM14-1_DO3			0.5		0.5	0.5		0.5		0.5
+	MM14-1_DO4			0.5		0.5	0.5		0.5		0.5
+	MM14-1_DO5			0.5		0.5	0.5		0.5		0.5
+	MM15-1_DO1			0.5		0.5	0.5		0.5		0.5
+	MM15-1_DO2			0.5		0.5	0.5		0.5		0.5
+	MM15-1_DO3			0.5		0.5	0.5		0.5		0.5
+	MM15-1_DO4			0.5		0.5	0.5		0.5		0.5
+	MM15-1_DO5			0.5		0.5	0.5		0.5		0.5
+	MM16-1_DO1			0.5		0.5	0.5		0.5		0.5
+	MM16-1_DO2			0.5		0.5	0.5		0.5		0.5
+	MM16-1_DO3			0.5		0.5	0.5		0.5		0.5
+	MM16-1_DO4			0.5		0.5	0.5		0.5		0.5
+	MM16-1_DO5			0.5		0.5	0.5		0.5		0.5
+	MM17-1_DO1			0.5		0.5	0.5		0.5		0.5
+	MM17-1_DO2			0.5		0.5	0.5		0.5		0.5
+	MM17-1_DO3			0.5		0.5	0.5		0.5		0.5
+	MM17-1_DO4			0.5		0.5	0.5		0.5		0.5
+	MM17-1_DO5			0.5		0.5	0.5		0.5		0.5
+	MM18-1_DO1			0.5		0.5	0.5		0.5		0.5
+	MM18-1_DO2			0.5		0.5	0.5		0.5		0.5
+	MM18-1_DO3			0.5		0.5	0.5		0.5		0.5
+	MM18-1_DO4			0.5		0.5	0.5		0.5		0.5
+	MM18-1_DO5			0.5		0.5	0.5		0.5		0.5
+	MM19-1_DO1			0.5		0.5	0.5		0.5		0.5
+	MM19-1_DO2			0.5		0.5	0.5		0.5		0.5
+	MM19-1_DO3			0.5		0.5	0.5		0.5		0.5
+	MM19-1_DO4			0.5		0.5	0.5		0.5		0.5
+	MM19-1_DO5			0.5		0.5	0.5		0.5		0.5
+	MM20-1_DO1			0.5		0.5	0.5		0.5		0.5
+	MM20-1_DO2			0.5		0.5	0.5		0.5		0.5
+	MM20-1_DO3			0.5		0.5	0.5		0.5		0.5
+	MM20-1_DO4			0.5		0.5	0.5		0.5		0.5
+	MM20-1_DO5			0.5		0.5	0.5		0.5		0.5
+	MM21-1_DO1			0.5		0.5	0.5		0.5		0.5
+	MM21-1_DO2			0.5		0.5	0.5		0.5		0.5
+	MM21-1_DO3			0.5		0.5	0.5		0.5		0.5
+	MM21-1_DO4			0.5		0.5	0.5		0.5		0.5
+	MM21-1_DO5			0.5		0.5	0.5		0.5		0.5
+	MM22-1_DO1			0.5		0.5	0.5		0.5		0.5
+	MM22-1_DO2			0.5		0.5	0.5		0.5		0.5
+	MM22-1_DO3			0.5		0.5	0.5		0.5		0.5
+	MM22-1_DO4			0.5		0.5	0.5		0.5		0.5
+	MM22-1_DO5			0.5		0.5	0.5		0.5		0.5
+	MM23-1_DO1			0.5		0.5	0.5		0.5		0.5
+	MM23-1_DO2			0.5		0.5	0.5		0.5		0.5
+	MM23-1_DO3			0.5		0.5	0.5		0.5		0.5
+	MM23-1_DO4			0.5		0.5	0.5		0.5		0.5
+	MM23-1_DO5			0.5		0.5	0.5		0.5		0.5
+	MM24-1_DO1			0.5		0.5	0.5		0.5		0.5
+	MM24-1_DO2			0.5		0.5	0.5		0.5		0.5
+	MM24-1_DO3			0.5		0.5	0.5		0.5		0.5
+	MM24-1_DO4			0.5		0.5	0.5		0.5		0.5
+	MM24-1_DO5			0.5		0.5	0.5		0.5		0.5
+	MM25-1_DO1			0.5		0.5	0.5		0.5		0.5
+	MM25-1_DO2			0.5		0.5	0.5		0.5		0.5
+	MM25-1_DO3			0.5		0.5	0.5		0.5		0.5
+	MM25-1_DO4			0.5		0.5	0.5		0.5		0.5
+	MM25-1_DO5			0.5		0.5	0.5		0.5		0.5
+	MM26-1_DO1			0.5		0.5	0.5		0.5		0.5
+	MM26-1_DO2			0.5		0.5	0.5		0.5		0.5
+	MM26-1_DO3			0.5		0.5	0.5		0.5		0.5
+	MM26-1_DO4			0.5		0.5	0.5		0.5		0.5
+	MM26-1_DO5			0.5		0.5	0.5		0.5		0.5
+	MM27-1_DO1			0.5		0.5	0.5		0.5		0.5
+	MM27-1_DO2			0.5		0.5	0.5		0.5		0.5
+	MM27-1_DO3			0.5		0.5	0.5		0.5		0.5
+	MM27-1_DO4			0.5		0.5	0.5		0.5		0.5
+	MM27-1_DO5			0.5		0.5	0.5		0.5		0.5
+	MM28-1_DO1			0.5		0.5	0.5		0.5		0.5
+	MM28-1_DO2			0.5		0.5	0.5		0.5		0.5
+	MM28-1_DO3			0.5		0.5	0.5		0.5		0.5
+	MM28-1_DO4			0.5		0.5	0.5		0.5		0.5
+	MM28-1_DO5			0.5		0.5	0.5		0.5		0.5
+	MM29-1_DO1			0.5		0.5	0.5		0.5		0.5
+	MM29-1_DO2			0.5		0.5	0.5		0.5		0.5
+	MM29-1_DO3			0.5		0.5	0.5		0.5		0.5
+	MM29-1_DO4			0.5		0.5	0.5		0.5		0.5
+	MM29-1_DO5			0.5		0.5	0.5		0.5		0.5
+	MM30-1_DO1			0.5		0.5	0.5		0.5		0.5
+
+
+

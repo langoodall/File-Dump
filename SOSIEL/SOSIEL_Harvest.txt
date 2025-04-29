@@ -1,0 +1,26 @@
+>> Name: SOSIEL_TEST
+>> Description: The SOSIEL Harvest Extension's main input file.
+>> Data: By Louis Goodall
+
+   LandisData  "SOSIEL Harvest"
+
+   Mode	       2
+
+   Timestep    5
+
+>> ---------            ---------
+>> Extension            Extension
+>> name                 file
+>> ---------            ---------
+   "SOSIEL Harvest"	SOSIEL_SHE.txt
+   "Biomass Harvest"	treeMap_SHE.txt << Piedmont Prescriptions
+>>   "Base Harvest"	SOSIEL_Plantation.txt
+
+   AgentToManagementArea
+>> -----     ----------
+>> Agent     Management
+>>           area 
+>> -----     ----------
+	FM1	1,2,3	RandomWalk	2
+	FM2	1,2,3	RandomWalk	2
+	FM3	4	RandomWalk	2

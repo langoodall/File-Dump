@@ -1,0 +1,340 @@
+	Run Sosiel with parameters:
+	Area:1
+		Biomass:             8,354,011
+		Harvested:                   0
+		MaturityPercent:         95.20
+	Area:2
+		Biomass:             7,387,259
+		Harvested:                   0
+		MaturityPercent:         97.14
+	Area:3
+		Biomass:             9,575,519
+		Harvested:                   0
+		MaturityPercent:         96.27
+	Area:4
+		Biomass:             5,394,480
+		Harvested:                   0
+		MaturityPercent:         94.81
+	Run Sosiel with parameters:
+	Area:1
+		Biomass:             4,784,775
+		Harvested:           5,224,943
+		MaturityPercent:         89.20
+	Area:2
+		Biomass:             3,804,551
+		Harvested:           5,442,769
+		MaturityPercent:         89.51
+	Area:3
+		Biomass:             5,451,608
+		Harvested:           6,243,432
+		MaturityPercent:         89.93
+	Area:4
+		Biomass:             1,308,349
+		Harvested:           8,172,261
+		MaturityPercent:         24.55
+	Run Sosiel with parameters:
+	Area:1
+		Biomass:             5,116,311
+		Harvested:           1,171,759
+		MaturityPercent:         88.08
+	Area:2
+		Biomass:             4,478,838
+		Harvested:           1,064,982
+		MaturityPercent:         87.33
+	Area:3
+		Biomass:             5,097,770
+		Harvested:           1,201,242
+		MaturityPercent:         89.77
+	Area:4
+		Biomass:             1,372,859
+		Harvested:                   0
+		MaturityPercent:         24.91
+	Run Sosiel with parameters:
+	Area:1
+		Biomass:             4,794,395
+		Harvested:             489,374
+		MaturityPercent:         87.43
+	Area:2
+		Biomass:             4,304,240
+		Harvested:             261,379
+		MaturityPercent:         86.01
+	Area:3
+		Biomass:             4,876,839
+		Harvested:             290,949
+		MaturityPercent:         89.15
+	Area:4
+		Biomass:             1,248,696
+		Harvested:             248,193
+		MaturityPercent:         19.27
+	Run Sosiel with parameters:
+	Area:1
+		Biomass:             6,259,496
+		Harvested:              94,942
+		MaturityPercent:         89.77
+	Area:2
+		Biomass:             5,928,389
+		Harvested:              71,196
+		MaturityPercent:         86.74
+	Area:3
+		Biomass:             5,857,155
+		Harvested:              91,717
+		MaturityPercent:         90.74
+	Area:4
+		Biomass:             1,420,837
+		Harvested:                   0
+		MaturityPercent:         19.18
+	Run Sosiel with parameters:
+	Area:1
+		Biomass:             6,226,667
+		Harvested:              39,140
+		MaturityPercent:         89.62
+	Area:2
+		Biomass:             5,897,271
+		Harvested:              33,576
+		MaturityPercent:         86.67
+	Area:3
+		Biomass:             5,812,833
+		Harvested:              69,450
+		MaturityPercent:         90.65
+	Area:4
+		Biomass:             1,420,837
+		Harvested:                   0
+		MaturityPercent:         19.18
+	Run Sosiel with parameters:
+	Area:1
+		Biomass:             6,694,397
+		Harvested:             261,029
+		MaturityPercent:         90.49
+	Area:2
+		Biomass:             6,400,007
+		Harvested:             408,094
+		MaturityPercent:         86.92
+	Area:3
+		Biomass:             5,817,109
+		Harvested:             213,069
+		MaturityPercent:         91.37
+	Area:4
+		Biomass:             1,578,831
+		Harvested:                   0
+		MaturityPercent:         72.79
+	Run Sosiel with parameters:
+	Area:1
+		Biomass:             6,574,588
+		Harvested:             143,316
+		MaturityPercent:         90.54
+	Area:2
+		Biomass:             6,047,945
+		Harvested:             397,220
+		MaturityPercent:         86.94
+	Area:3
+		Biomass:             5,633,140
+		Harvested:             191,733
+		MaturityPercent:         91.45
+	Area:4
+		Biomass:             1,578,831
+		Harvested:                   0
+		MaturityPercent:         72.79
+	Run Sosiel with parameters:
+	Area:1
+		Biomass:             7,054,686
+		Harvested:           1,015,863
+		MaturityPercent:         90.34
+	Area:2
+		Biomass:             6,546,317
+		Harvested:           1,190,065
+		MaturityPercent:         85.74
+	Area:3
+		Biomass:             5,864,182
+		Harvested:             992,786
+		MaturityPercent:         91.13
+	Area:4
+		Biomass:             2,044,959
+		Harvested:                   0
+		MaturityPercent:         97.25
+	Run Sosiel with parameters:
+	Area:1
+		Biomass:             6,462,249
+		Harvested:             895,934
+		MaturityPercent:         89.91
+	Area:2
+		Biomass:             6,111,936
+		Harvested:             611,458
+		MaturityPercent:         84.93
+	Area:3
+		Biomass:             5,534,735
+		Harvested:             490,358
+		MaturityPercent:         90.91
+	Area:4
+		Biomass:             1,383,995
+		Harvested:           1,320,616
+		MaturityPercent:         23.59
+	Run Sosiel with parameters:
+	Area:1
+		Biomass:             7,372,090
+		Harvested:             328,944
+		MaturityPercent:         90.23
+	Area:2
+		Biomass:             7,079,661
+		Harvested:             217,352
+		MaturityPercent:         85.08
+	Area:3
+		Biomass:             6,223,467
+		Harvested:             139,530
+		MaturityPercent:         91.33
+	Area:4
+		Biomass:             1,539,249
+		Harvested:                   0
+		MaturityPercent:         24.98
+	Run Sosiel with parameters:
+	Area:1
+		Biomass:             7,281,553
+		Harvested:             102,881
+		MaturityPercent:         90.23
+	Area:2
+		Biomass:             6,939,276
+		Harvested:             162,537
+		MaturityPercent:         84.77
+	Area:3
+		Biomass:             6,098,657
+		Harvested:             168,584
+		MaturityPercent:         91.15
+	Area:4
+		Biomass:             1,458,576
+		Harvested:             161,245
+		MaturityPercent:         19.44
+	Run Sosiel with parameters:
+	Area:1
+		Biomass:             7,827,129
+		Harvested:             148,098
+		MaturityPercent:         90.20
+	Area:2
+		Biomass:             7,530,082
+		Harvested:             132,422
+		MaturityPercent:         84.84
+	Area:3
+		Biomass:             6,409,385
+		Harvested:              62,285
+		MaturityPercent:         91.23
+	Area:4
+		Biomass:             1,632,235
+		Harvested:                   0
+		MaturityPercent:         19.45
+	Run Sosiel with parameters:
+	Area:1
+		Biomass:             7,602,627
+		Harvested:             293,820
+		MaturityPercent:         90.09
+	Area:2
+		Biomass:             7,380,376
+		Harvested:             165,723
+		MaturityPercent:         84.69
+	Area:3
+		Biomass:             6,237,893
+		Harvested:             184,480
+		MaturityPercent:         91.13
+	Area:4
+		Biomass:             1,632,235
+		Harvested:                   0
+		MaturityPercent:         19.45
+	Run Sosiel with parameters:
+	Area:1
+		Biomass:             7,874,590
+		Harvested:             277,185
+		MaturityPercent:         90.04
+	Area:2
+		Biomass:             7,705,316
+		Harvested:             199,101
+		MaturityPercent:         84.55
+	Area:3
+		Biomass:             6,395,834
+		Harvested:             168,020
+		MaturityPercent:         91.17
+	Area:4
+		Biomass:             1,818,443
+		Harvested:                   0
+		MaturityPercent:         72.80
+	Run Sosiel with parameters:
+	Area:1
+		Biomass:             7,537,968
+		Harvested:             453,484
+		MaturityPercent:         89.91
+	Area:2
+		Biomass:             7,386,814
+		Harvested:             376,116
+		MaturityPercent:         84.34
+	Area:3
+		Biomass:             6,191,837
+		Harvested:             316,016
+		MaturityPercent:         90.97
+	Area:4
+		Biomass:             1,818,443
+		Harvested:                   0
+		MaturityPercent:         72.80
+	Run Sosiel with parameters:
+	Area:1
+		Biomass:             7,682,633
+		Harvested:             396,927
+		MaturityPercent:         89.85
+	Area:2
+		Biomass:             7,570,858
+		Harvested:             264,020
+		MaturityPercent:         84.24
+	Area:3
+		Biomass:             6,298,350
+		Harvested:             168,841
+		MaturityPercent:         90.83
+	Area:4
+		Biomass:             2,073,794
+		Harvested:                   0
+		MaturityPercent:         97.43
+	Run Sosiel with parameters:
+	Area:1
+		Biomass:             7,504,577
+		Harvested:             209,170
+		MaturityPercent:         89.84
+	Area:2
+		Biomass:             7,387,212
+		Harvested:             220,574
+		MaturityPercent:         84.21
+	Area:3
+		Biomass:             6,154,599
+		Harvested:             170,138
+		MaturityPercent:         90.73
+	Area:4
+		Biomass:             1,488,623
+		Harvested:           1,169,051
+		MaturityPercent:         23.61
+	Run Sosiel with parameters:
+	Area:1
+		Biomass:             7,709,505
+		Harvested:             111,768
+		MaturityPercent:         89.76
+	Area:2
+		Biomass:             7,557,641
+		Harvested:             143,652
+		MaturityPercent:         84.06
+	Area:3
+		Biomass:             6,266,846
+		Harvested:              66,803
+		MaturityPercent:         90.60
+	Area:4
+		Biomass:             1,606,780
+		Harvested:                   0
+		MaturityPercent:         25.11
+	Run Sosiel with parameters:
+	Area:1
+		Biomass:             7,644,119
+		Harvested:              66,438
+		MaturityPercent:         89.76
+	Area:2
+		Biomass:             7,438,909
+		Harvested:             142,398
+		MaturityPercent:         83.65
+	Area:3
+		Biomass:             6,192,459
+		Harvested:              83,341
+		MaturityPercent:         90.60
+	Area:4
+		Biomass:             1,539,752
+		Harvested:             133,958
+		MaturityPercent:         19.49

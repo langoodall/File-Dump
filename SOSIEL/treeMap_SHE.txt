@@ -1,0 +1,4816 @@
+﻿LandisData	"Biomass Harvest"
+
+Timestep 10
+
+>> Prescriptions were based upon previous LANDIS projects, discussions with members of my committee,
+>> active foresters and the USFS silvics manual to ascertain individual tree characteristics to replicate
+>> real-world associations and harvesting techniques
+
+>> Prescribed fire biomass reductions came from several sources:
+>> Waldrop et al., 2008. Fuel reduction treatments affect stand structure of hardwood forests in Western NC and Southern OH, USA. doi:10.1016/j.foreco.2007.11.010
+>> Schweitzer et al., 2019. White Oak (Quercus alba) response to thinning and prescribed fire in north central Alabama mixed pine-hardwood forests. doi: 10.1093/forsci/fxz031
+>> Elliot & Vote, 2005. Effects of understory prescribed burning on shortleaf pine (Pinus echinata)/mixed hardwood forests. https://doi.org/10.3159/1095- 5674(2005)132[236:EOUPBO]2.0.CO;2
+>> Fire Effects Information System (USFS FEIS)
+>> LANDFIRE
+
+
+ManagementAreas		./Harvest/ManagementAreas4.tif
+
+Stands			./Harvest/standRast.tif
+
+>> THINNING TREATMENTS
+
+Prescription	MM1-1_DO1 << Thinning1A
+StandRanking	Random
+MinimumAge	30
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(5%)
+	CAAL27	20-300(5%)
+	CAGL8	20-300(5%)
+	CAOV2	20-300(5%)
+	FRPE	20-300(5%)
+	JUVI	20-300(5%)
+	LIST2	20-300(5%)
+	LITU	20-300(5%)
+	NYBI	20-300(5%)
+	NYSY	20-300(5%)
+	PIEC2	20-300(5%)
+	PIPA2	20-300(5%)
+	PITA	20-300(5%)
+	PIVI2	20-300(5%)
+	QUAL	20-300(5%)
+	QUCO2	20-300(5%)
+	QUFA	20-300(5%)
+	QULA2	20-300(5%)
+	QULA3	20-300(5%)
+	QUMA3	20-300(5%)
+	QUNI	20-300(5%)
+	QUPR2	20-300(5%)
+	QURU	20-300(5%)
+	QUST	20-300(5%)
+	QUVE	20-300(5%)
+	TADI2	20-300(5%)
+
+Prescription	MM1-1_DO2 << Thinning1B
+StandRanking	Random
+MinimumAge	30
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(3%)
+	CAAL27	20-300(3%)
+	CAGL8	20-300(3%)
+	CAOV2	20-300(3%)
+	FRPE	20-300(3%)
+	JUVI	20-300(3%)
+	LIST2	20-300(3%)
+	LITU	20-300(3%)
+	NYBI	20-300(3%)
+	NYSY	20-300(3%)
+	PIEC2	20-300(3%)
+	PIPA2	20-300(3%)
+	PITA	20-300(3%)
+	PIVI2	20-300(3%)
+	QUAL	20-300(3%)
+	QUCO2	20-300(3%)
+	QUFA	20-300(3%)
+	QULA2	20-300(3%)
+	QULA3	20-300(3%)
+	QUMA3	20-300(3%)
+	QUNI	20-300(3%)
+	QUPR2	20-300(3%)
+	QURU	20-300(3%)
+	QUST	20-300(3%)
+	QUVE	20-300(3%)
+	TADI2	20-300(3%)
+
+Prescription	MM1-1_DO3 << Thinning1C
+StandRanking	Random
+MinimumAge	30
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(7%)
+	CAAL27	20-300(7%)
+	CAGL8	20-300(7%)
+	CAOV2	20-300(7%)
+	FRPE	20-300(7%)
+	JUVI	20-300(7%)
+	LIST2	20-300(7%)
+	LITU	20-300(7%)
+	NYBI	20-300(7%)
+	NYSY	20-300(7%)
+	PIEC2	20-300(7%)
+	PIPA2	20-300(7%)
+	PITA	20-300(7%)
+	PIVI2	20-300(7%)
+	QUAL	20-300(7%)
+	QUCO2	20-300(7%)
+	QUFA	20-300(7%)
+	QULA2	20-300(7%)
+	QULA3	20-300(7%)
+	QUMA3	20-300(7%)
+	QUNI	20-300(7%)
+	QUPR2	20-300(7%)
+	QURU	20-300(7%)
+	QUST	20-300(7%)
+	QUVE	20-300(7%)
+	TADI2	20-300(7%)
+
+Prescription	MM2-1_DO1 << Thinning2A
+StandRanking	Random
+MinimumAge	30
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(10%)
+	CAAL27	20-300(10%)
+	CAGL8	20-300(10%)
+	CAOV2	20-300(10%)
+	FRPE	20-300(10%)
+	JUVI	20-300(10%)
+	LIST2	20-300(10%)
+	LITU	20-300(10%)
+	NYBI	20-300(10%)
+	NYSY	20-300(10%)
+	PIEC2	20-300(10%)
+	PIPA2	20-300(10%)
+	PITA	20-300(10%)
+	PIVI2	20-300(10%)
+	QUAL	20-300(10%)
+	QUCO2	20-300(10%)
+	QUFA	20-300(10%)
+	QULA2	20-300(10%)
+	QULA3	20-300(10%)
+	QUMA3	20-300(10%)
+	QUNI	20-300(10%)
+	QUPR2	20-300(10%)
+	QURU	20-300(10%)
+	QUST	20-300(10%)
+	QUVE	20-300(10%)
+	TADI2	20-300(10%)
+
+Prescription	MM2-1_DO2 << Thinning2B
+StandRanking	Random
+MinimumAge	30
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(8%)
+	CAAL27	20-300(8%)
+	CAGL8	20-300(8%)
+	CAOV2	20-300(8%)
+	FRPE	20-300(8%)
+	JUVI	20-300(8%)
+	LIST2	20-300(8%)
+	LITU	20-300(8%)
+	NYBI	20-300(8%)
+	NYSY	20-300(8%)
+	PIEC2	20-300(8%)
+	PIPA2	20-300(8%)
+	PITA	20-300(8%)
+	PIVI2	20-300(8%)
+	QUAL	20-300(8%)
+	QUCO2	20-300(8%)
+	QUFA	20-300(8%)
+	QULA2	20-300(8%)
+	QULA3	20-300(8%)
+	QUMA3	20-300(8%)
+	QUNI	20-300(8%)
+	QUPR2	20-300(8%)
+	QURU	20-300(8%)
+	QUST	20-300(8%)
+	QUVE	20-300(8%)
+	TADI2	20-300(8%)
+
+Prescription	MM2-1_DO3 << Thinning2C
+StandRanking	Random
+MinimumAge	30
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(15%)
+	CAAL27	20-300(15%)
+	CAGL8	20-300(15%)
+	CAOV2	20-300(15%)
+	FRPE	20-300(15%)
+	JUVI	20-300(15%)
+	LIST2	20-300(15%)
+	LITU	20-300(15%)
+	NYBI	20-300(15%)
+	NYSY	20-300(15%)
+	PIEC2	20-300(15%)
+	PIPA2	20-300(15%)
+	PITA	20-300(15%)
+	PIVI2	20-300(15%)
+	QUAL	20-300(15%)
+	QUCO2	20-300(15%)
+	QUFA	20-300(15%)
+	QULA2	20-300(15%)
+	QULA3	20-300(15%)
+	QUMA3	20-300(15%)
+	QUNI	20-300(15%)
+	QUPR2	20-300(15%)
+	QURU	20-300(15%)
+	QUST	20-300(15%)
+	QUVE	20-300(15%)
+	TADI2	20-300(15%)
+
+Prescription	MM3-1_DO1 << Thinning3A
+StandRanking	Random
+MinimumAge	30
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(25%)
+	CAAL27	20-300(25%)
+	CAGL8	20-300(25%)
+	CAOV2	20-300(25%)
+	FRPE	20-300(25%)
+	JUVI	20-300(25%)
+	LIST2	20-300(25%)
+	LITU	20-300(25%)
+	NYBI	20-300(25%)
+	NYSY	20-300(25%)
+	PIEC2	20-300(25%)
+	PIPA2	20-300(25%)
+	PITA	20-300(25%)
+	PIVI2	20-300(25%)
+	QUAL	20-300(25%)
+	QUCO2	20-300(25%)
+	QUFA	20-300(25%)
+	QULA2	20-300(25%)
+	QULA3	20-300(25%)
+	QUMA3	20-300(25%)
+	QUNI	20-300(25%)
+	QUPR2	20-300(25%)
+	QURU	20-300(25%)
+	QUST	20-300(25%)
+	QUVE	20-300(25%)
+	TADI2	20-300(25%)
+
+Prescription	MM3-1_DO2 << Thinning3B
+StandRanking	Random
+MinimumAge	30
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(20%)
+	CAAL27	20-300(20%)
+	CAGL8	20-300(20%)
+	CAOV2	20-300(20%)
+	FRPE	20-300(20%)
+	JUVI	20-300(20%)
+	LIST2	20-300(20%)
+	LITU	20-300(20%)
+	NYBI	20-300(20%)
+	NYSY	20-300(20%)
+	PIEC2	20-300(20%)
+	PIPA2	20-300(20%)
+	PITA	20-300(20%)
+	PIVI2	20-300(20%)
+	QUAL	20-300(20%)
+	QUCO2	20-300(20%)
+	QUFA	20-300(20%)
+	QULA2	20-300(20%)
+	QULA3	20-300(20%)
+	QUMA3	20-300(20%)
+	QUNI	20-300(20%)
+	QUPR2	20-300(20%)
+	QURU	20-300(20%)
+	QUST	20-300(20%)
+	QUVE	20-300(20%)
+	TADI2	20-300(20%)
+
+Prescription	MM3-1_DO3 << Thinning3C
+StandRanking	Random
+MinimumAge	30
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(35%)
+	CAAL27	20-300(35%)
+	CAGL8	20-300(35%)
+	CAOV2	20-300(35%)
+	FRPE	20-300(35%)
+	JUVI	20-300(35%)
+	LIST2	20-300(35%)
+	LITU	20-300(35%)
+	NYBI	20-300(35%)
+	NYSY	20-300(35%)
+	PIEC2	20-300(35%)
+	PIPA2	20-300(35%)
+	PITA	20-300(35%)
+	PIVI2	20-300(35%)
+	QUAL	20-300(35%)
+	QUCO2	20-300(35%)
+	QUFA	20-300(35%)
+	QULA2	20-300(35%)
+	QULA3	20-300(35%)
+	QUMA3	20-300(35%)
+	QUNI	20-300(35%)
+	QUPR2	20-300(35%)
+	QURU	20-300(35%)
+	QUST	20-300(35%)
+	QUVE	20-300(35%)
+	TADI2	20-300(35%)
+
+Prescription	MM4-1_DO1 << Thinning4A
+StandRanking	Random
+MinimumAge	30
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(50%)
+	CAAL27	20-300(50%)
+	CAGL8	20-300(50%)
+	CAOV2	20-300(50%)
+	FRPE	20-300(50%)
+	JUVI	20-300(50%)
+	LIST2	20-300(50%)
+	LITU	20-300(50%)
+	NYBI	20-300(50%)
+	NYSY	20-300(50%)
+	PIEC2	20-300(50%)
+	PIPA2	20-300(50%)
+	PITA	20-300(50%)
+	PIVI2	20-300(50%)
+	QUAL	20-300(50%)
+	QUCO2	20-300(50%)
+	QUFA	20-300(50%)
+	QULA2	20-300(50%)
+	QULA3	20-300(50%)
+	QUMA3	20-300(50%)
+	QUNI	20-300(50%)
+	QUPR2	20-300(50%)
+	QURU	20-300(50%)
+	QUST	20-300(50%)
+	QUVE	20-300(50%)
+	TADI2	20-300(50%)
+
+Prescription	MM4-1_DO2 << Thinning4B
+StandRanking	Random
+MinimumAge	30
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(40%)
+	CAAL27	20-300(40%)
+	CAGL8	20-300(40%)
+	CAOV2	20-300(40%)
+	FRPE	20-300(40%)
+	JUVI	20-300(40%)
+	LIST2	20-300(40%)
+	LITU	20-300(40%)
+	NYBI	20-300(40%)
+	NYSY	20-300(40%)
+	PIEC2	20-300(40%)
+	PIPA2	20-300(40%)
+	PITA	20-300(40%)
+	PIVI2	20-300(40%)
+	QUAL	20-300(40%)
+	QUCO2	20-300(40%)
+	QUFA	20-300(40%)
+	QULA2	20-300(40%)
+	QULA3	20-300(40%)
+	QUMA3	20-300(40%)
+	QUNI	20-300(40%)
+	QUPR2	20-300(40%)
+	QURU	20-300(40%)
+	QUST	20-300(40%)
+	QUVE	20-300(40%)
+	TADI2	20-300(40%)
+
+Prescription	MM4-1_DO3 << Thinning4C
+StandRanking	Random
+MinimumAge	30
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(60%)
+	CAAL27	20-300(60%)
+	CAGL8	20-300(60%)
+	CAOV2	20-300(60%)
+	FRPE	20-300(60%)
+	JUVI	20-300(60%)
+	LIST2	20-300(60%)
+	LITU	20-300(60%)
+	NYBI	20-300(60%)
+	NYSY	20-300(60%)
+	PIEC2	20-300(60%)
+	PIPA2	20-300(60%)
+	PITA	20-300(60%)
+	PIVI2	20-300(60%)
+	QUAL	20-300(60%)
+	QUCO2	20-300(60%)
+	QUFA	20-300(60%)
+	QULA2	20-300(60%)
+	QULA3	20-300(60%)
+	QUMA3	20-300(60%)
+	QUNI	20-300(60%)
+	QUPR2	20-300(60%)
+	QURU	20-300(60%)
+	QUST	20-300(60%)
+	QUVE	20-300(60%)
+	TADI2	20-300(60%)
+
+Prescription	MM5-1_DO1 << Thinning5A
+StandRanking	Random
+MinimumAge	30
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(75%)
+	CAAL27	20-300(75%)
+	CAGL8	20-300(75%)
+	CAOV2	20-300(75%)
+	FRPE	20-300(75%)
+	JUVI	20-300(75%)
+	LIST2	20-300(75%)
+	LITU	20-300(75%)
+	NYBI	20-300(75%)
+	NYSY	20-300(75%)
+	PIEC2	20-300(75%)
+	PIPA2	20-300(75%)
+	PITA	20-300(75%)
+	PIVI2	20-300(75%)
+	QUAL	20-300(75%)
+	QUCO2	20-300(75%)
+	QUFA	20-300(75%)
+	QULA2	20-300(75%)
+	QULA3	20-300(75%)
+	QUMA3	20-300(75%)
+	QUNI	20-300(75%)
+	QUPR2	20-300(75%)
+	QURU	20-300(75%)
+	QUST	20-300(75%)
+	QUVE	20-300(75%)
+	TADI2	20-300(75%)
+
+Prescription	MM5-1_DO2 << Thinning5B
+StandRanking	Random
+MinimumAge	30
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(65%)
+	CAAL27	20-300(65%)
+	CAGL8	20-300(65%)
+	CAOV2	20-300(65%)
+	FRPE	20-300(65%)
+	JUVI	20-300(65%)
+	LIST2	20-300(65%)
+	LITU	20-300(65%)
+	NYBI	20-300(65%)
+	NYSY	20-300(65%)
+	PIEC2	20-300(65%)
+	PIPA2	20-300(65%)
+	PITA	20-300(65%)
+	PIVI2	20-300(65%)
+	QUAL	20-300(65%)
+	QUCO2	20-300(65%)
+	QUFA	20-300(65%)
+	QULA2	20-300(65%)
+	QULA3	20-300(65%)
+	QUMA3	20-300(65%)
+	QUNI	20-300(65%)
+	QUPR2	20-300(65%)
+	QURU	20-300(65%)
+	QUST	20-300(65%)
+	QUVE	20-300(65%)
+	TADI2	20-300(65%)
+
+Prescription	MM5-1_DO3 << Thinning5C
+StandRanking	Random
+MinimumAge	30
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(85%)
+	CAAL27	20-300(85%)
+	CAGL8	20-300(85%)
+	CAOV2	20-300(85%)
+	FRPE	20-300(85%)
+	JUVI	20-300(85%)
+	LIST2	20-300(85%)
+	LITU	20-300(85%)
+	NYBI	20-300(85%)
+	NYSY	20-300(85%)
+	PIEC2	20-300(85%)
+	PIPA2	20-300(85%)
+	PITA	20-300(85%)
+	PIVI2	20-300(85%)
+	QUAL	20-300(85%)
+	QUCO2	20-300(85%)
+	QUFA	20-300(85%)
+	QULA2	20-300(85%)
+	QULA3	20-300(85%)
+	QUMA3	20-300(85%)
+	QUNI	20-300(85%)
+	QUPR2	20-300(85%)
+	QURU	20-300(85%)
+	QUST	20-300(85%)
+	QUVE	20-300(85%)
+	TADI2	20-300(85%)
+
+Prescription	MM6-1_DO1 << ThinningOakA
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+>>-------------------------------------------
+QUAL		100		50
+QURU		100		50
+QUPR2		100		50
+QUST		100		50
+MinimumAge	50
+	ForestTypeTable << Oak
+	>> InclusionRule ageRange percent species
+	Optional	30-250	30	QUAL
+	Optional	30-250	30	QURU
+	Optional	30-250	30	QUPR2
+	Optional	30-250	30	QUST
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(5%)
+	CAAL27	20-300(5%)
+	CAGL8	20-300(5%)
+	CAOV2	20-300(5%)
+	FRPE	20-300(5%)
+	JUVI	20-300(5%)
+	LIST2	20-300(5%)
+	LITU	20-300(5%)
+	NYBI	20-300(5%)
+	NYSY	20-300(5%)
+	PIEC2	20-300(5%)
+	PIPA2	20-300(5%)
+	PITA	20-300(5%)
+	PIVI2	20-300(5%)
+	QUAL	20-300(50%)
+	QUCO2	20-300(50%)
+	QUFA	20-300(50%)
+	QULA2	20-300(50%)
+	QULA3	20-300(50%)
+	QUMA3	20-300(50%)
+	QUNI	20-300(50%)
+	QUPR2	20-300(50%)
+	QURU	20-300(50%)
+	QUST	20-300(50%)
+	QUVE	20-300(50%)
+	TADI2	20-300(5%)
+
+Prescription	MM6-1_DO2 << ThinningOakB
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+>>-------------------------------------------
+QUAL		100		50
+QURU		100		50
+QUPR2		100		50
+QUST		100		50
+MinimumAge	50
+	ForestTypeTable << Oak
+	>> InclusionRule ageRange percent species
+	Optional	30-250	30	QUAL
+	Optional	30-250	30	QURU
+	Optional	30-250	30	QUPR2
+	Optional	30-250	30	QUST
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(5%)
+	CAAL27	20-300(5%)
+	CAGL8	20-300(5%)
+	CAOV2	20-300(5%)
+	FRPE	20-300(5%)
+	JUVI	20-300(5%)
+	LIST2	20-300(5%)
+	LITU	20-300(5%)
+	NYBI	20-300(5%)
+	NYSY	20-300(5%)
+	PIEC2	20-300(5%)
+	PIPA2	20-300(5%)
+	PITA	20-300(5%)
+	PIVI2	20-300(5%)
+	QUAL	20-300(40%)
+	QUCO2	20-300(40%)
+	QUFA	20-300(40%)
+	QULA2	20-300(40%)
+	QULA3	20-300(40%)
+	QUMA3	20-300(40%)
+	QUNI	20-300(40%)
+	QUPR2	20-300(40%)
+	QURU	20-300(40%)
+	QUST	20-300(40%)
+	QUVE	20-300(40%)
+	TADI2	20-300(5%)
+
+Prescription	MM6-1_DO3 << ThinningOakC
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+>>-------------------------------------------
+QUAL		100		50
+QURU		100		50
+QUPR2		100		50
+QUST		100		50
+MinimumAge	50
+	ForestTypeTable << Oak
+	>> InclusionRule ageRange percent species
+	Optional	30-250	30	QUAL
+	Optional	30-250	30	QURU
+	Optional	30-250	30	QUPR2
+	Optional	30-250	30	QUST
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(5%)
+	CAAL27	20-300(5%)
+	CAGL8	20-300(5%)
+	CAOV2	20-300(5%)
+	FRPE	20-300(5%)
+	JUVI	20-300(5%)
+	LIST2	20-300(5%)
+	LITU	20-300(5%)
+	NYBI	20-300(5%)
+	NYSY	20-300(5%)
+	PIEC2	20-300(5%)
+	PIPA2	20-300(5%)
+	PITA	20-300(5%)
+	PIVI2	20-300(5%)
+	QUAL	20-300(60%)
+	QUCO2	20-300(60%)
+	QUFA	20-300(60%)
+	QULA2	20-300(60%)
+	QULA3	20-300(60%)
+	QUMA3	20-300(60%)
+	QUNI	20-300(60%)
+	QUPR2	20-300(60%)
+	QURU	20-300(60%)
+	QUST	20-300(60%)
+	QUVE	20-300(60%)
+	TADI2	20-300(5%)
+
+Prescription	MM7-1_DO1 << ThinningPineA
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+>>-------------------------------------------
+PITA		100		30
+PIPA2		100		30
+MinimumAge	30
+	ForestTypeTable << Pine
+	>> InclusionRule ageRange percent species
+	Optional	30-250	30	PITA
+	Optional	30-250	30	PIPA2
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(5%)
+	CAAL27	20-300(5%)
+	CAGL8	20-300(5%)
+	CAOV2	20-300(5%)
+	FRPE	20-300(5%)
+	JUVI	20-300(5%)
+	LIST2	20-300(5%)
+	LITU	20-300(5%)
+	NYBI	20-300(5%)
+	NYSY	20-300(5%)
+	PIEC2	20-300(50%)
+	PIPA2	20-300(50%)
+	PITA	20-300(50%)
+	PIVI2	20-300(50%)
+	QUAL	20-300(5%)
+	QUCO2	20-300(5%)
+	QUFA	20-300(5%)
+	QULA2	20-300(5%)
+	QULA3	20-300(5%)
+	QUMA3	20-300(5%)
+	QUNI	20-300(5%)
+	QUPR2	20-300(5%)
+	QURU	20-300(5%)
+	QUST	20-300(5%)
+	QUVE	20-300(5%)
+	TADI2	20-300(5%)
+
+Prescription	MM7-1_DO2 << ThinningPineB
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+>>-------------------------------------------
+PITA		100		30
+PIPA2		100		30
+MinimumAge	30
+	ForestTypeTable << Pine
+	>> InclusionRule ageRange percent species
+	Optional	30-250	30	PITA
+	Optional	30-250	30	PIPA2
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(5%)
+	CAAL27	20-300(5%)
+	CAGL8	20-300(5%)
+	CAOV2	20-300(5%)
+	FRPE	20-300(5%)
+	JUVI	20-300(5%)
+	LIST2	20-300(5%)
+	LITU	20-300(5%)
+	NYBI	20-300(5%)
+	NYSY	20-300(5%)
+	PIEC2	20-300(40%)
+	PIPA2	20-300(40%)
+	PITA	20-300(40%)
+	PIVI2	20-300(40%)
+	QUAL	20-300(5%)
+	QUCO2	20-300(5%)
+	QUFA	20-300(5%)
+	QULA2	20-300(5%)
+	QULA3	20-300(5%)
+	QUMA3	20-300(5%)
+	QUNI	20-300(5%)
+	QUPR2	20-300(5%)
+	QURU	20-300(5%)
+	QUST	20-300(5%)
+	QUVE	20-300(5%)
+	TADI2	20-300(5%)
+
+Prescription	MM7-1_DO3 << ThinningPineC
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+>>-------------------------------------------
+PITA		100		30
+PIPA2		100		30
+MinimumAge	30
+	ForestTypeTable << Pine
+	>> InclusionRule ageRange percent species
+	Optional	30-250	30	PITA
+	Optional	30-250	30	PIPA2
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(5%)
+	CAAL27	20-300(5%)
+	CAGL8	20-300(5%)
+	CAOV2	20-300(5%)
+	FRPE	20-300(5%)
+	JUVI	20-300(5%)
+	LIST2	20-300(5%)
+	LITU	20-300(5%)
+	NYBI	20-300(5%)
+	NYSY	20-300(5%)
+	PIEC2	20-300(60%)
+	PIPA2	20-300(60%)
+	PITA	20-300(60%)
+	PIVI2	20-300(60%)
+	QUAL	20-300(5%)
+	QUCO2	20-300(5%)
+	QUFA	20-300(5%)
+	QULA2	20-300(5%)
+	QULA3	20-300(5%)
+	QUMA3	20-300(5%)
+	QUNI	20-300(5%)
+	QUPR2	20-300(5%)
+	QURU	20-300(5%)
+	QUST	20-300(5%)
+	QUVE	20-300(5%)
+	TADI2	20-300(5%)
+
+Prescription	MM8-1_DO1 << ThinningHardwoodA
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+>>-------------------------------------------
+ACRU		100		50
+LIST2		50		30
+LITU		100		50
+MinimumAge	50
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(50%)
+	CAAL27	20-300(50%)
+	CAGL8	20-300(50%)
+	CAOV2	20-300(50%)
+	FRPE	20-300(50%)
+	JUVI	20-300(5%)
+	LIST2	20-300(50%)
+	LITU	20-300(50%)
+	NYBI	20-300(50%)
+	NYSY	20-300(50%)
+	PIEC2	20-300(5%)
+	PIPA2	20-300(5%)
+	PITA	20-300(5%)
+	PIVI2	20-300(5%)
+	QUAL	20-300(50%)
+	QUCO2	20-300(50%)
+	QUFA	20-300(50%)
+	QULA2	20-300(50%)
+	QULA3	20-300(50%)
+	QUMA3	20-300(50%)
+	QUNI	20-300(50%)
+	QUPR2	20-300(50%)
+	QURU	20-300(50%)
+	QUST	20-300(50%)
+	QUVE	20-300(50%)
+	TADI2	20-300(5%)
+
+Prescription	MM8-1_DO2 << ThinningHardwoodB
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+>>-------------------------------------------
+ACRU		100		50
+LIST2		50		30
+LITU		100		50
+MinimumAge	50
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(40%)
+	CAAL27	20-300(40%)
+	CAGL8	20-300(40%)
+	CAOV2	20-300(40%)
+	FRPE	20-300(40%)
+	JUVI	20-300(5%)
+	LIST2	20-300(40%)
+	LITU	20-300(40%)
+	NYBI	20-300(40%)
+	NYSY	20-300(40%)
+	PIEC2	20-300(5%)
+	PIPA2	20-300(5%)
+	PITA	20-300(5%)
+	PIVI2	20-300(5%)
+	QUAL	20-300(40%)
+	QUCO2	20-300(40%)
+	QUFA	20-300(40%)
+	QULA2	20-300(40%)
+	QULA3	20-300(40%)
+	QUMA3	20-300(40%)
+	QUNI	20-300(40%)
+	QUPR2	20-300(40%)
+	QURU	20-300(40%)
+	QUST	20-300(40%)
+	QUVE	20-300(40%)
+	TADI2	20-300(5%)
+
+Prescription	MM8-1_DO3 << ThinningHardwoodC
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+>>-------------------------------------------
+ACRU		100		50
+LIST2		50		30
+LITU		100		50
+MinimumAge	50
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(60%)
+	CAAL27	20-300(60%)
+	CAGL8	20-300(60%)
+	CAOV2	20-300(60%)
+	FRPE	20-300(60%)
+	JUVI	20-300(5%)
+	LIST2	20-300(60%)
+	LITU	20-300(60%)
+	NYBI	20-300(60%)
+	NYSY	20-300(60%)
+	PIEC2	20-300(5%)
+	PIPA2	20-300(5%)
+	PITA	20-300(5%)
+	PIVI2	20-300(5%)
+	QUAL	20-300(60%)
+	QUCO2	20-300(60%)
+	QUFA	20-300(60%)
+	QULA2	20-300(60%)
+	QULA3	20-300(60%)
+	QUMA3	20-300(60%)
+	QUNI	20-300(60%)
+	QUPR2	20-300(60%)
+	QURU	20-300(60%)
+	QUST	20-300(60%)
+	QUVE	20-300(60%)
+	TADI2	20-300(5%)
+
+Prescription	MM9-1_DO1 << ThinningSoftwoodA
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+>>-------------------------------------------
+PITA		100		30
+PIPA2		100		30
+MinimumAge	30
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(5%)
+	CAAL27	20-300(5%)
+	CAGL8	20-300(5%)
+	CAOV2	20-300(5%)
+	FRPE	20-300(5%)
+	JUVI	20-300(50%)
+	LIST2	20-300(5%)
+	LITU	20-300(5%)
+	NYBI	20-300(5%)
+	NYSY	20-300(5%)
+	PIEC2	20-300(50%)
+	PIPA2	20-300(50%)
+	PITA	20-300(50%)
+	PIVI2	20-300(50%)
+	QUAL	20-300(5%)
+	QUCO2	20-300(5%)
+	QUFA	20-300(5%)
+	QULA2	20-300(5%)
+	QULA3	20-300(5%)
+	QUMA3	20-300(5%)
+	QUNI	20-300(5%)
+	QUPR2	20-300(5%)
+	QURU	20-300(5%)
+	QUST	20-300(5%)
+	QUVE	20-300(5%)
+	TADI2	20-300(50%)
+
+Prescription	MM9-1_DO2 << ThinningSoftwoodB
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+>>-------------------------------------------
+PITA		100		30
+PIPA2		100		30
+MinimumAge	30
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(5%)
+	CAAL27	20-300(5%)
+	CAGL8	20-300(5%)
+	CAOV2	20-300(5%)
+	FRPE	20-300(5%)
+	JUVI	20-300(40%)
+	LIST2	20-300(5%)
+	LITU	20-300(5%)
+	NYBI	20-300(5%)
+	NYSY	20-300(5%)
+	PIEC2	20-300(40%)
+	PIPA2	20-300(40%)
+	PITA	20-300(40%)
+	PIVI2	20-300(40%)
+	QUAL	20-300(5%)
+	QUCO2	20-300(5%)
+	QUFA	20-300(5%)
+	QULA2	20-300(5%)
+	QULA3	20-300(5%)
+	QUMA3	20-300(5%)
+	QUNI	20-300(5%)
+	QUPR2	20-300(5%)
+	QURU	20-300(5%)
+	QUST	20-300(5%)
+	QUVE	20-300(5%)
+	TADI2	20-300(40%)
+
+Prescription	MM9-1_DO3 << ThinningSoftwoodC
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+>>-------------------------------------------
+PITA		100		30
+PIPA2		100		30
+MinimumAge	30
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(5%)
+	CAAL27	20-300(5%)
+	CAGL8	20-300(5%)
+	CAOV2	20-300(5%)
+	FRPE	20-300(5%)
+	JUVI	20-300(60%)
+	LIST2	20-300(5%)
+	LITU	20-300(5%)
+	NYBI	20-300(5%)
+	NYSY	20-300(5%)
+	PIEC2	20-300(60%)
+	PIPA2	20-300(60%)
+	PITA	20-300(60%)
+	PIVI2	20-300(60%)
+	QUAL	20-300(5%)
+	QUCO2	20-300(5%)
+	QUFA	20-300(5%)
+	QULA2	20-300(5%)
+	QULA3	20-300(5%)
+	QUMA3	20-300(5%)
+	QUNI	20-300(5%)
+	QUPR2	20-300(5%)
+	QURU	20-300(5%)
+	QUST	20-300(5%)
+	QUVE	20-300(5%)
+	TADI2	20-300(60%)
+
+
+>> SEEDTREE TREATMENTS
+
+Prescription	MM10-1_DO1 << PineSeedTreeA
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+>>-------------------------------------------
+PITA		100		30
+PIPA2		100		30
+MinimumAge	30
+	ForestTypeTable << Pine
+	>> InclusionRule ageRange percent species
+	Optional	10-250	10	PITA
+	Optional	10-250	10	PIPA2
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	All
+	CAAL27	All
+	CAGL8	All
+	CAOV2	All
+	FRPE	All
+	JUVI	All
+	LIST2	All
+	LITU	All
+	NYBI	All
+	NYSY	All
+	PIEC2	20-300(80%)
+	PIPA2	20-300(80%)
+	PITA	20-300(80%)
+	PIVI2	20-300(80%)
+	QUAL	All
+	QUCO2	All
+	QUFA	All
+	QULA2	All
+	QULA3	All
+	QUMA3	All
+	QUNI	All
+	QUPR2	All
+	QURU	All
+	QUST	All
+	QUVE	All
+	TADI2	All
+
+Prescription	MM10-1_DO2 << PineSeedTreeB
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+>>-------------------------------------------
+PITA		100		30
+PIPA2		100		30
+MinimumAge	30
+	ForestTypeTable << Pine
+	>> InclusionRule ageRange percent species
+	Optional	10-250	10	PITA
+	Optional	10-250	10	PIPA2
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	All
+	CAAL27	All
+	CAGL8	All
+	CAOV2	All
+	FRPE	All
+	JUVI	All
+	LIST2	All
+	LITU	All
+	NYBI	All
+	NYSY	All
+	PIEC2	20-300(72%)
+	PIPA2	20-300(72%)
+	PITA	20-300(72%)
+	PIVI2	20-300(72%)
+	QUAL	All
+	QUCO2	All
+	QUFA	All
+	QULA2	All
+	QULA3	All
+	QUMA3	All
+	QUNI	All
+	QUPR2	All
+	QURU	All
+	QUST	All
+	QUVE	All
+	TADI2	All
+
+Prescription	MM10-1_DO3 << PineSeedTreeC
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+>>-------------------------------------------
+PITA		100		30
+PIPA2		100		30
+MinimumAge	30
+	ForestTypeTable << Pine
+	>> InclusionRule ageRange percent species
+	Optional	10-250	10	PITA
+	Optional	10-250	10	PIPA2
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	All
+	CAAL27	All
+	CAGL8	All
+	CAOV2	All
+	FRPE	All
+	JUVI	All
+	LIST2	All
+	LITU	All
+	NYBI	All
+	NYSY	All
+	PIEC2	20-300(88%)
+	PIPA2	20-300(88%)
+	PITA	20-300(88%)
+	PIVI2	20-300(88%)
+	QUAL	All
+	QUCO2	All
+	QUFA	All
+	QULA2	All
+	QULA3	All
+	QUMA3	All
+	QUNI	All
+	QUPR2	All
+	QURU	All
+	QUST	All
+	QUVE	All
+	TADI2	All
+
+Prescription	MM11-1_DO1 << OakSeedTreeA
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+>>-------------------------------------------
+QUAL		100		50
+QUCO2		100		50
+QUFA		100		50
+QULA2		100		50
+QULA3		100		50
+QUMA3		100		50
+QUNI		100		50
+QUPR2		100		50
+QURU		100		50
+QUST		100		50
+QUVE		100		50
+MinimumAge	50
+	ForestTypeTable << Oak
+	>> InclusionRule ageRange percentCells species
+	Optional	50-250	30	QUAL
+	Optional	50-250	30	QUCO2
+	Optional	50-250	30	QUFA
+	Optional	50-250	30	QULA2
+	Optional	50-250	30	QULA3
+	Optional	50-250	30	QUMA3
+	Optional	50-250	30	QUNI
+	Optional	50-250	30	QUPR2
+	Optional	50-250	30	QURU
+	Optional	50-250	30	QUST
+	Optional	50-250	30	QUVE
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	All
+	CAAL27	All
+	CAGL8	All
+	CAOV2	All
+	FRPE	All
+	JUVI	All
+	LIST2	All
+	LITU	All
+	NYBI	All
+	NYSY	All
+	PIEC2	All
+	PIPA2	All
+	PITA	All
+	PIVI2	All
+	QUAL	20-300(80%)
+	QUCO2	20-300(80%)
+	QUFA	20-300(80%)
+	QULA2	20-300(80%)
+	QULA3	20-300(80%)
+	QUMA3	20-300(80%)
+	QUNI	20-300(80%)
+	QUPR2	20-300(80%)
+	QURU	20-300(80%)
+	QUST	20-300(80%)
+	QUVE	20-300(80%)
+	TADI2	All
+
+Prescription	MM11-1_DO2 << OakSeedTreeB
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+>>-------------------------------------------
+QUAL		100		50
+QUCO2		100		50
+QUFA		100		50
+QULA2		100		50
+QULA3		100		50
+QUMA3		100		50
+QUNI		100		50
+QUPR2		100		50
+QURU		100		50
+QUST		100		50
+QUVE		100		50
+MinimumAge	50
+	ForestTypeTable << Oak
+	>> InclusionRule ageRange percentCells species
+	Optional	50-250	30	QUAL
+	Optional	50-250	30	QUCO2
+	Optional	50-250	30	QUFA
+	Optional	50-250	30	QULA2
+	Optional	50-250	30	QULA3
+	Optional	50-250	30	QUMA3
+	Optional	50-250	30	QUNI
+	Optional	50-250	30	QUPR2
+	Optional	50-250	30	QURU
+	Optional	50-250	30	QUST
+	Optional	50-250	30	QUVE
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	All
+	CAAL27	All
+	CAGL8	All
+	CAOV2	All
+	FRPE	All
+	JUVI	All
+	LIST2	All
+	LITU	All
+	NYBI	All
+	NYSY	All
+	PIEC2	All
+	PIPA2	All
+	PITA	All
+	PIVI2	All
+	QUAL	20-300(72%)
+	QUCO2	20-300(72%)
+	QUFA	20-300(72%)
+	QULA2	20-300(72%)
+	QULA3	20-300(72%)
+	QUMA3	20-300(72%)
+	QUNI	20-300(72%)
+	QUPR2	20-300(72%)
+	QURU	20-300(72%)
+	QUST	20-300(72%)
+	QUVE	20-300(72%)
+	TADI2	All
+
+Prescription	MM11-1_DO3 << OakSeedTreeC
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+>>-------------------------------------------
+QUAL		100		50
+QUCO2		100		50
+QUFA		100		50
+QULA2		100		50
+QULA3		100		50
+QUMA3		100		50
+QUNI		100		50
+QUPR2		100		50
+QURU		100		50
+QUST		100		50
+QUVE		100		50
+MinimumAge	50
+	ForestTypeTable << Oak
+	>> InclusionRule ageRange percentCells species
+	Optional	50-250	30	QUAL
+	Optional	50-250	30	QUCO2
+	Optional	50-250	30	QUFA
+	Optional	50-250	30	QULA2
+	Optional	50-250	30	QULA3
+	Optional	50-250	30	QUMA3
+	Optional	50-250	30	QUNI
+	Optional	50-250	30	QUPR2
+	Optional	50-250	30	QURU
+	Optional	50-250	30	QUST
+	Optional	50-250	30	QUVE
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	All
+	CAAL27	All
+	CAGL8	All
+	CAOV2	All
+	FRPE	All
+	JUVI	All
+	LIST2	All
+	LITU	All
+	NYBI	All
+	NYSY	All
+	PIEC2	All
+	PIPA2	All
+	PITA	All
+	PIVI2	All
+	QUAL	20-300(88%)
+	QUCO2	20-300(88%)
+	QUFA	20-300(88%)
+	QULA2	20-300(88%)
+	QULA3	20-300(88%)
+	QUMA3	20-300(88%)
+	QUNI	20-300(88%)
+	QUPR2	20-300(88%)
+	QURU	20-300(88%)
+	QUST	20-300(88%)
+	QUVE	20-300(88%)
+	TADI2	All
+
+Prescription	MM12-1_DO1 << HickorySeedTreeA
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+>>-------------------------------------------
+CAAL27		100		50
+CAGL8		100		50
+CAOV2		100		50
+MinimumAge	50
+	ForestTypeTable << Hickory
+	>> InclusionRule ageRange percentCells species
+	Optional	50-250	30	CAAL27
+	Optional	50-250	30	CAGL8
+	Optional	50-250	30	CAOV2
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	All
+	CAAL27	20-300(80%)
+	CAGL8	20-300(80%)
+	CAOV2	20-300(80%)
+	FRPE	All
+	JUVI	All
+	LIST2	All
+	LITU	All
+	NYBI	All
+	NYSY	All
+	PIEC2	All
+	PIPA2	All
+	PITA	All
+	PIVI2	All
+	QUAL	All
+	QUCO2	All
+	QUFA	All
+	QULA2	All
+	QULA3	All
+	QUMA3	All
+	QUNI	All
+	QUPR2	All
+	QURU	All
+	QUST	All
+	QUVE	All
+	TADI2	All
+
+Prescription	MM12-1_DO2 << HickorySeedTreeB
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+>>-------------------------------------------
+CAAL27		100		50
+CAGL8		100		50
+CAOV2		100		50
+MinimumAge	50
+	ForestTypeTable << Hickory
+	>> InclusionRule ageRange percentCells species
+	Optional	50-250	30	CAAL27
+	Optional	50-250	30	CAGL8
+	Optional	50-250	30	CAOV2
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	All
+	CAAL27	20-300(72%)
+	CAGL8	20-300(72%)
+	CAOV2	20-300(72%)
+	FRPE	All
+	JUVI	All
+	LIST2	All
+	LITU	All
+	NYBI	All
+	NYSY	All
+	PIEC2	All
+	PIPA2	All
+	PITA	All
+	PIVI2	All
+	QUAL	All
+	QUCO2	All
+	QUFA	All
+	QULA2	All
+	QULA3	All
+	QUMA3	All
+	QUNI	All
+	QUPR2	All
+	QURU	All
+	QUST	All
+	QUVE	All
+	TADI2	All
+
+Prescription	MM12-1_DO3 << HickorySeedTreeC
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+>>-------------------------------------------
+CAAL27		100		50
+CAGL8		100		50
+CAOV2		100		50
+MinimumAge	50
+	ForestTypeTable << Hickory
+	>> InclusionRule ageRange percentCells species
+	Optional	50-250	30	CAAL27
+	Optional	50-250	30	CAGL8
+	Optional	50-250	30	CAOV2
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	All
+	CAAL27	20-300(88%)
+	CAGL8	20-300(88%)
+	CAOV2	20-300(88%)
+	FRPE	All
+	JUVI	All
+	LIST2	All
+	LITU	All
+	NYBI	All
+	NYSY	All
+	PIEC2	All
+	PIPA2	All
+	PITA	All
+	PIVI2	All
+	QUAL	All
+	QUCO2	All
+	QUFA	All
+	QULA2	All
+	QULA3	All
+	QUMA3	All
+	QUNI	All
+	QUPR2	All
+	QURU	All
+	QUST	All
+	QUVE	All
+	TADI2	All
+
+Prescription	MM13-1_DO1 << MesicHardwoodSeedTreeA
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+>>-------------------------------------------
+ACRU		100		50
+CAAL27		100		50
+CAGL8		100		50
+CAOV2		100		50
+FRPE		100		50
+LIST2		100		50
+LITU		100		50
+QUAL		100		50
+QULA3		100		50
+QUNI		100		50
+QUPR2		100		50
+QURU		100		50
+MinimumAge	50
+	ForestTypeTable << Mesic Hardwood
+	>> InclusionRule ageRange percent species
+	Optional	30-250	30	ACRU
+	Optional	30-250	30	CAAL27
+	Optional	30-250	30	CAGL8
+	Optional	30-250	30	CAOV2
+	Optional	30-250	30	FRPE
+	Optional	30-250	30	LIST2
+	Optional	30-250	30	LITU
+	Optional	30-250	30	QUAL
+	Optional	30-250	30	QULA3
+	Optional	30-250	30	QUNI
+	Optional	30-250	30	QUPR2
+	Optional	30-250	30	QURU
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(80%)
+	CAAL27	20-300(80%)
+	CAGL8	20-300(80%)
+	CAOV2	20-300(80%)
+	FRPE	20-300(80%)
+	JUVI	All
+	LIST2	20-300(80%)
+	LITU	20-300(80%)
+	NYBI	All
+	NYSY	All
+	PIEC2	All
+	PIPA2	All
+	PITA	All
+	PIVI2	All
+	QUAL	20-300(80%)
+	QUCO2	All
+	QUFA	All
+	QULA2	All
+	QULA3	20-300(80%)
+	QUMA3	All
+	QUNI	20-300(80%)
+	QUPR2	20-300(80%)
+	QURU	20-300(80%)
+	QUST	All
+	QUVE	All
+	TADI2	All
+
+Prescription	MM13-1_DO2 << MesicHardwoodSeedTreeB
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+>>-------------------------------------------
+ACRU		100		50
+CAAL27		100		50
+CAGL8		100		50
+CAOV2		100		50
+FRPE		100		50
+LIST2		100		50
+LITU		100		50
+QUAL		100		50
+QULA3		100		50
+QUNI		100		50
+QUPR2		100		50
+QURU		100		50
+MinimumAge	50
+	ForestTypeTable << Mesic Hardwood
+	>> InclusionRule ageRange percent species
+	Optional	30-250	30	ACRU
+	Optional	30-250	30	CAAL27
+	Optional	30-250	30	CAGL8
+	Optional	30-250	30	CAOV2
+	Optional	30-250	30	FRPE
+	Optional	30-250	30	LIST2
+	Optional	30-250	30	LITU
+	Optional	30-250	30	QUAL
+	Optional	30-250	30	QULA3
+	Optional	30-250	30	QUNI
+	Optional	30-250	30	QUPR2
+	Optional	30-250	30	QURU
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(72%)
+	CAAL27	20-300(72%)
+	CAGL8	20-300(72%)
+	CAOV2	20-300(72%)
+	FRPE	20-300(72%)
+	JUVI	All
+	LIST2	20-300(72%)
+	LITU	20-300(72%)
+	NYBI	All
+	NYSY	All
+	PIEC2	All
+	PIPA2	All
+	PITA	All
+	PIVI2	All
+	QUAL	20-300(72%)
+	QUCO2	All
+	QUFA	All
+	QULA2	All
+	QULA3	20-300(72%)
+	QUMA3	All
+	QUNI	20-300(72%)
+	QUPR2	20-300(72%)
+	QURU	20-300(72%)
+	QUST	All
+	QUVE	All
+	TADI2	All
+
+Prescription	MM13-1_DO3 << MesicHardwoodSeedTreeC
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+>>-------------------------------------------
+ACRU		100		50
+CAAL27		100		50
+CAGL8		100		50
+CAOV2		100		50
+FRPE		100		50
+LIST2		100		50
+LITU		100		50
+QUAL		100		50
+QULA3		100		50
+QUNI		100		50
+QUPR2		100		50
+QURU		100		50
+MinimumAge	50
+	ForestTypeTable << Mesic Hardwood
+	>> InclusionRule ageRange percent species
+	Optional	30-250	30	ACRU
+	Optional	30-250	30	CAAL27
+	Optional	30-250	30	CAGL8
+	Optional	30-250	30	CAOV2
+	Optional	30-250	30	FRPE
+	Optional	30-250	30	LIST2
+	Optional	30-250	30	LITU
+	Optional	30-250	30	QUAL
+	Optional	30-250	30	QULA3
+	Optional	30-250	30	QUNI
+	Optional	30-250	30	QUPR2
+	Optional	30-250	30	QURU
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(88%)
+	CAAL27	20-300(88%)
+	CAGL8	20-300(88%)
+	CAOV2	20-300(88%)
+	FRPE	20-300(88%)
+	JUVI	All
+	LIST2	20-300(88%)
+	LITU	20-300(88%)
+	NYBI	All
+	NYSY	All
+	PIEC2	All
+	PIPA2	All
+	PITA	All
+	PIVI2	All
+	QUAL	20-300(88%)
+	QUCO2	All
+	QUFA	All
+	QULA2	All
+	QULA3	20-300(88%)
+	QUMA3	All
+	QUNI	20-300(88%)
+	QUPR2	20-300(88%)
+	QURU	20-300(88%)
+	QUST	All
+	QUVE	All
+	TADI2	All
+
+Prescription	MM14-1_DO1 << XericHardwoodSeedTreeA
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+>>-------------------------------------------
+QUCO2		100		50
+QUFA		100		50
+QULA2		100		50
+QUMA3		100		50
+QUST		100		50
+QUVE		100		50
+MinimumAge	40
+	ForestTypeTable	<< Xeric Hardwood
+	>> InclusionRule ageRange	percent	species
+	Optional	40-250	30	QUCO2
+	Optional	40-250	30	QUFA
+	Optional	40-250	30	QULA2
+	Optional	40-250	30	QUMA3
+	Optional	40-250	30	QUST
+	Optional	40-250	30	QUVE
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	All
+	CAAL27	All
+	CAGL8	All
+	CAOV2	All
+	FRPE	All
+	JUVI	All
+	LIST2	All
+	LITU	All
+	NYBI	All
+	NYSY	All
+	PIEC2	All
+	PIPA2	All
+	PITA	All
+	PIVI2	All
+	QUAL	All
+	QUCO2	20-300(80%)
+	QUFA	20-300(80%)
+	QULA2	20-300(80%)
+	QULA3	All
+	QUMA3	20-300(80%)
+	QUNI	All
+	QUPR2	All
+	QURU	All
+	QUST	20-300(80%)
+	QUVE	20-300(80%)
+	TADI2	All
+
+Prescription	MM14-1_DO2 << XericHardwoodSeedTreeB
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+>>-------------------------------------------
+QUCO2		100		50
+QUFA		100		50
+QULA2		100		50
+QUMA3		100		50
+QUST		100		50
+QUVE		100		50
+MinimumAge	40
+	ForestTypeTable	<< Xeric Hardwood
+	>> InclusionRule ageRange	percent	species
+	Optional	40-250	30	QUCO2
+	Optional	40-250	30	QUFA
+	Optional	40-250	30	QULA2
+	Optional	40-250	30	QUMA3
+	Optional	40-250	30	QUST
+	Optional	40-250	30	QUVE
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	All
+	CAAL27	All
+	CAGL8	All
+	CAOV2	All
+	FRPE	All
+	JUVI	All
+	LIST2	All
+	LITU	All
+	NYBI	All
+	NYSY	All
+	PIEC2	All
+	PIPA2	All
+	PITA	All
+	PIVI2	All
+	QUAL	All
+	QUCO2	20-300(72%)
+	QUFA	20-300(72%)
+	QULA2	20-300(72%)
+	QULA3	All
+	QUMA3	20-300(72%)
+	QUNI	All
+	QUPR2	All
+	QURU	All
+	QUST	20-300(72%)
+	QUVE	20-300(72%)
+	TADI2	All
+
+Prescription	MM14-1_DO3 << XericHardwoodSeedTreeC
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+>>-------------------------------------------
+QUCO2		100		50
+QUFA		100		50
+QULA2		100		50
+QUMA3		100		50
+QUST		100		50
+QUVE		100		50
+MinimumAge	40
+	ForestTypeTable	<< Xeric Hardwood
+	>> InclusionRule ageRange	percent	species
+	Optional	40-250	30	QUCO2
+	Optional	40-250	30	QUFA
+	Optional	40-250	30	QULA2
+	Optional	40-250	30	QUMA3
+	Optional	40-250	30	QUST
+	Optional	40-250	30	QUVE
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	All
+	CAAL27	All
+	CAGL8	All
+	CAOV2	All
+	FRPE	All
+	JUVI	All
+	LIST2	All
+	LITU	All
+	NYBI	All
+	NYSY	All
+	PIEC2	All
+	PIPA2	All
+	PITA	All
+	PIVI2	All
+	QUAL	All
+	QUCO2	20-300(88%)
+	QUFA	20-300(88%)
+	QULA2	20-300(88%)
+	QULA3	All
+	QUMA3	20-300(88%)
+	QUNI	All
+	QUPR2	All
+	QURU	All
+	QUST	20-300(88%)
+	QUVE	20-300(88%)
+	TADI2	All
+
+
+>> SHELTERWOOD PRESCRIPTIONS
+
+Prescription	MM15-1_DO1 << OakShelterwoodA
+StandRanking Economic
+>>Species	EconomicRank	MinimumAge
+>>------------------------------------------
+QUAL		100		50
+QUPR2		100		50
+QURU		100		50	
+MinimumAge 50
+	ForestTypeTable << Oak
+	>>InclusionRule	ageRange	percent	species
+	Optional	40-250	30	QUAL
+	Optional	40-250	30	QUPR2
+	Optional	40-250	30	QURU
+SiteSelection Complete
+CohortsRemoved	SpeciesList
+>>-----------------------------------------
+	ACRU	20-60
+	CAAL27	20-60
+	CAGL8	20-60
+	CAOV2	20-60
+	FRPE	20-60
+	JUVI	20-60
+	LIST2	20-60
+	LITU	20-60
+	NYBI	20-60
+	NYSY	20-60
+	PIEC2	20-60
+	PIPA2	20-60
+	PITA	20-60
+	PIVI2	20-60
+	QUAL	20-60(25%)
+	QUCO2	20-60(25%)
+	QUFA	20-60(25%)
+	QULA2	20-60(25%)
+	QULA3	20-60(25%)
+	QUMA3	20-60(25%)
+	QUNI	20-60(25%)
+	QUPR2	20-60(25%)
+	QURU	20-60(25%)
+	QUST	20-60(25%)
+	QUVE	20-60
+	TADI2	20-60
+SingleRepeat	20
+CohortsRemoved	SpeciesList
+	ACRU	40-500
+	CAAL27	40-500
+	CAGL8	40-500
+	CAOV2	40-500
+	FRPE	40-500
+	JUVI	40-500
+	LIST2	40-500
+	LITU	40-500
+	NYBI	40-500
+	NYSY	40-500
+	PIEC2	40-500
+	PIPA2	40-500
+	PITA	40-500
+	PIVI2	40-500
+	QUAL	40-500
+	QUCO2	40-500
+	QUFA	40-500
+	QULA2	40-500
+	QULA3	40-500
+	QUMA3	40-500
+	QUNI	40-500
+	QUPR2	40-500
+	QURU	40-500
+	QUST	40-500
+	QUVE	40-500
+	TADI2	40-500
+
+Prescription	MM15-1_DO2 << OakShelterwoodB
+StandRanking Economic
+>>Species	EconomicRank	MinimumAge
+>>------------------------------------------
+QUAL		100		50
+QUPR2		100		50
+QURU		100		50	
+MinimumAge 50
+	ForestTypeTable << Oak
+	>>InclusionRule	ageRange	percent	species
+	Optional	40-250	30	QUAL
+	Optional	40-250	30	QUPR2
+	Optional	40-250	30	QURU
+SiteSelection Complete
+CohortsRemoved	SpeciesList
+	ACRU	20-60
+	CAAL27	20-60
+	CAGL8	20-60
+	CAOV2	20-60
+	FRPE	20-60
+	JUVI	20-60
+	LIST2	20-60
+	LITU	20-60
+	NYBI	20-60
+	NYSY	20-60
+	PIEC2	20-60
+	PIPA2	20-60
+	PITA	20-60
+	PIVI2	20-60
+	QUAL	20-60(20%)
+	QUCO2	20-60(20%)
+	QUFA	20-60(20%)
+	QULA2	20-60(20%)
+	QULA3	20-60(20%)
+	QUMA3	20-60(20%)
+	QUNI	20-60(20%)
+	QUPR2	20-60(20%)
+	QURU	20-60(20%)
+	QUST	20-60(20%)
+	QUVE	20-60
+	TADI2	20-60
+SingleRepeat	20
+CohortsRemoved	SpeciesList
+	ACRU	40-500
+	CAAL27	40-500
+	CAGL8	40-500
+	CAOV2	40-500
+	FRPE	40-500
+	JUVI	40-500
+	LIST2	40-500
+	LITU	40-500
+	NYBI	40-500
+	NYSY	40-500
+	PIEC2	40-500
+	PIPA2	40-500
+	PITA	40-500
+	PIVI2	40-500
+	QUAL	40-500
+	QUCO2	40-500
+	QUFA	40-500
+	QULA2	40-500
+	QULA3	40-500
+	QUMA3	40-500
+	QUNI	40-500
+	QUPR2	40-500
+	QURU	40-500
+	QUST	40-500
+	QUVE	40-500
+	TADI2	40-500
+
+Prescription	MM15-1_DO3 << OakShelterwoodC
+StandRanking Economic
+>>Species	EconomicRank	MinimumAge
+>>------------------------------------------
+QUAL		100		50
+QUPR2		100		50
+QURU		100		50	
+MinimumAge 50
+	ForestTypeTable << Oak
+	>>InclusionRule	ageRange	percent	species
+	Optional	40-250	30	QUAL
+	Optional	40-250	30	QUPR2
+	Optional	40-250	30	QURU
+SiteSelection Complete
+CohortsRemoved	SpeciesList
+>>-----------------------------------------
+	ACRU	20-60
+	CAAL27	20-60
+	CAGL8	20-60
+	CAOV2	20-60
+	FRPE	20-60
+	JUVI	20-60
+	LIST2	20-60
+	LITU	20-60
+	NYBI	20-60
+	NYSY	20-60
+	PIEC2	20-60
+	PIPA2	20-60
+	PITA	20-60
+	PIVI2	20-60
+	QUAL	20-60(35%)
+	QUCO2	20-60(35%)
+	QUFA	20-60(35%)
+	QULA2	20-60(35%)
+	QULA3	20-60(35%)
+	QUMA3	20-60(35%)
+	QUNI	20-60(35%)
+	QUPR2	20-60(35%)
+	QURU	20-60(35%)
+	QUST	20-60(35%)
+	QUVE	20-60
+	TADI2	20-60
+SingleRepeat	20
+CohortsRemoved	SpeciesList
+	ACRU	40-500
+	CAAL27	40-500
+	CAGL8	40-500
+	CAOV2	40-500
+	FRPE	40-500
+	JUVI	40-500
+	LIST2	40-500
+	LITU	40-500
+	NYBI	40-500
+	NYSY	40-500
+	PIEC2	40-500
+	PIPA2	40-500
+	PITA	40-500
+	PIVI2	40-500
+	QUAL	40-500
+	QUCO2	40-500
+	QUFA	40-500
+	QULA2	40-500
+	QULA3	40-500
+	QUMA3	40-500
+	QUNI	40-500
+	QUPR2	40-500
+	QURU	40-500
+	QUST	40-500
+	QUVE	40-500
+	TADI2	40-500
+
+Prescription	MM16-1_DO1 << PineShelterwoodA
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+>>-------------------------------------------
+PITA		100		30
+PIEC2		100		30
+PIPA2		100		30
+MinimumAge	30
+	ForestTypeTable << Pine
+	>> InclusionRule ageRange percent species
+	Optional	30-250	30	PITA
+	Optional	30-250	30	PIPA2
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+>>-------------------------------------------
+	ACRU	All
+	CAAL27	All
+	CAGL8	All
+	CAOV2	All
+	FRPE	All
+	JUVI	All
+	LIST2	All
+	LITU	All
+	NYBI	All
+	NYSY	All
+	PIEC2	20-50(25%)
+	PIPA2	20-50(25%)
+	PITA	20-50(25%)
+	PIVI2	20-50(25%)
+	QUAL	All
+	QUCO2	All
+	QUFA	All
+	QULA2	All
+	QULA3	All
+	QUMA3	All
+	QUNI	All
+	QUPR2	All
+	QURU	All
+	QUST	All
+	QUVE	All
+	TADI2	All
+SingleRepeat 20
+CohortsRemoved	SpeciesList
+	PIEC2	15-250
+	PIPA2	15-250
+	PITA	15-250
+	PIVI2	15-250
+
+Prescription	MM16-1_DO2 << PineShelterwoodB
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+>>-------------------------------------------
+PITA		100		30
+PIEC2		100		30
+PIPA2		100		30
+MinimumAge	30
+	ForestTypeTable << Pine
+	>> InclusionRule ageRange percent species
+	Optional	30-250	30	PITA
+	Optional	30-250	30	PIPA2
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+>>-------------------------------------------
+	ACRU	All
+	CAAL27	All
+	CAGL8	All
+	CAOV2	All
+	FRPE	All
+	JUVI	All
+	LIST2	All
+	LITU	All
+	NYBI	All
+	NYSY	All
+	PIEC2	20-50(20%)
+	PIPA2	20-50(20%)
+	PITA	20-50(20%)
+	PIVI2	20-50(20%)
+	QUAL	All
+	QUCO2	All
+	QUFA	All
+	QULA2	All
+	QULA3	All
+	QUMA3	All
+	QUNI	All
+	QUPR2	All
+	QURU	All
+	QUST	All
+	QUVE	All
+	TADI2	All
+SingleRepeat 20
+CohortsRemoved	SpeciesList
+	PIEC2	15-250
+	PIPA2	15-250
+	PITA	15-250
+	PIVI2	15-250
+
+Prescription	MM16-1_DO3 << PineShelterwoodC
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+>>-------------------------------------------
+PITA		100		30
+PIEC2		100		30
+PIPA2		100		30
+MinimumAge	30
+	ForestTypeTable << Pine
+	>> InclusionRule ageRange percent species
+	Optional	30-250	30	PITA
+	Optional	30-250	30	PIPA2
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+>>-------------------------------------------
+	ACRU	All
+	CAAL27	All
+	CAGL8	All
+	CAOV2	All
+	FRPE	All
+	JUVI	All
+	LIST2	All
+	LITU	All
+	NYBI	All
+	NYSY	All
+	PIEC2	20-50(35%)
+	PIPA2	20-50(35%)
+	PITA	20-50(35%)
+	PIVI2	20-50(35%)
+	QUAL	All
+	QUCO2	All
+	QUFA	All
+	QULA2	All
+	QULA3	All
+	QUMA3	All
+	QUNI	All
+	QUPR2	All
+	QURU	All
+	QUST	All
+	QUVE	All
+	TADI2	All
+SingleRepeat 20
+CohortsRemoved	SpeciesList
+	PIEC2	15-250
+	PIPA2	15-250
+	PITA	15-250
+	PIVI2	15-250
+
+Prescription	MM17-1_DO1 << HickoryShelterwoodA
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+CAAL27		100		50
+CAGL8		100		50
+CAOV2		100		50
+MinimumAge	50
+	ForestTypeTable << Hickory
+	>> InclusionRule ageRange percent species
+	Optional	50-250	30	CAAL27
+	Optional	50-250	30	CAGL8
+	Optional	50-250	30	CAOV2
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+>>-------------------------------------------
+	ACRU	All
+	CAAL27	30-60(25%)
+	CAGL8	30-60(25%)
+	CAOV2	30-60(25%)
+	FRPE	All
+	JUVI	All
+	LIST2	All
+	LITU	All
+	NYBI	All
+	NYSY	All
+	PIEC2	All
+	PIPA2	All
+	PITA	All
+	PIVI2	All
+	QUAL	All
+	QUCO2	All
+	QUFA	All
+	QULA2	All
+	QULA3	All
+	QUMA3	All
+	QUNI	All
+	QUPR2	All
+	QURU	All
+	QUST	All
+	QUVE	All
+	TADI2	All
+SingleRepeat 20
+CohortsRemoved	SpeciesList
+	CAAL27	20-250
+	CAGL8	20-250
+	CAOV2	20-250
+
+Prescription	MM17-1_DO2 << HickoryShelterwoodB
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+CAAL27		100		50
+CAGL8		100		50
+CAOV2		100		50
+MinimumAge	50
+	ForestTypeTable << Hickory
+	>> InclusionRule ageRange percent species
+	Optional	50-250	30	CAAL27
+	Optional	50-250	30	CAGL8
+	Optional	50-250	30	CAOV2
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+>>-------------------------------------------
+	ACRU	All
+	CAAL27	30-60(20%)
+	CAGL8	30-60(20%)
+	CAOV2	30-60(20%)
+	FRPE	All
+	JUVI	All
+	LIST2	All
+	LITU	All
+	NYBI	All
+	NYSY	All
+	PIEC2	All
+	PIPA2	All
+	PITA	All
+	PIVI2	All
+	QUAL	All
+	QUCO2	All
+	QUFA	All
+	QULA2	All
+	QULA3	All
+	QUMA3	All
+	QUNI	All
+	QUPR2	All
+	QURU	All
+	QUST	All
+	QUVE	All
+	TADI2	All
+SingleRepeat 20
+CohortsRemoved	SpeciesList
+	CAAL27	20-250
+	CAGL8	20-250
+	CAOV2	20-250
+
+Prescription	MM17-1_DO3 << HickoryShelterwoodC
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+CAAL27		100		50
+CAGL8		100		50
+CAOV2		100		50
+MinimumAge	50
+	ForestTypeTable << Hickory
+	>> InclusionRule ageRange percent species
+	Optional	50-250	30	CAAL27
+	Optional	50-250	30	CAGL8
+	Optional	50-250	30	CAOV2
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+>>-------------------------------------------
+	ACRU	All
+	CAAL27	30-60(35%)
+	CAGL8	30-60(35%)
+	CAOV2	30-60(35%)
+	FRPE	All
+	JUVI	All
+	LIST2	All
+	LITU	All
+	NYBI	All
+	NYSY	All
+	PIEC2	All
+	PIPA2	All
+	PITA	All
+	PIVI2	All
+	QUAL	All
+	QUCO2	All
+	QUFA	All
+	QULA2	All
+	QULA3	All
+	QUMA3	All
+	QUNI	All
+	QUPR2	All
+	QURU	All
+	QUST	All
+	QUVE	All
+	TADI2	All
+SingleRepeat 20
+CohortsRemoved	SpeciesList
+	CAAL27	20-250
+	CAGL8	20-250
+	CAOV2	20-250
+
+Prescription	MM18-1_DO1 << MesicHardwoodShelterwoodA
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+ACRU		100		50
+CAAL27		100		50
+CAGL8		100		50
+CAOV2		100		50
+FRPE		100		50
+LIST2		100		50
+LITU		100		50
+QUAL		100		50
+QULA3		100		50
+QUNI		100		50
+QUPR2		100		50
+QURU		100		50
+MinimumAge	50
+	ForestTypeTable << Mesic Hardwood
+	>> InclusionRule ageRange percent species
+	Optional	30-250	30	ACRU
+	Optional	30-250	30	CAAL27
+	Optional	30-250	30	CAGL8
+	Optional	30-250	30	CAOV2
+	Optional	30-250	30	FRPE
+	Optional	30-250	30	LIST2
+	Optional	30-250	30	LITU
+	Optional	30-250	30	QUAL
+	Optional	30-250	30	QULA3
+	Optional	30-250	30	QUNI
+	Optional	30-250	30	QUPR2
+	Optional	30-250	30	QURU
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-60(25%)
+	CAAL27	20-60(25%)
+	CAGL8	20-60(25%)
+	CAOV2	20-60(25%)
+	FRPE	20-60(25%)
+	JUVI	All
+	LIST2	20-60(25%)
+	LITU	20-60(25%)
+	NYBI	All
+	NYSY	All
+	PIEC2	All
+	PIPA2	All
+	PITA	All
+	PIVI2	All
+	QUAL	20-60(25%)
+	QUCO2	All
+	QUFA	All
+	QULA2	All
+	QULA3	20-60(25%)
+	QUMA3	All
+	QUNI	20-60(25%)
+	QUPR2	20-60(25%)
+	QURU	20-60(25%)
+	QUST	All
+	QUVE	All
+	TADI2	All
+SingleRepeat	20
+CohortsRemoved	SpeciesList
+	ACRU	20-250
+	CAAL27	20-250
+	CAGL8	20-250
+	CAOV2	20-250
+	FRPE	20-250
+	LIST2	20-250
+	LITU	20-250
+	QUAL	20-250
+	QULA3	20-250
+	QUNI	20-250
+	QUPR2	20-250
+	QURU	20-250
+
+Prescription	MM18-1_DO2 << MesicHardwoodShelterwoodB
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+ACRU		100		50
+CAAL27		100		50
+CAGL8		100		50
+CAOV2		100		50
+FRPE		100		50
+LIST2		100		50
+LITU		100		50
+QUAL		100		50
+QULA3		100		50
+QUNI		100		50
+QUPR2		100		50
+QURU		100		50
+MinimumAge	50
+	ForestTypeTable << Mesic Hardwood
+	>> InclusionRule ageRange percent species
+	Optional	30-250	30	ACRU
+	Optional	30-250	30	CAAL27
+	Optional	30-250	30	CAGL8
+	Optional	30-250	30	CAOV2
+	Optional	30-250	30	FRPE
+	Optional	30-250	30	LIST2
+	Optional	30-250	30	LITU
+	Optional	30-250	30	QUAL
+	Optional	30-250	30	QULA3
+	Optional	30-250	30	QUNI
+	Optional	30-250	30	QUPR2
+	Optional	30-250	30	QURU
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-60(20%)
+	CAAL27	20-60(20%)
+	CAGL8	20-60(20%)
+	CAOV2	20-60(20%)
+	FRPE	20-60(20%)
+	JUVI	All
+	LIST2	20-60(20%)
+	LITU	20-60(20%)
+	NYBI	All
+	NYSY	All
+	PIEC2	All
+	PIPA2	All
+	PITA	All
+	PIVI2	All
+	QUAL	20-60(20%)
+	QUCO2	All
+	QUFA	All
+	QULA2	All
+	QULA3	20-60(20%)
+	QUMA3	All
+	QUNI	20-60(20%)
+	QUPR2	20-60(20%)
+	QURU	20-60(20%)
+	QUST	All
+	QUVE	All
+	TADI2	All
+SingleRepeat	20
+CohortsRemoved	SpeciesList
+	ACRU	20-250
+	CAAL27	20-250
+	CAGL8	20-250
+	CAOV2	20-250
+	FRPE	20-250
+	LIST2	20-250
+	LITU	20-250
+	QUAL	20-250
+	QULA3	20-250
+	QUNI	20-250
+	QUPR2	20-250
+	QURU	20-250
+
+Prescription	MM18-1_DO3 << MesicHardwoodShelterwoodC
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+ACRU		100		50
+CAAL27		100		50
+CAGL8		100		50
+CAOV2		100		50
+FRPE		100		50
+LIST2		100		50
+LITU		100		50
+QUAL		100		50
+QULA3		100		50
+QUNI		100		50
+QUPR2		100		50
+QURU		100		50
+MinimumAge	50
+	ForestTypeTable << Mesic Hardwood
+	>> InclusionRule ageRange percent species
+	Optional	30-250	30	ACRU
+	Optional	30-250	30	CAAL27
+	Optional	30-250	30	CAGL8
+	Optional	30-250	30	CAOV2
+	Optional	30-250	30	FRPE
+	Optional	30-250	30	LIST2
+	Optional	30-250	30	LITU
+	Optional	30-250	30	QUAL
+	Optional	30-250	30	QULA3
+	Optional	30-250	30	QUNI
+	Optional	30-250	30	QUPR2
+	Optional	30-250	30	QURU
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-60(35%)
+	CAAL27	20-60(35%)
+	CAGL8	20-60(35%)
+	CAOV2	20-60(35%)
+	FRPE	20-60(35%)
+	JUVI	All
+	LIST2	20-60(35%)
+	LITU	20-60(35%)
+	NYBI	All
+	NYSY	All
+	PIEC2	All
+	PIPA2	All
+	PITA	All
+	PIVI2	All
+	QUAL	20-60(35%)
+	QUCO2	All
+	QUFA	All
+	QULA2	All
+	QULA3	20-60(35%)
+	QUMA3	All
+	QUNI	20-60(35%)
+	QUPR2	20-60(35%)
+	QURU	20-60(35%)
+	QUST	All
+	QUVE	All
+	TADI2	All
+SingleRepeat	20
+CohortsRemoved	SpeciesList
+	ACRU	20-250
+	CAAL27	20-250
+	CAGL8	20-250
+	CAOV2	20-250
+	FRPE	20-250
+	LIST2	20-250
+	LITU	20-250
+	QUAL	20-250
+	QULA3	20-250
+	QUNI	20-250
+	QUPR2	20-250
+	QURU	20-250
+
+Prescription	MM19-1_DO1 << XericHardwoodShelterwoodA
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+>>-------------------------------------------
+QUCO2		100		50
+QUFA		100		50
+QULA2		100		50
+QUMA3		100		50
+QUST		100		50
+QUVE		100		50
+MinimumAge	40
+	ForestTypeTable	<< Xeric Hardwood
+	>> InclusionRule ageRange	percent	species
+	Optional	40-250	30	QUCO2
+	Optional	40-250	30	QUFA
+	Optional	40-250	30	QULA2
+	Optional	40-250	30	QUMA3
+	Optional	40-250	30	QUST
+	Optional	40-250	30	QUVE
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	All
+	CAAL27	All
+	CAGL8	All
+	CAOV2	All
+	FRPE	All
+	JUVI	All
+	LIST2	All
+	LITU	All
+	NYBI	All
+	NYSY	All
+	PIEC2	All
+	PIPA2	All
+	PITA	All
+	PIVI2	All
+	QUAL	All
+	QUCO2	20-60(25%)
+	QUFA	20-60(25%)
+	QULA2	20-60(25%)
+	QULA3	All
+	QUMA3	20-60(25%)
+	QUNI	All
+	QUPR2	All
+	QURU	All
+	QUST	20-60(25%)
+	QUVE	20-60(25%)
+	TADI2	All
+SingleRepeat	20
+CohortsRemoved	SpeciesList
+	QUCO2	20-250
+	QUFA	20-250
+	QULA2	20-250
+	QUMA3	20-250
+	QUST	20-250
+	QUVE	20-250
+
+Prescription	MM19-1_DO2 << XericHardwoodShelterwoodB
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+>>-------------------------------------------
+QUCO2		100		50
+QUFA		100		50
+QULA2		100		50
+QUMA3		100		50
+QUST		100		50
+QUVE		100		50
+MinimumAge	40
+	ForestTypeTable	<< Xeric Hardwood
+	>> InclusionRule ageRange	percent	species
+	Optional	40-250	30	QUCO2
+	Optional	40-250	30	QUFA
+	Optional	40-250	30	QULA2
+	Optional	40-250	30	QUMA3
+	Optional	40-250	30	QUST
+	Optional	40-250	30	QUVE
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	All
+	CAAL27	All
+	CAGL8	All
+	CAOV2	All
+	FRPE	All
+	JUVI	All
+	LIST2	All
+	LITU	All
+	NYBI	All
+	NYSY	All
+	PIEC2	All
+	PIPA2	All
+	PITA	All
+	PIVI2	All
+	QUAL	All
+	QUCO2	20-60(20%)
+	QUFA	20-60(20%)
+	QULA2	20-60(20%)
+	QULA3	All
+	QUMA3	20-60(20%)
+	QUNI	All
+	QUPR2	All
+	QURU	All
+	QUST	20-60(20%)
+	QUVE	20-60(20%)
+	TADI2	All
+SingleRepeat	20
+CohortsRemoved	SpeciesList
+	QUCO2	20-250
+	QUFA	20-250
+	QULA2	20-250
+	QUMA3	20-250
+	QUST	20-250
+	QUVE	20-250
+
+Prescription	MM19-1_DO3 << XericHardwoodShelterwoodC
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+>>-------------------------------------------
+QUCO2		100		50
+QUFA		100		50
+QULA2		100		50
+QUMA3		100		50
+QUST		100		50
+QUVE		100		50
+MinimumAge	40
+	ForestTypeTable	<< Xeric Hardwood
+	>> InclusionRule ageRange	percent	species
+	Optional	40-250	30	QUCO2
+	Optional	40-250	30	QUFA
+	Optional	40-250	30	QULA2
+	Optional	40-250	30	QUMA3
+	Optional	40-250	30	QUST
+SiteSelection	Complete
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	All
+	CAAL27	All
+	CAGL8	All
+	CAOV2	All
+	FRPE	All
+	JUVI	All
+	LIST2	All
+	LITU	All
+	NYBI	All
+	NYSY	All
+	PIEC2	All
+	PIPA2	All
+	PITA	All
+	PIVI2	All
+	QUAL	All
+	QUCO2	20-60(35%)
+	QUFA	20-60(35%)
+	QULA2	20-60(35%)
+	QULA3	All
+	QUMA3	20-60(35%)
+	QUNI	All
+	QUPR2	All
+	QURU	All
+	QUST	20-60(35%)
+	QUVE	20-60(35%)
+	TADI2	All
+SingleRepeat	20
+CohortsRemoved	SpeciesList
+	QUCO2	20-250
+	QUFA	20-250
+	QULA2	20-250
+	QUMA3	20-250
+	QUST	20-250
+	QUVE	20-250
+
+>> PATCHCUTTING
+
+Prescription MM20-1_DO1	<< OakPatchcutA
+	StandRanking	Economic
+	>>Species	EconomicRank	MinimumAge
+	>>————————————————————
+QUAL		100		50
+QUPR2		100		50
+QURU		100		50	
+MinimumAge		50
+	ForestTypeTable << Oak
+	>>InclusionRule	ageRange	percent	species
+	Optional	40-250	30	QUAL
+	Optional	40-250	30	QUPR2
+	Optional	40-250	30	QURU
+SiteSelection		PatchCutting		20%	0.5
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(50%)
+	CAAL27	20-300(50%)
+	CAGL8	20-300(50%)
+	CAOV2	20-300(50%)
+	FRPE	20-300(50%)
+	JUVI	20-300(50%)
+	LIST2	20-300(50%)
+	LITU	20-300(50%)
+	NYBI	20-300(50%)
+	NYSY	20-300(50%)
+	PIEC2	20-300(50%)
+	PIPA2	20-300(50%)
+	PITA	20-300(50%)
+	PIVI2	20-300(50%)
+	QUAL	20-300(10%)
+	QUCO2	20-300(10%)
+	QUFA	20-300(10%)
+	QULA2	20-300(10%)
+	QULA3	20-300(10%)
+	QUMA3	20-300(10%)
+	QUNI	20-300(10%)
+	QUPR2	20-300(10%)
+	QURU	20-300(10%)
+	QUST	20-300(10%)
+	QUVE	20-300(10%)
+	TADI2	20-300(50%)
+SingleRepeat	30
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	60-300
+	CAAL27	60-300
+	CAGL8	60-300
+	CAOV2	60-300
+	FRPE	60-300
+	JUVI	60-300
+	LIST2	60-300
+	LITU	60-300
+	NYBI	60-300
+	NYSY	60-300
+	PIEC2	60-300
+	PIPA2	60-300
+	PITA	60-300
+	PIVI2	60-300
+	QUAL	60-300
+	QUCO2	60-300
+	QUFA	60-300
+	QULA2	60-300
+	QULA3	60-300
+	QUMA3	60-300
+	QUNI	60-300
+	QUPR2	60-300
+	QURU	60-300
+	QUST	60-300
+	QUVE	60-300
+	TADI2	60-300
+
+Prescription MM20-1_DO2	<< OakPatchcut
+	StandRanking	Economic
+	>>Species	EconomicRank	MinimumAge
+	>>————————————————————
+QUAL		100		50
+QUPR2		100		50
+QURU		100		50	
+MinimumAge		50
+	ForestTypeTable << Oak
+	>>InclusionRule	ageRange	percent	species
+	Optional	40-250	30	QUAL
+	Optional	40-250	30	QUPR2
+	Optional	40-250	30	QURU
+SiteSelection		PatchCutting		20%	0.5
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(40%)
+	CAAL27	20-300(40%)
+	CAGL8	20-300(40%)
+	CAOV2	20-300(40%)
+	FRPE	20-300(40%)
+	JUVI	20-300(40%)
+	LIST2	20-300(40%)
+	LITU	20-300(40%)
+	NYBI	20-300(40%)
+	NYSY	20-300(40%)
+	PIEC2	20-300(40%)
+	PIPA2	20-300(40%)
+	PITA	20-300(40%)
+	PIVI2	20-300(40%)
+	QUAL	20-300(10%)
+	QUCO2	20-300(10%)
+	QUFA	20-300(10%)
+	QULA2	20-300(10%)
+	QULA3	20-300(10%)
+	QUMA3	20-300(10%)
+	QUNI	20-300(10%)
+	QUPR2	20-300(10%)
+	QURU	20-300(10%)
+	QUST	20-300(10%)
+	QUVE	20-300(10%)
+	TADI2	20-300(40%)
+SingleRepeat	30
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	60-300
+	CAAL27	60-300
+	CAGL8	60-300
+	CAOV2	60-300
+	FRPE	60-300
+	JUVI	60-300
+	LIST2	60-300
+	LITU	60-300
+	NYBI	60-300
+	NYSY	60-300
+	PIEC2	60-300
+	PIPA2	60-300
+	PITA	60-300
+	PIVI2	60-300
+	QUAL	60-300
+	QUCO2	60-300
+	QUFA	60-300
+	QULA2	60-300
+	QULA3	60-300
+	QUMA3	60-300
+	QUNI	60-300
+	QUPR2	60-300
+	QURU	60-300
+	QUST	60-300
+	QUVE	60-300
+	TADI2	60-300
+
+Prescription MM20-1_DO3	<< OakPatchcutC
+	StandRanking	Economic
+	>>Species	EconomicRank	MinimumAge
+	>>————————————————————
+QUAL		100		50
+QUPR2		100		50
+QURU		100		50	
+MinimumAge		50
+	ForestTypeTable << Oak
+	>>InclusionRule	ageRange	percent	species
+	Optional	40-250	30	QUAL
+	Optional	40-250	30	QUPR2
+	Optional	40-250	30	QURU
+SiteSelection		PatchCutting		20%	0.5
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(60%)
+	CAAL27	20-300(60%)
+	CAGL8	20-300(60%)
+	CAOV2	20-300(60%)
+	FRPE	20-300(60%)
+	JUVI	20-300(60%)
+	LIST2	20-300(60%)
+	LITU	20-300(60%)
+	NYBI	20-300(60%)
+	NYSY	20-300(60%)
+	PIEC2	20-300(60%)
+	PIPA2	20-300(60%)
+	PITA	20-300(60%)
+	PIVI2	20-300(60%)
+	QUAL	20-300(10%)
+	QUCO2	20-300(10%)
+	QUFA	20-300(10%)
+	QULA2	20-300(10%)
+	QULA3	20-300(10%)
+	QUMA3	20-300(10%)
+	QUNI	20-300(10%)
+	QUPR2	20-300(10%)
+	QURU	20-300(10%)
+	QUST	20-300(10%)
+	QUVE	20-300(10%)
+	TADI2	20-300(60%)
+SingleRepeat	30
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	60-300
+	CAAL27	60-300
+	CAGL8	60-300
+	CAOV2	60-300
+	FRPE	60-300
+	JUVI	60-300
+	LIST2	60-300
+	LITU	60-300
+	NYBI	60-300
+	NYSY	60-300
+	PIEC2	60-300
+	PIPA2	60-300
+	PITA	60-300
+	PIVI2	60-300
+	QUAL	60-300
+	QUCO2	60-300
+	QUFA	60-300
+	QULA2	60-300
+	QULA3	60-300
+	QUMA3	60-300
+	QUNI	60-300
+	QUPR2	60-300
+	QURU	60-300
+	QUST	60-300
+	QUVE	60-300
+	TADI2	60-300
+
+Prescription	MM21-1_DO1 << PinePatchCutA
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+>>-------------------------------------------
+PITA		100		30
+PIEC2		100		30
+PIPA2		100		30
+MinimumAge	30
+	ForestTypeTable << Pine
+	>> InclusionRule ageRange percent species
+	Optional	30-250	30	PITA
+	Optional	30-250	30	PIPA2
+SiteSelection	PatchCutting		20%	0.5
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(50%)
+	CAAL27	20-300(50%)
+	CAGL8	20-300(50%)
+	CAOV2	20-300(50%)
+	FRPE	20-300(50%)
+	JUVI	20-300(50%)
+	LIST2	20-300(50%)
+	LITU	20-300(50%)
+	NYBI	20-300(50%)
+	NYSY	20-300(50%)
+	PIEC2	20-300(10%)
+	PIPA2	20-300(10%)
+	PITA	20-300(10%)
+	PIVI2	20-300(10%)
+	QUAL	20-300(50%)
+	QUCO2	20-300(50%)
+	QUFA	20-300(50%)
+	QULA2	20-300(50%)
+	QULA3	20-300(50%)
+	QUMA3	20-300(50%)
+	QUNI	20-300(50%)
+	QUPR2	20-300(50%)
+	QURU	20-300(50%)
+	QUST	20-300(50%)
+	QUVE	20-300(50%)
+	TADI2	20-300(50%)
+SingleRepeat	30
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	60-300
+	CAAL27	60-300
+	CAGL8	60-300
+	CAOV2	60-300
+	FRPE	60-300
+	JUVI	60-300
+	LIST2	60-300
+	LITU	60-300
+	NYBI	60-300
+	NYSY	60-300
+	PIEC2	60-300
+	PIPA2	60-300
+	PITA	60-300
+	PIVI2	60-300
+	QUAL	60-300
+	QUCO2	60-300
+	QUFA	60-300
+	QULA2	60-300
+	QULA3	60-300
+	QUMA3	60-300
+	QUNI	60-300
+	QUPR2	60-300
+	QURU	60-300
+	QUST	60-300
+	QUVE	60-300
+	TADI2	60-300
+
+Prescription	MM21-1_DO2 << PinePatchCutB
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+>>-------------------------------------------
+PITA		100		30
+PIEC2		100		30
+PIPA2		100		30
+MinimumAge	30
+	ForestTypeTable << Pine
+	>> InclusionRule ageRange percent species
+	Optional	30-250	30	PITA
+	Optional	30-250	30	PIPA2
+SiteSelection	PatchCutting		20%	0.5
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(40%)
+	CAAL27	20-300(40%)
+	CAGL8	20-300(40%)
+	CAOV2	20-300(40%)
+	FRPE	20-300(40%)
+	JUVI	20-300(40%)
+	LIST2	20-300(40%)
+	LITU	20-300(40%)
+	NYBI	20-300(40%)
+	NYSY	20-300(40%)
+	PIEC2	20-300(10%)
+	PIPA2	20-300(10%)
+	PITA	20-300(10%)
+	PIVI2	20-300(10%)
+	QUAL	20-300(40%)
+	QUCO2	20-300(40%)
+	QUFA	20-300(40%)
+	QULA2	20-300(40%)
+	QULA3	20-300(40%)
+	QUMA3	20-300(40%)
+	QUNI	20-300(40%)
+	QUPR2	20-300(40%)
+	QURU	20-300(40%)
+	QUST	20-300(40%)
+	QUVE	20-300(40%)
+	TADI2	20-300(40%)
+SingleRepeat	30
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	60-300
+	CAAL27	60-300
+	CAGL8	60-300
+	CAOV2	60-300
+	FRPE	60-300
+	JUVI	60-300
+	LIST2	60-300
+	LITU	60-300
+	NYBI	60-300
+	NYSY	60-300
+	PIEC2	60-300
+	PIPA2	60-300
+	PITA	60-300
+	PIVI2	60-300
+	QUAL	60-300
+	QUCO2	60-300
+	QUFA	60-300
+	QULA2	60-300
+	QULA3	60-300
+	QUMA3	60-300
+	QUNI	60-300
+	QUPR2	60-300
+	QURU	60-300
+	QUST	60-300
+	QUVE	60-300
+	TADI2	60-300
+
+Prescription	MM21-1_DO3 << PinePatchCutC
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+>>-------------------------------------------
+PITA		100		30
+PIEC2		100		30
+PIPA2		100		30
+MinimumAge	30
+	ForestTypeTable << Pine
+	>> InclusionRule ageRange percent species
+	Optional	30-250	30	PITA
+	Optional	30-250	30	PIPA2
+SiteSelection	PatchCutting		20%	0.5
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(60%)
+	CAAL27	20-300(60%)
+	CAGL8	20-300(60%)
+	CAOV2	20-300(60%)
+	FRPE	20-300(60%)
+	JUVI	20-300(60%)
+	LIST2	20-300(60%)
+	LITU	20-300(60%)
+	NYBI	20-300(60%)
+	NYSY	20-300(60%)
+	PIEC2	20-300(10%)
+	PIPA2	20-300(10%)
+	PITA	20-300(10%)
+	PIVI2	20-300(10%)
+	QUAL	20-300(60%)
+	QUCO2	20-300(60%)
+	QUFA	20-300(60%)
+	QULA2	20-300(60%)
+	QULA3	20-300(60%)
+	QUMA3	20-300(60%)
+	QUNI	20-300(60%)
+	QUPR2	20-300(60%)
+	QURU	20-300(60%)
+	QUST	20-300(60%)
+	QUVE	20-300(60%)
+	TADI2	20-300(60%)
+SingleRepeat	30
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	60-300
+	CAAL27	60-300
+	CAGL8	60-300
+	CAOV2	60-300
+	FRPE	60-300
+	JUVI	60-300
+	LIST2	60-300
+	LITU	60-300
+	NYBI	60-300
+	NYSY	60-300
+	PIEC2	60-300
+	PIPA2	60-300
+	PITA	60-300
+	PIVI2	60-300
+	QUAL	60-300
+	QUCO2	60-300
+	QUFA	60-300
+	QULA2	60-300
+	QULA3	60-300
+	QUMA3	60-300
+	QUNI	60-300
+	QUPR2	60-300
+	QURU	60-300
+	QUST	60-300
+	QUVE	60-300
+	TADI2	60-300
+
+Prescription	MM22-1_DO1 << HickoryPatchCutA
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+>>-------------------------------------------
+CAAL27		100		50
+CAGL8		100		50
+CAOV2		100		50
+MinimumAge	50
+	ForestTypeTable << Hickory
+	>> InclusionRule ageRange percentCells species
+	Optional	50-250	30	CAAL27
+	Optional	50-250	30	CAGL8
+	Optional	50-250	30	CAOV2
+SiteSelection	PatchCutting		20%	0.5
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(50%)
+	CAAL27	20-300(10%)
+	CAGL8	20-300(10%)
+	CAOV2	20-300(10%)
+	FRPE	20-300(50%)
+	JUVI	20-300(50%)
+	LIST2	20-300(50%)
+	LITU	20-300(50%)
+	NYBI	20-300(50%)
+	NYSY	20-300(50%)
+	PIEC2	20-300(50%)
+	PIPA2	20-300(50%)
+	PITA	20-300(50%)
+	PIVI2	20-300(50%)
+	QUAL	20-300(50%)
+	QUCO2	20-300(50%)
+	QUFA	20-300(50%)
+	QULA2	20-300(50%)
+	QULA3	20-300(50%)
+	QUMA3	20-300(50%)
+	QUNI	20-300(50%)
+	QUPR2	20-300(50%)
+	QURU	20-300(50%)
+	QUST	20-300(50%)
+	QUVE	20-300(50%)
+	TADI2	20-300(50%)
+SingleRepeat	30
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	60-300
+	CAAL27	60-300
+	CAGL8	60-300
+	CAOV2	60-300
+	FRPE	60-300
+	JUVI	60-300
+	LIST2	60-300
+	LITU	60-300
+	NYBI	60-300
+	NYSY	60-300
+	PIEC2	60-300
+	PIPA2	60-300
+	PITA	60-300
+	PIVI2	60-300
+	QUAL	60-300
+	QUCO2	60-300
+	QUFA	60-300
+	QULA2	60-300
+	QULA3	60-300
+	QUMA3	60-300
+	QUNI	60-300
+	QUPR2	60-300
+	QURU	60-300
+	QUST	60-300
+	QUVE	60-300
+	TADI2	60-300
+
+Prescription	MM22-1_DO2 << HickoryPatchCutB
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+>>-------------------------------------------
+CAAL27		100		50
+CAGL8		100		50
+CAOV2		100		50
+MinimumAge	50
+	ForestTypeTable << Hickory
+	>> InclusionRule ageRange percentCells species
+	Optional	50-250	30	CAAL27
+	Optional	50-250	30	CAGL8
+	Optional	50-250	30	CAOV2
+SiteSelection	PatchCutting		20%	0.5
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(40%)
+	CAAL27	20-300(10%)
+	CAGL8	20-300(10%)
+	CAOV2	20-300(10%)
+	FRPE	20-300(40%)
+	JUVI	20-300(40%)
+	LIST2	20-300(40%)
+	LITU	20-300(40%)
+	NYBI	20-300(40%)
+	NYSY	20-300(40%)
+	PIEC2	20-300(40%)
+	PIPA2	20-300(40%)
+	PITA	20-300(40%)
+	PIVI2	20-300(40%)
+	QUAL	20-300(40%)
+	QUCO2	20-300(40%)
+	QUFA	20-300(40%)
+	QULA2	20-300(40%)
+	QULA3	20-300(40%)
+	QUMA3	20-300(40%)
+	QUNI	20-300(40%)
+	QUPR2	20-300(40%)
+	QURU	20-300(40%)
+	QUST	20-300(40%)
+	QUVE	20-300(40%)
+	TADI2	20-300(40%)
+SingleRepeat	30
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	60-300
+	CAAL27	60-300
+	CAGL8	60-300
+	CAOV2	60-300
+	FRPE	60-300
+	JUVI	60-300
+	LIST2	60-300
+	LITU	60-300
+	NYBI	60-300
+	NYSY	60-300
+	PIEC2	60-300
+	PIPA2	60-300
+	PITA	60-300
+	PIVI2	60-300
+	QUAL	60-300
+	QUCO2	60-300
+	QUFA	60-300
+	QULA2	60-300
+	QULA3	60-300
+	QUMA3	60-300
+	QUNI	60-300
+	QUPR2	60-300
+	QURU	60-300
+	QUST	60-300
+	QUVE	60-300
+	TADI2	60-300
+
+Prescription	MM22-1_DO3 << HickoryPatchCutC
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+>>-------------------------------------------
+CAAL27		100		50
+CAGL8		100		50
+CAOV2		100		50
+MinimumAge	50
+	ForestTypeTable << Hickory
+	>> InclusionRule ageRange percentCells species
+	Optional	50-250	30	CAAL27
+	Optional	50-250	30	CAGL8
+	Optional	50-250	30	CAOV2
+SiteSelection	PatchCutting		20%	0.5
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(60%)
+	CAAL27	20-300(10%)
+	CAGL8	20-300(10%)
+	CAOV2	20-300(10%)
+	FRPE	20-300(60%)
+	JUVI	20-300(60%)
+	LIST2	20-300(60%)
+	LITU	20-300(60%)
+	NYBI	20-300(60%)
+	NYSY	20-300(60%)
+	PIEC2	20-300(60%)
+	PIPA2	20-300(60%)
+	PITA	20-300(60%)
+	PIVI2	20-300(60%)
+	QUAL	20-300(60%)
+	QUCO2	20-300(60%)
+	QUFA	20-300(60%)
+	QULA2	20-300(60%)
+	QULA3	20-300(60%)
+	QUMA3	20-300(60%)
+	QUNI	20-300(60%)
+	QUPR2	20-300(60%)
+	QURU	20-300(60%)
+	QUST	20-300(60%)
+	QUVE	20-300(60%)
+	TADI2	20-300(60%)
+SingleRepeat	30
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	60-300
+	CAAL27	60-300
+	CAGL8	60-300
+	CAOV2	60-300
+	FRPE	60-300
+	JUVI	60-300
+	LIST2	60-300
+	LITU	60-300
+	NYBI	60-300
+	NYSY	60-300
+	PIEC2	60-300
+	PIPA2	60-300
+	PITA	60-300
+	PIVI2	60-300
+	QUAL	60-300
+	QUCO2	60-300
+	QUFA	60-300
+	QULA2	60-300
+	QULA3	60-300
+	QUMA3	60-300
+	QUNI	60-300
+	QUPR2	60-300
+	QURU	60-300
+	QUST	60-300
+	QUVE	60-300
+	TADI2	60-300
+
+Prescription	MM23-1_DO1 << MesicHardwoodPatchCutA
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+ACRU		100		50
+CAAL27		100		50
+CAGL8		100		50
+CAOV2		100		50
+FRPE		100		50
+LIST2		100		50
+LITU		100		50
+QUAL		100		50
+QULA3		100		50
+QUNI		100		50
+QUPR2		100		50
+QURU		100		50
+MinimumAge	50
+	ForestTypeTable << Mesic Hardwood
+	>> InclusionRule ageRange percent species
+	Optional	30-250	30	ACRU
+	Optional	30-250	30	CAAL27
+	Optional	30-250	30	CAGL8
+	Optional	30-250	30	CAOV2
+	Optional	30-250	30	FRPE
+	Optional	30-250	30	LIST2
+	Optional	30-250	30	LITU
+	Optional	30-250	30	QUAL
+	Optional	30-250	30	QULA3
+	Optional	30-250	30	QUNI
+	Optional	30-250	30	QUPR2
+	Optional	30-250	30	QURU
+SiteSelection	PatchCutting		20%	0.5
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(10%)
+	CAAL27	20-300(10%)
+	CAGL8	20-300(10%)
+	CAOV2	20-300(10%)
+	FRPE	20-300(10%)
+	JUVI	20-300(50%)
+	LIST2	20-300(10%)
+	LITU	20-300(10%)
+	NYBI	20-300(50%)
+	NYSY	20-300(50%)
+	PIEC2	20-300(50%)
+	PIPA2	20-300(50%)
+	PITA	20-300(50%)
+	PIVI2	20-300(50%)
+	QUAL	20-300(10%)
+	QUCO2	20-300(50%)
+	QUFA	20-300(50%)
+	QULA2	20-300(50%)
+	QULA3	20-300(10%)
+	QUMA3	20-300(50%)
+	QUNI	20-300(10%)
+	QUPR2	20-300(10%)
+	QURU	20-300(10%)
+	QUST	20-300(50%)
+	QUVE	20-300(50%)
+	TADI2	20-300(50%)
+SingleRepeat	30
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	60-300
+	CAAL27	60-300
+	CAGL8	60-300
+	CAOV2	60-300
+	FRPE	60-300
+	JUVI	60-300
+	LIST2	60-300
+	LITU	60-300
+	NYBI	60-300
+	NYSY	60-300
+	PIEC2	60-300
+	PIPA2	60-300
+	PITA	60-300
+	PIVI2	60-300
+	QUAL	60-300
+	QUCO2	60-300
+	QUFA	60-300
+	QULA2	60-300
+	QULA3	60-300
+	QUMA3	60-300
+	QUNI	60-300
+	QUPR2	60-300
+	QURU	60-300
+	QUST	60-300
+	QUVE	60-300
+	TADI2	60-300
+
+Prescription	MM23-1_DO2 << MesicHardwoodPatchCutB
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+ACRU		100		50
+CAAL27		100		50
+CAGL8		100		50
+CAOV2		100		50
+FRPE		100		50
+LIST2		100		50
+LITU		100		50
+QUAL		100		50
+QULA3		100		50
+QUNI		100		50
+QUPR2		100		50
+QURU		100		50
+MinimumAge	50
+	ForestTypeTable << Mesic Hardwood
+	>> InclusionRule ageRange percent species
+	Optional	30-250	30	ACRU
+	Optional	30-250	30	CAAL27
+	Optional	30-250	30	CAGL8
+	Optional	30-250	30	CAOV2
+	Optional	30-250	30	FRPE
+	Optional	30-250	30	LIST2
+	Optional	30-250	30	LITU
+	Optional	30-250	30	QUAL
+	Optional	30-250	30	QULA3
+	Optional	30-250	30	QUNI
+	Optional	30-250	30	QUPR2
+	Optional	30-250	30	QURU
+SiteSelection	PatchCutting		20%	0.5
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(10%)
+	CAAL27	20-300(10%)
+	CAGL8	20-300(10%)
+	CAOV2	20-300(10%)
+	FRPE	20-300(10%)
+	JUVI	20-300(40%)
+	LIST2	20-300(10%)
+	LITU	20-300(10%)
+	NYBI	20-300(40%)
+	NYSY	20-300(40%)
+	PIEC2	20-300(40%)
+	PIPA2	20-300(40%)
+	PITA	20-300(40%)
+	PIVI2	20-300(40%)
+	QUAL	20-300(10%)
+	QUCO2	20-300(40%)
+	QUFA	20-300(40%)
+	QULA2	20-300(40%)
+	QULA3	20-300(10%)
+	QUMA3	20-300(40%)
+	QUNI	20-300(10%)
+	QUPR2	20-300(10%)
+	QURU	20-300(10%)
+	QUST	20-300(40%)
+	QUVE	20-300(40%)
+	TADI2	20-300(40%)
+SingleRepeat	30
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	60-300
+	CAAL27	60-300
+	CAGL8	60-300
+	CAOV2	60-300
+	FRPE	60-300
+	JUVI	60-300
+	LIST2	60-300
+	LITU	60-300
+	NYBI	60-300
+	NYSY	60-300
+	PIEC2	60-300
+	PIPA2	60-300
+	PITA	60-300
+	PIVI2	60-300
+	QUAL	60-300
+	QUCO2	60-300
+	QUFA	60-300
+	QULA2	60-300
+	QULA3	60-300
+	QUMA3	60-300
+	QUNI	60-300
+	QUPR2	60-300
+	QURU	60-300
+	QUST	60-300
+	QUVE	60-300
+	TADI2	60-300
+
+Prescription	MM23-1_DO3 << MesicHardwoodPatchCutC
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+ACRU		100		50
+CAAL27		100		50
+CAGL8		100		50
+CAOV2		100		50
+FRPE		100		50
+LIST2		100		50
+LITU		100		50
+QUAL		100		50
+QULA3		100		50
+QUNI		100		50
+QUPR2		100		50
+QURU		100		50
+MinimumAge	50
+	ForestTypeTable << Mesic Hardwood
+	>> InclusionRule ageRange percent species
+	Optional	30-250	30	ACRU
+	Optional	30-250	30	CAAL27
+	Optional	30-250	30	CAGL8
+	Optional	30-250	30	CAOV2
+	Optional	30-250	30	FRPE
+	Optional	30-250	30	LIST2
+	Optional	30-250	30	LITU
+	Optional	30-250	30	QUAL
+	Optional	30-250	30	QULA3
+	Optional	30-250	30	QUNI
+	Optional	30-250	30	QUPR2
+	Optional	30-250	30	QURU
+SiteSelection	PatchCutting		20%	0.5
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(10%)
+	CAAL27	20-300(10%)
+	CAGL8	20-300(10%)
+	CAOV2	20-300(10%)
+	FRPE	20-300(10%)
+	JUVI	20-300(60%)
+	LIST2	20-300(10%)
+	LITU	20-300(10%)
+	NYBI	20-300(60%)
+	NYSY	20-300(60%)
+	PIEC2	20-300(60%)
+	PIPA2	20-300(60%)
+	PITA	20-300(60%)
+	PIVI2	20-300(60%)
+	QUAL	20-300(10%)
+	QUCO2	20-300(60%)
+	QUFA	20-300(60%)
+	QULA2	20-300(60%)
+	QULA3	20-300(10%)
+	QUMA3	20-300(60%)
+	QUNI	20-300(10%)
+	QUPR2	20-300(10%)
+	QURU	20-300(10%)
+	QUST	20-300(60%)
+	QUVE	20-300(60%)
+	TADI2	20-300(60%)
+SingleRepeat	30
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	60-300
+	CAAL27	60-300
+	CAGL8	60-300
+	CAOV2	60-300
+	FRPE	60-300
+	JUVI	60-300
+	LIST2	60-300
+	LITU	60-300
+	NYBI	60-300
+	NYSY	60-300
+	PIEC2	60-300
+	PIPA2	60-300
+	PITA	60-300
+	PIVI2	60-300
+	QUAL	60-300
+	QUCO2	60-300
+	QUFA	60-300
+	QULA2	60-300
+	QULA3	60-300
+	QUMA3	60-300
+	QUNI	60-300
+	QUPR2	60-300
+	QURU	60-300
+	QUST	60-300
+	QUVE	60-300
+	TADI2	60-300
+
+Prescription	MM24-1_DO1 << XericHardwoodPatchCutA
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+>>-------------------------------------------
+QUCO2		100		50
+QUFA		100		50
+QULA2		100		50
+QUMA3		100		50
+QUST		100		50
+QUVE		100		50
+MinimumAge	40
+	ForestTypeTable	<< Xeric Hardwood
+	>> InclusionRule ageRange	percent	species
+	Optional	40-250	30	QUCO2
+	Optional	40-250	30	QUFA
+	Optional	40-250	30	QULA2
+	Optional	40-250	30	QUMA3
+	Optional	40-250	30	QUST
+SiteSelection	PatchCutting		20%	0.5
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(50%)
+	CAAL27	20-300(50%)
+	CAGL8	20-300(50%)
+	CAOV2	20-300(50%)
+	FRPE	20-300(50%)
+	JUVI	20-300(50%)
+	LIST2	20-300(50%)
+	LITU	20-300(50%)
+	NYBI	20-300(50%)
+	NYSY	20-300(50%)
+	PIEC2	20-300(50%)
+	PIPA2	20-300(50%)
+	PITA	20-300(50%)
+	PIVI2	20-300(50%)
+	QUAL	20-300(50%)
+	QUCO2	20-300(10%)
+	QUFA	20-300(10%)
+	QULA2	20-300(10%)
+	QULA3	20-300(50%)
+	QUMA3	20-300(10%)
+	QUNI	20-300(50%)
+	QUPR2	20-300(50%)
+	QURU	20-300(50%)
+	QUST	20-300(10%)
+	QUVE	20-300(50%)
+	TADI2	20-300(50%)
+SingleRepeat	30
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	60-300
+	CAAL27	60-300
+	CAGL8	60-300
+	CAOV2	60-300
+	FRPE	60-300
+	JUVI	60-300
+	LIST2	60-300
+	LITU	60-300
+	NYBI	60-300
+	NYSY	60-300
+	PIEC2	60-300
+	PIPA2	60-300
+	PITA	60-300
+	PIVI2	60-300
+	QUAL	60-300
+	QUCO2	60-300
+	QUFA	60-300
+	QULA2	60-300
+	QULA3	60-300
+	QUMA3	60-300
+	QUNI	60-300
+	QUPR2	60-300
+	QURU	60-300
+	QUST	60-300
+	QUVE	60-300
+	TADI2	60-300
+
+Prescription	MM24-1_DO2 << XericHardwoodPatchCutB
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+>>-------------------------------------------
+QUCO2		100		50
+QUFA		100		50
+QULA2		100		50
+QUMA3		100		50
+QUST		100		50
+QUVE		100		50
+MinimumAge	40
+	ForestTypeTable	<< Xeric Hardwood
+	>> InclusionRule ageRange	percent	species
+	Optional	40-250	30	QUCO2
+	Optional	40-250	30	QUFA
+	Optional	40-250	30	QULA2
+	Optional	40-250	30	QUMA3
+	Optional	40-250	30	QUST
+SiteSelection	PatchCutting		20%	0.5
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(40%)
+	CAAL27	20-300(40%)
+	CAGL8	20-300(40%)
+	CAOV2	20-300(40%)
+	FRPE	20-300(40%)
+	JUVI	20-300(40%)
+	LIST2	20-300(40%)
+	LITU	20-300(40%)
+	NYBI	20-300(40%)
+	NYSY	20-300(40%)
+	PIEC2	20-300(40%)
+	PIPA2	20-300(40%)
+	PITA	20-300(40%)
+	PIVI2	20-300(40%)
+	QUAL	20-300(40%)
+	QUCO2	20-300(10%)
+	QUFA	20-300(10%)
+	QULA2	20-300(10%)
+	QULA3	20-300(40%)
+	QUMA3	20-300(40%)
+	QUNI	20-300(40%)
+	QUPR2	20-300(40%)
+	QURU	20-300(40%)
+	QUST	20-300(10%)
+	QUVE	20-300(40%)
+	TADI2	20-300(40%)
+SingleRepeat	30
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	60-300
+	CAAL27	60-300
+	CAGL8	60-300
+	CAOV2	60-300
+	FRPE	60-300
+	JUVI	60-300
+	LIST2	60-300
+	LITU	60-300
+	NYBI	60-300
+	NYSY	60-300
+	PIEC2	60-300
+	PIPA2	60-300
+	PITA	60-300
+	PIVI2	60-300
+	QUAL	60-300
+	QUCO2	60-300
+	QUFA	60-300
+	QULA2	60-300
+	QULA3	60-300
+	QUMA3	60-300
+	QUNI	60-300
+	QUPR2	60-300
+	QURU	60-300
+	QUST	60-300
+	QUVE	60-300
+	TADI2	60-300
+
+Prescription	MM24-1_DO3 << XericHardwoodPatchCutC
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+>>-------------------------------------------
+QUCO2		100		50
+QUFA		100		50
+QULA2		100		50
+QUMA3		100		50
+QUST		100		50
+QUVE		100		50
+MinimumAge	40
+	ForestTypeTable	<< Xeric Hardwood
+	>> InclusionRule ageRange	percent	species
+	Optional	40-250	30	QUCO2
+	Optional	40-250	30	QUFA
+	Optional	40-250	30	QULA2
+	Optional	40-250	30	QUMA3
+	Optional	40-250	30	QUST
+SiteSelection	PatchCutting		20%	0.5
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(60%)
+	CAAL27	20-300(60%)
+	CAGL8	20-300(60%)
+	CAOV2	20-300(60%)
+	FRPE	20-300(60%)
+	JUVI	20-300(60%)
+	LIST2	20-300(60%)
+	LITU	20-300(60%)
+	NYBI	20-300(60%)
+	NYSY	20-300(60%)
+	PIEC2	20-300(60%)
+	PIPA2	20-300(60%)
+	PITA	20-300(60%)
+	PIVI2	20-300(60%)
+	QUAL	20-300(60%)
+	QUCO2	20-300(10%)
+	QUFA	20-300(10%)
+	QULA2	20-300(10%)
+	QULA3	20-300(60%)
+	QUMA3	20-300(10%)
+	QUNI	20-300(60%)
+	QUPR2	20-300(60%)
+	QURU	20-300(60%)
+	QUST	20-300(10%)
+	QUVE	20-300(60%)
+	TADI2	20-300(60%)
+SingleRepeat	30
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	60-300
+	CAAL27	60-300
+	CAGL8	60-300
+	CAOV2	60-300
+	FRPE	60-300
+	JUVI	60-300
+	LIST2	60-300
+	LITU	60-300
+	NYBI	60-300
+	NYSY	60-300
+	PIEC2	60-300
+	PIPA2	60-300
+	PITA	60-300
+	PIVI2	60-300
+	QUAL	60-300
+	QUCO2	60-300
+	QUFA	60-300
+	QULA2	60-300
+	QULA3	60-300
+	QUMA3	60-300
+	QUNI	60-300
+	QUPR2	60-300
+	QURU	60-300
+	QUST	60-300
+	QUVE	60-300
+	TADI2	60-300
+
+>> QUASI-VARIABLE DENSITY THINNING
+
+Prescription MM25-1_DO1	<< OakVDTA
+	StandRanking	Economic
+	>>Species	EconomicRank	MinimumAge
+	>>————————————————————
+QUAL		100		50
+QUPR2		100		50
+QURU		100		50	
+MinimumAge		50
+	ForestTypeTable << Oak
+	>>InclusionRule	ageRange	percent	species
+	Optional	40-250	30	QUAL
+	Optional	40-250	30	QUPR2
+	Optional	40-250	30	QURU
+SiteSelection		PatchCutting		80%	0.5
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(80%)
+	CAAL27	20-300(80%)
+	CAGL8	20-300(80%)
+	CAOV2	20-300(80%)
+	FRPE	20-300(80%)
+	JUVI	20-300(80%)
+	LIST2	20-300(80%)
+	LITU	20-300(80%)
+	NYBI	20-300(80%)
+	NYSY	20-300(80%)
+	PIEC2	20-300(80%)
+	PIPA2	20-300(80%)
+	PITA	20-300(80%)
+	PIVI2	20-300(80%)
+	QUAL	20-300(50%)
+	QUCO2	20-300(50%)
+	QUFA	20-300(50%)
+	QULA2	20-300(50%)
+	QULA3	20-300(50%)
+	QUMA3	20-300(50%)
+	QUNI	20-300(50%)
+	QUPR2	20-300(50%)
+	QURU	20-300(50%)
+	QUST	20-300(50%)
+	QUVE	20-300(50%)
+	TADI2	20-300(80%)
+MultipleRepeat	20
+
+Prescription MM25-1_DO2	<< OakVDTB
+	StandRanking	Economic
+	>>Species	EconomicRank	MinimumAge
+	>>————————————————————
+QUAL		100		50
+QUPR2		100		50
+QURU		100		50	
+MinimumAge		50
+	ForestTypeTable << Oak
+	>>InclusionRule	ageRange	percent	species
+	Optional	40-250	30	QUAL
+	Optional	40-250	30	QUPR2
+	Optional	40-250	30	QURU
+SiteSelection		PatchCutting		80%	0.5
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(70%)
+	CAAL27	20-300(70%)
+	CAGL8	20-300(70%)
+	CAOV2	20-300(70%)
+	FRPE	20-300(70%)
+	JUVI	20-300(70%)
+	LIST2	20-300(70%)
+	LITU	20-300(70%)
+	NYBI	20-300(70%)
+	NYSY	20-300(70%)
+	PIEC2	20-300(70%)
+	PIPA2	20-300(70%)
+	PITA	20-300(70%)
+	PIVI2	20-300(70%)
+	QUAL	20-300(50%)
+	QUCO2	20-300(50%)
+	QUFA	20-300(50%)
+	QULA2	20-300(50%)
+	QULA3	20-300(50%)
+	QUMA3	20-300(50%)
+	QUNI	20-300(50%)
+	QUPR2	20-300(50%)
+	QURU	20-300(50%)
+	QUST	20-300(50%)
+	QUVE	20-300(50%)
+	TADI2	20-300(70%)
+MultipleRepeat	20
+
+Prescription MM25-1_DO3	<< OakVDTC
+	StandRanking	Economic
+	>>Species	EconomicRank	MinimumAge
+	>>————————————————————
+QUAL		100		50
+QUPR2		100		50
+QURU		100		50	
+MinimumAge		50
+	ForestTypeTable << Oak
+	>>InclusionRule	ageRange	percent	species
+	Optional	40-250	30	QUAL
+	Optional	40-250	30	QUPR2
+	Optional	40-250	30	QURU
+SiteSelection		PatchCutting		80%	0.5
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(90%)
+	CAAL27	20-300(90%)
+	CAGL8	20-300(90%)
+	CAOV2	20-300(90%)
+	FRPE	20-300(90%)
+	JUVI	20-300(90%)
+	LIST2	20-300(90%)
+	LITU	20-300(90%)
+	NYBI	20-300(90%)
+	NYSY	20-300(90%)
+	PIEC2	20-300(90%)
+	PIPA2	20-300(90%)
+	PITA	20-300(90%)
+	PIVI2	20-300(90%)
+	QUAL	20-300(50%)
+	QUCO2	20-300(50%)
+	QUFA	20-300(50%)
+	QULA2	20-300(50%)
+	QULA3	20-300(50%)
+	QUMA3	20-300(50%)
+	QUNI	20-300(50%)
+	QUPR2	20-300(50%)
+	QURU	20-300(50%)
+	QUST	20-300(50%)
+	QUVE	20-300(50%)
+	TADI2	20-300(90%)
+MultipleRepeat	20
+
+Prescription	MM26-1_DO1 << PineVDTA
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+>>-------------------------------------------
+PITA		100		30
+PIEC2		100		30
+PIPA2		100		30
+MinimumAge	30
+	ForestTypeTable << Pine
+	>> InclusionRule ageRange percent species
+	Optional	30-250	30	PITA
+	Optional	30-250	30	PIPA2
+SiteSelection	PatchCutting		80%	0.5
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(80%)
+	CAAL27	20-300(80%)
+	CAGL8	20-300(80%)
+	CAOV2	20-300(80%)
+	FRPE	20-300(80%)
+	JUVI	20-300(80%)
+	LIST2	20-300(80%)
+	LITU	20-300(80%)
+	NYBI	20-300(80%)
+	NYSY	20-300(80%)
+	PIEC2	20-300(50%)
+	PIPA2	20-300(50%)
+	PITA	20-300(50%)
+	PIVI2	20-300(50%)
+	QUAL	20-300(80%)
+	QUCO2	20-300(80%)
+	QUFA	20-300(80%)
+	QULA2	20-300(80%)
+	QULA3	20-300(80%)
+	QUMA3	20-300(80%)
+	QUNI	20-300(80%)
+	QUPR2	20-300(80%)
+	QURU	20-300(80%)
+	QUST	20-300(80%)
+	QUVE	20-300(80%)
+	TADI2	20-300(80%)
+MultipleRepeat	20
+
+Prescription	MM26-1_DO2 << PineVDTB
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+>>-------------------------------------------
+PITA		100		30
+PIEC2		100		30
+PIPA2		100		30
+MinimumAge	30
+	ForestTypeTable << Pine
+	>> InclusionRule ageRange percent species
+	Optional	30-250	30	PITA
+	Optional	30-250	30	PIPA2
+SiteSelection	PatchCutting		80%	0.5
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(70%)
+	CAAL27	20-300(70%)
+	CAGL8	20-300(70%)
+	CAOV2	20-300(70%)
+	FRPE	20-300(70%)
+	JUVI	20-300(70%)
+	LIST2	20-300(70%)
+	LITU	20-300(70%)
+	NYBI	20-300(70%)
+	NYSY	20-300(70%)
+	PIEC2	20-300(50%)
+	PIPA2	20-300(50%)
+	PITA	20-300(50%)
+	PIVI2	20-300(50%)
+	QUAL	20-300(70%)
+	QUCO2	20-300(70%)
+	QUFA	20-300(70%)
+	QULA2	20-300(70%)
+	QULA3	20-300(70%)
+	QUMA3	20-300(70%)
+	QUNI	20-300(70%)
+	QUPR2	20-300(70%)
+	QURU	20-300(70%)
+	QUST	20-300(70%)
+	QUVE	20-300(70%)
+	TADI2	20-300(70%)
+MultipleRepeat	20
+
+Prescription	MM26-1_DO3 << PineVDTC
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+>>-------------------------------------------
+PITA		100		30
+PIEC2		100		30
+PIPA2		100		30
+MinimumAge	30
+	ForestTypeTable << Pine
+	>> InclusionRule ageRange percent species
+	Optional	30-250	30	PITA
+	Optional	30-250	30	PIPA2
+SiteSelection	PatchCutting		80%	0.5
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(90%)
+	CAAL27	20-300(90%)
+	CAGL8	20-300(90%)
+	CAOV2	20-300(90%)
+	FRPE	20-300(90%)
+	JUVI	20-300(90%)
+	LIST2	20-300(90%)
+	LITU	20-300(90%)
+	NYBI	20-300(90%)
+	NYSY	20-300(90%)
+	PIEC2	20-300(50%)
+	PIPA2	20-300(50%)
+	PITA	20-300(50%)
+	PIVI2	20-300(50%)
+	QUAL	20-300(90%)
+	QUCO2	20-300(90%)
+	QUFA	20-300(90%)
+	QULA2	20-300(90%)
+	QULA3	20-300(90%)
+	QUMA3	20-300(90%)
+	QUNI	20-300(90%)
+	QUPR2	20-300(90%)
+	QURU	20-300(90%)
+	QUST	20-300(90%)
+	QUVE	20-300(90%)
+	TADI2	20-300(90%)
+MultipleRepeat	20
+
+Prescription	MM27-1_DO1 << HickoryVDTA
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+CAAL27		100		50
+CAGL8		100		50
+CAOV2		100		50
+MinimumAge	50
+	ForestTypeTable << Hickory
+	>> InclusionRule ageRange percent species
+	Optional	50-250	30	CAAL27
+	Optional	50-250	30	CAGL8
+	Optional	50-250	30	CAOV2
+SiteSelection	PatchCutting		80%	0.5
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(80%)
+	CAAL27	20-300(50%)
+	CAGL8	20-300(50%)
+	CAOV2	20-300(50%)
+	FRPE	20-300(80%)
+	JUVI	20-300(80%)
+	LIST2	20-300(80%)
+	LITU	20-300(80%)
+	NYBI	20-300(80%)
+	NYSY	20-300(80%)
+	PIEC2	20-300(80%)
+	PIPA2	20-300(80%)
+	PITA	20-300(80%)
+	PIVI2	20-300(80%)
+	QUAL	20-300(80%)
+	QUCO2	20-300(80%)
+	QUFA	20-300(80%)
+	QULA2	20-300(80%)
+	QULA3	20-300(80%)
+	QUMA3	20-300(80%)
+	QUNI	20-300(80%)
+	QUPR2	20-300(80%)
+	QURU	20-300(80%)
+	QUST	20-300(80%)
+	QUVE	20-300(80%)
+	TADI2	20-300(80%)
+MultipleRepeat	20
+
+Prescription	MM27-1_DO2 << HickoryVDTB
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+CAAL27		100		50
+CAGL8		100		50
+CAOV2		100		50
+MinimumAge	50
+	ForestTypeTable << Hickory
+	>> InclusionRule ageRange percent species
+	Optional	50-250	30	CAAL27
+	Optional	50-250	30	CAGL8
+	Optional	50-250	30	CAOV2
+SiteSelection	PatchCutting		80%	0.5
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(70%)
+	CAAL27	20-300(50%)
+	CAGL8	20-300(50%)
+	CAOV2	20-300(50%)
+	FRPE	20-300(70%)
+	JUVI	20-300(70%)
+	LIST2	20-300(70%)
+	LITU	20-300(70%)
+	NYBI	20-300(70%)
+	NYSY	20-300(70%)
+	PIEC2	20-300(70%)
+	PIPA2	20-300(70%)
+	PITA	20-300(70%)
+	PIVI2	20-300(70%)
+	QUAL	20-300(70%)
+	QUCO2	20-300(70%)
+	QUFA	20-300(70%)
+	QULA2	20-300(70%)
+	QULA3	20-300(70%)
+	QUMA3	20-300(70%)
+	QUNI	20-300(70%)
+	QUPR2	20-300(70%)
+	QURU	20-300(70%)
+	QUST	20-300(70%)
+	QUVE	20-300(70%)
+	TADI2	20-300(70%)
+MultipleRepeat	20
+
+Prescription	MM27-1_DO3 << HickoryVDTC
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+CAAL27		100		50
+CAGL8		100		50
+CAOV2		100		50
+MinimumAge	50
+	ForestTypeTable << Hickory
+	>> InclusionRule ageRange percent species
+	Optional	50-250	30	CAAL27
+	Optional	50-250	30	CAGL8
+	Optional	50-250	30	CAOV2
+SiteSelection	PatchCutting		80%	0.5
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(90%)
+	CAAL27	20-300(50%)
+	CAGL8	20-300(50%)
+	CAOV2	20-300(50%)
+	FRPE	20-300(90%)
+	JUVI	20-300(90%)
+	LIST2	20-300(90%)
+	LITU	20-300(90%)
+	NYBI	20-300(90%)
+	NYSY	20-300(90%)
+	PIEC2	20-300(90%)
+	PIPA2	20-300(90%)
+	PITA	20-300(90%)
+	PIVI2	20-300(90%)
+	QUAL	20-300(90%)
+	QUCO2	20-300(90%)
+	QUFA	20-300(90%)
+	QULA2	20-300(90%)
+	QULA3	20-300(90%)
+	QUMA3	20-300(90%)
+	QUNI	20-300(90%)
+	QUPR2	20-300(90%)
+	QURU	20-300(90%)
+	QUST	20-300(90%)
+	QUVE	20-300(90%)
+	TADI2	20-300(90%)
+MultipleRepeat	20
+
+Prescription	MM28-1_DO1 << MesicHardwoodVDTA
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+ACRU		100		50
+CAAL27		100		50
+CAGL8		100		50
+CAOV2		100		50
+FRPE		100		50
+LIST2		100		50
+LITU		100		50
+QUAL		100		50
+QULA3		100		50
+QUNI		100		50
+QUPR2		100		50
+QURU		100		50
+MinimumAge	50
+	ForestTypeTable << Mesic Hardwood
+	>> InclusionRule ageRange percent species
+	Optional	30-250	30	ACRU
+	Optional	30-250	30	CAAL27
+	Optional	30-250	30	CAGL8
+	Optional	30-250	30	CAOV2
+	Optional	30-250	30	FRPE
+	Optional	30-250	30	LIST2
+	Optional	30-250	30	LITU
+	Optional	30-250	30	QUAL
+	Optional	30-250	30	QULA3
+	Optional	30-250	30	QUNI
+	Optional	30-250	30	QUPR2
+	Optional	30-250	30	QURU
+SiteSelection	PatchCutting		80%	0.5
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(50%)
+	CAAL27	20-300(50%)
+	CAGL8	20-300(50%)
+	CAOV2	20-300(50%)
+	FRPE	20-300(50%)
+	JUVI	20-300(80%)
+	LIST2	20-300(50%)
+	LITU	20-300(50%)
+	NYBI	20-300(80%)
+	NYSY	20-300(80%)
+	PIEC2	20-300(80%)
+	PIPA2	20-300(80%)
+	PITA	20-300(80%)
+	PIVI2	20-300(80%)
+	QUAL	20-300(50%)
+	QUCO2	20-300(80%)
+	QUFA	20-300(80%)
+	QULA2	20-300(80%)
+	QULA3	20-300(50%)
+	QUMA3	20-300(80%)
+	QUNI	20-300(50%)
+	QUPR2	20-300(50%)
+	QURU	20-300(50%)
+	QUST	20-300(80%)
+	QUVE	20-300(80%)
+	TADI2	20-300(80%)
+MultipleRepeat	20
+
+Prescription	MM28-1_DO2 << MesicHardwoodVDTB
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+ACRU		100		50
+CAAL27		100		50
+CAGL8		100		50
+CAOV2		100		50
+FRPE		100		50
+LIST2		100		50
+LITU		100		50
+QUAL		100		50
+QULA3		100		50
+QUNI		100		50
+QUPR2		100		50
+QURU		100		50
+MinimumAge	50
+	ForestTypeTable << Mesic Hardwood
+	>> InclusionRule ageRange percent species
+	Optional	30-250	30	ACRU
+	Optional	30-250	30	CAAL27
+	Optional	30-250	30	CAGL8
+	Optional	30-250	30	CAOV2
+	Optional	30-250	30	FRPE
+	Optional	30-250	30	LIST2
+	Optional	30-250	30	LITU
+	Optional	30-250	30	QUAL
+	Optional	30-250	30	QULA3
+	Optional	30-250	30	QUNI
+	Optional	30-250	30	QUPR2
+	Optional	30-250	30	QURU
+SiteSelection	PatchCutting		80%	0.5
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(50%)
+	CAAL27	20-300(50%)
+	CAGL8	20-300(50%)
+	CAOV2	20-300(50%)
+	FRPE	20-300(50%)
+	JUVI	20-300(70%)
+	LIST2	20-300(50%)
+	LITU	20-300(50%)
+	NYBI	20-300(70%)
+	NYSY	20-300(70%)
+	PIEC2	20-300(70%)
+	PIPA2	20-300(70%)
+	PITA	20-300(70%)
+	PIVI2	20-300(70%)
+	QUAL	20-300(50%)
+	QUCO2	20-300(70%)
+	QUFA	20-300(70%)
+	QULA2	20-300(70%)
+	QULA3	20-300(50%)
+	QUMA3	20-300(70%)
+	QUNI	20-300(50%)
+	QUPR2	20-300(50%)
+	QURU	20-300(50%)
+	QUST	20-300(70%)
+	QUVE	20-300(70%)
+	TADI2	20-300(70%)
+MultipleRepeat	20
+
+Prescription	MM28-1_DO3 << MesicHardwoodVDTC
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+ACRU		100		50
+CAAL27		100		50
+CAGL8		100		50
+CAOV2		100		50
+FRPE		100		50
+LIST2		100		50
+LITU		100		50
+QUAL		100		50
+QULA3		100		50
+QUNI		100		50
+QUPR2		100		50
+QURU		100		50
+MinimumAge	50
+	ForestTypeTable << Mesic Hardwood
+	>> InclusionRule ageRange percent species
+	Optional	30-250	30	ACRU
+	Optional	30-250	30	CAAL27
+	Optional	30-250	30	CAGL8
+	Optional	30-250	30	CAOV2
+	Optional	30-250	30	FRPE
+	Optional	30-250	30	LIST2
+	Optional	30-250	30	LITU
+	Optional	30-250	30	QUAL
+	Optional	30-250	30	QULA3
+	Optional	30-250	30	QUNI
+	Optional	30-250	30	QUPR2
+	Optional	30-250	30	QURU
+SiteSelection	PatchCutting		80%	0.5
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(50%)
+	CAAL27	20-300(50%)
+	CAGL8	20-300(50%)
+	CAOV2	20-300(50%)
+	FRPE	20-300(50%)
+	JUVI	20-300(90%)
+	LIST2	20-300(50%)
+	LITU	20-300(50%)
+	NYBI	20-300(90%)
+	NYSY	20-300(90%)
+	PIEC2	20-300(90%)
+	PIPA2	20-300(90%)
+	PITA	20-300(90%)
+	PIVI2	20-300(90%)
+	QUAL	20-300(50%)
+	QUCO2	20-300(90%)
+	QUFA	20-300(90%)
+	QULA2	20-300(90%)
+	QULA3	20-300(50%)
+	QUMA3	20-300(90%)
+	QUNI	20-300(50%)
+	QUPR2	20-300(50%)
+	QURU	20-300(50%)
+	QUST	20-300(90%)
+	QUVE	20-300(90%)
+	TADI2	20-300(90%)
+MultipleRepeat	20
+
+Prescription	MM29-1_DO1 << XericHardwoodVDTA
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+>>-------------------------------------------
+QUCO2		100		50
+QUFA		100		50
+QULA2		100		50
+QUMA3		100		50
+QUST		100		50
+QUVE		100		50
+MinimumAge	40
+	ForestTypeTable	<< Xeric Hardwood
+	>> InclusionRule ageRange	percent	species
+	Optional	40-250	30	QUCO2
+	Optional	40-250	30	QUFA
+	Optional	40-250	30	QULA2
+	Optional	40-250	30	QUMA3
+	Optional	40-250	30	QUST
+SiteSelection	PatchCutting		80%	0.5
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(80%)
+	CAAL27	20-300(80%)
+	CAGL8	20-300(80%)
+	CAOV2	20-300(80%)
+	FRPE	20-300(80%)
+	JUVI	20-300(80%)
+	LIST2	20-300(80%)
+	LITU	20-300(80%)
+	NYBI	20-300(80%)
+	NYSY	20-300(80%)
+	PIEC2	20-300(80%)
+	PIPA2	20-300(80%)
+	PITA	20-300(80%)
+	PIVI2	20-300(80%)
+	QUAL	20-300(80%)
+	QUCO2	20-300(50%)
+	QUFA	20-300(50%)
+	QULA2	20-300(50%)
+	QULA3	20-300(80%)
+	QUMA3	20-300(50%)
+	QUNI	20-300(80%)
+	QUPR2	20-300(80%)
+	QURU	20-300(80%)
+	QUST	20-300(50%)
+	QUVE	20-300(80%)
+	TADI2	20-300(80%)
+MultipleRepeat	20
+
+Prescription	MM29-1_DO2 << XericHardwoodVDTB
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+>>-------------------------------------------
+QUCO2		100		50
+QUFA		100		50
+QULA2		100		50
+QUMA3		100		50
+QUST		100		50
+QUVE		100		50
+MinimumAge	40
+	ForestTypeTable	<< Xeric Hardwood
+	>> InclusionRule ageRange	percent	species
+	Optional	40-250	30	QUCO2
+	Optional	40-250	30	QUFA
+	Optional	40-250	30	QULA2
+	Optional	40-250	30	QUMA3
+	Optional	40-250	30	QUST
+SiteSelection	PatchCutting		28%	0.5
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(70%)
+	CAAL27	20-300(70%)
+	CAGL8	20-300(70%)
+	CAOV2	20-300(70%)
+	FRPE	20-300(70%)
+	JUVI	20-300(70%)
+	LIST2	20-300(70%)
+	LITU	20-300(70%)
+	NYBI	20-300(70%)
+	NYSY	20-300(70%)
+	PIEC2	20-300(70%)
+	PIPA2	20-300(70%)
+	PITA	20-300(70%)
+	PIVI2	20-300(70%)
+	QUAL	20-300(70%)
+	QUCO2	20-300(50%)
+	QUFA	20-300(50%)
+	QULA2	20-300(50%)
+	QULA3	20-300(70%)
+	QUMA3	20-300(50%)
+	QUNI	20-300(70%)
+	QUPR2	20-300(70%)
+	QURU	20-300(70%)
+	QUST	20-300(50%)
+	QUVE	20-300(70%)
+	TADI2	20-300(70%)
+MultipleRepeat	20
+
+Prescription	MM29-1_DO3 << XericHardwoodVDTC
+StandRanking	Economic
+>>Species	EconomicRank	MinimumAge
+>>-------------------------------------------
+QUCO2		100		50
+QUFA		100		50
+QULA2		100		50
+QUMA3		100		50
+QUST		100		50
+QUVE		100		50
+MinimumAge	40
+	ForestTypeTable	<< Xeric Hardwood
+	>> InclusionRule ageRange	percent	species
+	Optional	40-250	30	QUCO2
+	Optional	40-250	30	QUFA
+	Optional	40-250	30	QULA2
+	Optional	40-250	30	QUMA3
+	Optional	40-250	30	QUST
+SiteSelection	PatchCutting		28%	0.5
+CohortsRemoved	SpeciesList
+	>>—————————————————————
+	ACRU	20-300(90%)
+	CAAL27	20-300(90%)
+	CAGL8	20-300(90%)
+	CAOV2	20-300(90%)
+	FRPE	20-300(90%)
+	JUVI	20-300(90%)
+	LIST2	20-300(90%)
+	LITU	20-300(90%)
+	NYBI	20-300(90%)
+	NYSY	20-300(90%)
+	PIEC2	20-300(90%)
+	PIPA2	20-300(90%)
+	PITA	20-300(90%)
+	PIVI2	20-300(90%)
+	QUAL	20-300(90%)
+	QUCO2	20-300(50%)
+	QUFA	20-300(50%)
+	QULA2	20-300(50%)
+	QULA3	20-300(90%)
+	QUMA3	20-300(50%)
+	QUNI	20-300(90%)
+	QUPR2	20-300(90%)
+	QURU	20-300(90%)
+	QUST	20-300(50%)
+	QUVE	20-300(90%)
+	TADI2	20-300(90%)
+MultipleRepeat	20
+
+>>PLANTATION PRESCRIPTIONS
+Prescription	MM30-1_DO1 << Plantation
+	StandRanking Economic		
+	>>Species	EconomicRank	MinimumAge
+	>>——————————————————————
+	PITA			100			30
+	MinimumAge		30
+	ForestTypeTable << LoblollyPine
+	>> InclusionRule ageRange percentCells species
+	          Required	10-300	10	PITA PIPA2 PIEC2
+	          SiteSelection Complete
+	          CohortsRemoved ClearCut
+	          Plant PITA PIPA2 PIEC2
+
+>>——————————————————————————
+HarvestImplementations
+>> MgmtArea Descriptions:
+>> 1 = Private Landownership, 2 = Commercial Private, 3 = Public Land
+
+>>ma		presc			target%		start	stop	COMMENTS
+1		MM1-1_DO1		50%		0	100
+1		MM1-1_DO2		50%		0	100
+1		MM1-1_DO3		50%		0	100
+1		MM2-1_DO1		50%		0	100
+1		MM2-1_DO2		50%		0	100
+1		MM2-1_DO3		50%		0	100
+1		MM3-1_DO1		50%		0	100
+1		MM3-1_DO2		50%		0	100
+1		MM3-1_DO3		50%		0	100
+1		MM4-1_DO1		50%		0	100
+1		MM4-1_DO2		50%		0	100
+1		MM4-1_DO3		50%		0	100
+1		MM5-1_DO1		50%		0	100
+1		MM5-1_DO2		50%		0	100
+1		MM5-1_DO3		50%		0	100
+1		MM6-1_DO1		50%		0	100
+1		MM6-1_DO2		50%		0	100
+1		MM6-1_DO3		50%		0	100
+1		MM7-1_DO1		50%		0	100
+1		MM7-1_DO2		50%		0	100
+1		MM7-1_DO3		50%		0	100
+1		MM8-1_DO1		50%		0	100
+1		MM8-1_DO2		50%		0	100
+1		MM8-1_DO3		50%		0	100
+1		MM9-1_DO1		50%		0	100
+1		MM9-1_DO2		50%		0	100
+1		MM9-1_DO3		50%		0	100
+1		MM10-1_DO1		50%		0	100
+1		MM10-1_DO2		50%		0	100
+1		MM10-1_DO3		50%		0	100
+1		MM11-1_DO1		50%		0	100
+1		MM11-1_DO2		50%		0	100
+1		MM11-1_DO3		50%		0	100
+1		MM12-1_DO1		50%		0	100
+1		MM12-1_DO2		50%		0	100
+1		MM12-1_DO3		50%		0	100
+1		MM13-1_DO1		50%		0	100
+1		MM13-1_DO2		50%		0	100
+1		MM13-1_DO3		50%		0	100
+1		MM14-1_DO1		50%		0	100
+1		MM14-1_DO2		50%		0	100
+1		MM14-1_DO3		50%		0	100
+1		MM15-1_DO1		50%		0	100
+1		MM15-1_DO2		50%		0	100
+1		MM15-1_DO3		50%		0	100
+1		MM16-1_DO1		50%		0	100
+1		MM16-1_DO2		50%		0	100
+1		MM16-1_DO3		50%		0	100
+1		MM17-1_DO1		50%		0	100
+1		MM17-1_DO2		50%		0	100
+1		MM17-1_DO3		50%		0	100
+1		MM18-1_DO1		50%		0	100
+1		MM18-1_DO2		50%		0	100
+1		MM18-1_DO3		50%		0	100
+1		MM19-1_DO1		50%		0	100
+1		MM19-1_DO2		50%		0	100
+1		MM19-1_DO3		50%		0	100
+1		MM20-1_DO1		50%		0	100
+1		MM20-1_DO2		50%		0	100
+1		MM20-1_DO3		50%		0	100
+1		MM21-1_DO1		50%		0	100
+1		MM21-1_DO2		50%		0	100
+1		MM21-1_DO3		50%		0	100
+1		MM22-1_DO1		50%		0	100
+1		MM22-1_DO2		50%		0	100
+1		MM22-1_DO3		50%		0	100
+1		MM23-1_DO1		50%		0	100
+1		MM23-1_DO2		50%		0	100
+1		MM23-1_DO3		50%		0	100
+1		MM24-1_DO1		50%		0	100
+1		MM24-1_DO2		50%		0	100
+1		MM24-1_DO3		50%		0	100
+1		MM25-1_DO1		50%		0	100
+1		MM25-1_DO2		50%		0	100
+1		MM25-1_DO3		50%		0	100
+1		MM26-1_DO1		50%		0	100
+1		MM26-1_DO2		50%		0	100
+1		MM26-1_DO3		50%		0	100
+1		MM27-1_DO1		50%		0	100
+1		MM27-1_DO2		50%		0	100
+1		MM27-1_DO3		50%		0	100
+1		MM28-1_DO1		50%		0	100
+1		MM28-1_DO2		50%		0	100
+1		MM28-1_DO3		50%		0	100
+1		MM29-1_DO1		50%		0	100
+1		MM29-1_DO2		50%		0	100
+1		MM29-1_DO3		50%		0	100
+
+2		MM1-1_DO1		50%		0	100
+2		MM1-1_DO2		50%		0	100
+2		MM1-1_DO3		50%		0	100
+2		MM2-1_DO1		50%		0	100
+2		MM2-1_DO2		50%		0	100
+2		MM2-1_DO3		50%		0	100
+2		MM3-1_DO1		50%		0	100
+2		MM3-1_DO2		50%		0	100
+2		MM3-1_DO3		50%		0	100
+2		MM4-1_DO1		50%		0	100
+2		MM4-1_DO2		50%		0	100
+2		MM4-1_DO3		50%		0	100
+2		MM5-1_DO1		50%		0	100
+2		MM5-1_DO2		50%		0	100
+2		MM5-1_DO3		50%		0	100
+2		MM6-1_DO1		50%		0	100
+2		MM6-1_DO2		50%		0	100
+2		MM6-1_DO3		50%		0	100
+2		MM7-1_DO1		50%		0	100
+2		MM7-1_DO2		50%		0	100
+2		MM7-1_DO3		50%		0	100
+2		MM8-1_DO1		50%		0	100
+2		MM8-1_DO2		50%		0	100
+2		MM8-1_DO3		50%		0	100
+2		MM9-1_DO1		50%		0	100
+2		MM9-1_DO2		50%		0	100
+2		MM9-1_DO3		50%		0	100
+2		MM10-1_DO1		50%		0	100
+2		MM10-1_DO2		50%		0	100
+2		MM10-1_DO3		50%		0	100
+2		MM11-1_DO1		50%		0	100
+2		MM11-1_DO2		50%		0	100
+2		MM11-1_DO3		50%		0	100
+2		MM12-1_DO1		50%		0	100
+2		MM12-1_DO2		50%		0	100
+2		MM12-1_DO3		50%		0	100
+2		MM13-1_DO1		50%		0	100
+2		MM13-1_DO2		50%		0	100
+2		MM13-1_DO3		50%		0	100
+2		MM14-1_DO1		50%		0	100
+2		MM14-1_DO2		50%		0	100
+2		MM14-1_DO3		50%		0	100
+2		MM15-1_DO1		50%		0	100
+2		MM15-1_DO2		50%		0	100
+2		MM15-1_DO3		50%		0	100
+2		MM16-1_DO1		50%		0	100
+2		MM16-1_DO2		50%		0	100
+2		MM16-1_DO3		50%		0	100
+2		MM17-1_DO1		50%		0	100
+2		MM17-1_DO2		50%		0	100
+2		MM17-1_DO3		50%		0	100
+2		MM18-1_DO1		50%		0	100
+2		MM18-1_DO2		50%		0	100
+2		MM18-1_DO3		50%		0	100
+2		MM19-1_DO1		50%		0	100
+2		MM19-1_DO2		50%		0	100
+2		MM19-1_DO3		50%		0	100
+2		MM20-1_DO1		50%		0	100
+2		MM20-1_DO2		50%		0	100
+2		MM20-1_DO3		50%		0	100
+2		MM21-1_DO1		50%		0	100
+2		MM21-1_DO2		50%		0	100
+2		MM21-1_DO3		50%		0	100
+2		MM22-1_DO1		50%		0	100
+2		MM22-1_DO2		50%		0	100
+2		MM22-1_DO3		50%		0	100
+2		MM23-1_DO1		50%		0	100
+2		MM23-1_DO2		50%		0	100
+2		MM23-1_DO3		50%		0	100
+2		MM24-1_DO1		50%		0	100
+2		MM24-1_DO2		50%		0	100
+2		MM24-1_DO3		50%		0	100
+2		MM25-1_DO1		50%		0	100
+2		MM25-1_DO2		50%		0	100
+2		MM25-1_DO3		50%		0	100
+2		MM26-1_DO1		50%		0	100
+2		MM26-1_DO2		50%		0	100
+2		MM26-1_DO3		50%		0	100
+2		MM27-1_DO1		50%		0	100
+2		MM27-1_DO2		50%		0	100
+2		MM27-1_DO3		50%		0	100
+2		MM28-1_DO1		50%		0	100
+2		MM28-1_DO2		50%		0	100
+2		MM28-1_DO3		50%		0	100
+2		MM29-1_DO1		50%		0	100
+2		MM29-1_DO2		50%		0	100
+2		MM29-1_DO3		50%		0	100
+
+3		MM1-1_DO1		50%		0	100
+3		MM1-1_DO2		50%		0	100
+3		MM1-1_DO3		50%		0	100
+3		MM2-1_DO1		50%		0	100
+3		MM2-1_DO2		50%		0	100
+3		MM2-1_DO3		50%		0	100
+3		MM3-1_DO1		50%		0	100
+3		MM3-1_DO2		50%		0	100
+3		MM3-1_DO3		50%		0	100
+3		MM4-1_DO1		50%		0	100
+3		MM4-1_DO2		50%		0	100
+3		MM4-1_DO3		50%		0	100
+3		MM5-1_DO1		50%		0	100
+3		MM5-1_DO2		50%		0	100
+3		MM5-1_DO3		50%		0	100
+3		MM6-1_DO1		50%		0	100
+3		MM6-1_DO2		50%		0	100
+3		MM6-1_DO3		50%		0	100
+3		MM7-1_DO1		50%		0	100
+3		MM7-1_DO2		50%		0	100
+3		MM7-1_DO3		50%		0	100
+3		MM8-1_DO1		50%		0	100
+3		MM8-1_DO2		50%		0	100
+3		MM8-1_DO3		50%		0	100
+3		MM9-1_DO1		50%		0	100
+3		MM9-1_DO2		50%		0	100
+3		MM9-1_DO3		50%		0	100
+3		MM10-1_DO1		50%		0	100
+3		MM10-1_DO2		50%		0	100
+3		MM10-1_DO3		50%		0	100
+3		MM11-1_DO1		50%		0	100
+3		MM11-1_DO2		50%		0	100
+3		MM11-1_DO3		50%		0	100
+3		MM12-1_DO1		50%		0	100
+3		MM12-1_DO2		50%		0	100
+3		MM12-1_DO3		50%		0	100
+3		MM13-1_DO1		50%		0	100
+3		MM13-1_DO2		50%		0	100
+3		MM13-1_DO3		50%		0	100
+3		MM14-1_DO1		50%		0	100
+3		MM14-1_DO2		50%		0	100
+3		MM14-1_DO3		50%		0	100
+3		MM15-1_DO1		50%		0	100
+3		MM15-1_DO2		50%		0	100
+3		MM15-1_DO3		50%		0	100
+3		MM16-1_DO1		50%		0	100
+3		MM16-1_DO2		50%		0	100
+3		MM16-1_DO3		50%		0	100
+3		MM17-1_DO1		50%		0	100
+3		MM17-1_DO2		50%		0	100
+3		MM17-1_DO3		50%		0	100
+3		MM18-1_DO1		50%		0	100
+3		MM18-1_DO2		50%		0	100
+3		MM18-1_DO3		50%		0	100
+3		MM19-1_DO1		50%		0	100
+3		MM19-1_DO2		50%		0	100
+3		MM19-1_DO3		50%		0	100
+3		MM20-1_DO1		50%		0	100
+3		MM20-1_DO2		50%		0	100
+3		MM20-1_DO3		50%		0	100
+3		MM21-1_DO1		50%		0	100
+3		MM21-1_DO2		50%		0	100
+3		MM21-1_DO3		50%		0	100
+3		MM22-1_DO1		50%		0	100
+3		MM22-1_DO2		50%		0	100
+3		MM22-1_DO3		50%		0	100
+3		MM23-1_DO1		50%		0	100
+3		MM23-1_DO2		50%		0	100
+3		MM23-1_DO3		50%		0	100
+3		MM24-1_DO1		50%		0	100
+3		MM24-1_DO2		50%		0	100
+3		MM24-1_DO3		50%		0	100
+3		MM25-1_DO1		50%		0	100
+3		MM25-1_DO2		50%		0	100
+3		MM25-1_DO3		50%		0	100
+3		MM26-1_DO1		50%		0	100
+3		MM26-1_DO2		50%		0	100
+3		MM26-1_DO3		50%		0	100
+3		MM27-1_DO1		50%		0	100
+3		MM27-1_DO2		50%		0	100
+3		MM27-1_DO3		50%		0	100
+3		MM28-1_DO1		50%		0	100
+3		MM28-1_DO2		50%		0	100
+3		MM28-1_DO3		50%		0	100
+3		MM29-1_DO1		50%		0	100
+3		MM29-1_DO2		50%		0	100
+3		MM29-1_DO3		50%		0	100
+
+4		MM30-1_DO1		100%		0	100
+
+
+
+
+>> OUTPUTS
+
+PrescriptionMaps	Harvest/biomass-harvest-prescripts-{timestep}.img
+BiomassMaps		Harvest/biomass-removed-{timestep}.img
+EventLog		Harvest/biomass-event-log.csv
+SummaryLog		Harvest/biomass-harvest-summary-log.csv
