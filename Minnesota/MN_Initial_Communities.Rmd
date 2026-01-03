@@ -1,0 +1,176 @@
+---
+title: "Untitled"
+output: pdf_document
+date: "2025-12-27"
+---
+
+```{r, message = FALSE, warning = FALSE}
+library(tidyverse)
+library(tidyterra)
+library(terra)
+library(sf)
+templateRaster <- rast("D:/Minnesota/templateRaster.tif")
+```
+
+# Mosaic MN together
+
+```{r}
+MN.shp <- st_read("C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/MN_Shapefile/mn_county_boundaries.shp")
+directory <- "D:/Minnesota/TreeMap"
+files <- list.files(directory, full.names = TRUE)
+fortypcdList <- list()
+for (file in files) {
+  raster <- rast(file)
+  name <- basename(file)
+  fortypcdList[[name]] <- raster
+}
+
+rasterSPRC <- sprc(fortypcdList)
+fortypcdMN <- mosaic(rasterSPRC)
+
+
+shapefile <- st_transform(MN.shp, crs = crs(fortypcdMN))
+fortypcdMN <- crop(fortypcdMN, shapefile) %>% mask(., shapefile)
+fortypcdMN <- ifel(fortypcdMN < 0, 0, fortypcdMN)
+fortypcdMN <- project(fortypcdMN, templateRaster, method = "near")
+
+plot(fortypcdMN)
+
+
+writeRaster(fortypcdMN,
+            filename = "D:/Minnesota/Data/IC_30m_UTM15N.tif",
+            overwrite = TRUE,
+            datatype = "INT4S",
+            NAflag = 0)
+
+
+fortypcdDf <- read_csv("D:/Minnesota/FORTYPCDs.csv")[,-1] %>% `colnames<-`(c("FORTYPCD", "Forest_Type")) %>%
+  mutate(FORTYPCD = str_trim(FORTYPCD, side = "both"))
+fortypcdDf$FORTYPCD <- as.integer(fortypcdDf$FORTYPCD)
+
+# Plot with labels and not just the numbered FORTYPCDs
+r < fortypcdMN
+r <- as.int(r)
+r <- as.factor(r)
+levels(r) <- fortypcdDf
+plot(r)
+
+```
+
+
+```{r}
+library(terra)
+library(sf)
+library(readr)
+library(stringr)
+library(dplyr)
+
+# -------------------------------------------------------------------
+# Load template raster
+# -------------------------------------------------------------------
+templateRaster <- rast("D:/Minnesota/templateRaster.tif")
+
+# -------------------------------------------------------------------
+# Load MN county boundary
+# -------------------------------------------------------------------
+MN.shp <- st_read(
+  "C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/MN_Shapefile/mn_county_boundaries.shp",
+  quiet = TRUE
+)
+
+# -------------------------------------------------------------------
+# Load and mosaic all forest type rasters
+# -------------------------------------------------------------------
+directory <- "D:/Minnesota/TreeMap"
+files <- list.files(directory, full.names = TRUE)
+
+rasterSPRC <- sprc(files)
+fortypcdMN <- mosaic(rasterSPRC)
+
+# -------------------------------------------------------------------
+# Reproject & crop to Minnesota
+# -------------------------------------------------------------------
+MN.shp <- st_transform(MN.shp, crs(fortypcdMN))
+
+fortypcdMN <- crop(fortypcdMN, MN.shp)
+fortypcdMN <- mask(fortypcdMN, MN.shp)
+
+# -------------------------------------------------------------------
+# Clean invalid values
+# -------------------------------------------------------------------
+fortypcdMN <- ifel(fortypcdMN < 0, NA, fortypcdMN)
+
+# -------------------------------------------------------------------
+# Align to template raster
+# -------------------------------------------------------------------
+fortypcdMN <- project(
+  fortypcdMN,
+  templateRaster,
+  method = "near"
+)
+
+# -------------------------------------------------------------------
+# Convert to categorical raster
+# -------------------------------------------------------------------
+fortypcdMN <- as.int(fortypcdMN)
+fortypcdMN <- as.factor(fortypcdMN)
+
+# -------------------------------------------------------------------
+# Load forest type lookup table
+# -------------------------------------------------------------------
+fortypcdDf <- read_csv(
+  "D:/Minnesota/FORTYPCDs.csv",
+  show_col_types = FALSE
+) |>
+  select(`Forest type / type group`) |>
+  mutate(
+    FORTYPCD = as.integer(str_trim(`Forest type / type group`))
+  )
+
+
+read_csv(
+  "D:/Minnesota/FORTYPCDs.csv",
+  show_col_types = FALSE
+  )
+
+# -------------------------------------------------------------------
+# Attach labels to raster (RAT)
+# -------------------------------------------------------------------
+levels(fortypcdMN) <- fortypcdDf
+
+# -------------------------------------------------------------------
+# Write output raster
+# -------------------------------------------------------------------
+writeRaster(
+  fortypcdMN,
+  "D:/Minnesota/Data/IC_MN.tif",
+  overwrite = TRUE
+)
+
+# -------------------------------------------------------------------
+# Plot for sanity check
+# -------------------------------------------------------------------
+plot(fortypcdMN)
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

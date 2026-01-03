@@ -1,0 +1,405 @@
+---
+title: "Untitled"
+output: pdf_document
+date: "2025-12-18"
+---
+
+```{r, message = FALSE, warning = FALSE}
+library(tidyverse)
+library(terra)
+library(sf)
+library(whitebox)
+templateRaster <- rast("D:/Minnesota/templateRaster.tif")
+gc()
+```
+
+# Soil Maps
+
+```{r}
+# OG data is in t/ha but will need to be in g/m2
+# soilGrid <- rast("C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/SoilGrid_MN_250m.tif")
+# MN.shp <- st_read("C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/MN_Shapefile/mn_county_boundaries.shp")
+# shapefile <- st_transform(MN.shp, crs(soilGrid))
+# soilGrid <- crop(soilGrid, shapefile) %>% mask(., shapefile)
+# 
+# soilGrid <- project(soilGrid, "epsg:26915", res = c(30,30), method = "near")
+# 
+# writeRaster(soilGrid,
+#             filename = "D:/Minnesota/Data/SoilGrid_30m_UTM15N.tif",
+#             NAflag = 0,
+#             datatype = "FLT4S",
+#             overwrite = TRUE)
+
+
+# Create the soil pool maps for NECN
+# Start by converting the data from t/ha to g/m2
+soilGrid <- rast("D:/Minnesota/Data/SoilGrid_30m_UTM15N.tif")
+values(soilGrid) <- values(soilGrid) * 100
+
+# Starting C:N ratios 
+SOM1surfC <- soilGrid
+SOM1soilC <- soilGrid
+SOM2C <- soilGrid
+SOM3C <- soilGrid
+SOM1surfN <- SOM1surfC
+SOM1soilN <- SOM1soilC
+SOM2N <- SOM2C
+SOM3N <- SOM3C
+
+# Change the values
+values(SOM1surfC) <- values(soilGrid) * 0.01
+values(SOM1surfN) <- values(SOM1surfC) * 0.1
+values(SOM1soilC) <- values(soilGrid) * 0.02
+values(SOM1soilN) <- values(SOM1soilC) * 0.1
+values(SOM2C) <- values(soilGrid) * 0.59
+values(SOM2N) <- values(SOM2C) * 0.04
+values(SOM3C) <- values(soilGrid) * 0.38
+values(SOM3N) <- values(SOM2C) * 0.118
+rasters <- list(SOM1surfC, SOM1surfN, SOM1soilC, SOM1soilN, SOM2C, SOM2N, SOM3C, SOM3N)
+rasters <- lapply(rasters, function(x) ifel(is.na(SOM1soilC), 0, x))
+names(rasters) <- c("SOM1surfC", "SOM1surfN", "SOM1soilC", "SOM1soilN", "SOM2C", "SOM2N", "SOM3C", "SOM3N")
+
+# Write out the rasters
+outDirectory <- "D:/Minnesota/Data/"
+for (i in seq_along(rasters)) {
+  rasterName <- names(rasters)[i]
+  filename <- paste0(outDirectory, rasterName, "_30m_UTM15N.tif")
+  writeRaster(rasters[[i]],
+              filename = filename,
+              NAflag = 0,
+              datatype = "FLT4S",
+              overwrite = TRUE)
+}
+
+# Clay, Sand and Silt
+
+```
+
+
+
+
+```{r}
+soilGrid <- rast("D:/Minnesota/Data/SoilGrid_30m_UTM15N.tif")
+values(soilGrid) <- values(soilGrid) * 100
+MN.shp <- st_read("C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/MN_Shapefile/mn_county_boundaries.shp")
+unionMN <- st_union(MN.shp)
+
+mapUnits <- read_sf("D:/Minnesota/gSSURGO_MN.gdb", layer = "MUPOLYGON") %>% st_transform(., 26915)
+mapUnits <- mapUnits %>% st_make_valid(.)
+mapUnits <- mapUnits %>% st_intersection(., unionMN)
+mapUnits$ID <- 1:nrow(mapUnits)
+
+gc()
+
+mapunits_clean <- mapUnits |>
+  st_zm(drop = TRUE) |>
+  st_make_valid() |>
+  st_collection_extract("POLYGON") |>
+  st_cast("POLYGON")
+
+gc()
+
+mapunits_vect <- vect(mapunits_clean)
+
+gc()
+
+fieldCapacityRast <- terra::rasterize(
+  mapunits_vect,
+  soilGrid,
+  field = "wthirdbar_r",
+  fun = mean,
+  na.rm = TRUE
+)
+
+gc()
+
+fieldCapacityRast <- ifel(is.na(fieldCapacityRast), 0, fieldCapacityRast)
+
+# Component
+component <- st_read(dsn = "D:/Minnesota/gSSURGO_MN.gdb",
+                     layer = "component",
+                     quiet = TRUE) %>%
+  filter(mukey %in% mapUnits$MUKEY) %>%
+  select(comppct_r, cokey, mukey, drainagecl, slope_r)
+
+# Horizon
+horizon <- st_read(dsn = "D:/Minnesota/gSSURGO_MN.gdb",
+                   layer = "chorizon",
+                   quiet = TRUE) %>%
+  filter(cokey %in% component$cokey)
+
+# Value1
+valu1 <- st_read(dsn = "D:/Minnesota/gSSURGO_MN.gdb",
+                 layer = "Valu1",
+                 quiet = TRUE) %>%
+  filter(mukey %in% mapUnits$MUKEY)
+
+# Restrictions
+restrictions <- st_read(dsn = "D:/Minnesota/gSSURGO_MN.gdb",
+                        layer = "corestrictions",
+                        quiet = TRUE) %>%
+  filter(cokey %in% component$cokey) %>%
+  group_by(cokey) %>%
+  summarise(soilDepth = min(resdept_r), .groups = "keep")
+component <- left_join(component, restrictions, by = "cokey")
+
+# Make NA soil depth to median (currently 99cm)
+component[is.na(component$soilDepth), "soilDepth"] <- median(component$soilDepth, na.rm = TRUE)
+
+# Drainage table
+drainageDf <- data.frame(drainagecl = c("Excessively drained", "Somewhat excessively drained", "Well drained", "Moderately well drained", "Somewhat well drained", "Poorly wdrained", "Very poorly drained"),
+           drain_coef = c(1,0.83,0.66,0.5,0.33,0.167,0))
+component$soilDrain <- drainageDf$drain_coef[match(component$drainagecl, drainageDf$drainagecl)]
+
+# For the remaining SSURGO data we need to extract data from each horizon and then aggregate
+# up to the component layer and then up again to the map unit
+
+# Take the weighted average of variables by the horizon thickness for each component
+# and then join with components
+component <- horizon %>%
+  mutate(hzthk_r = ifelse(!is.na(hzthk_r), hzthk_r, hzdepb_r - hzdept_r)) %>%
+  select(cokey, hzthk_r, wthirdbar_r, wfifteenbar_r, sandtotal_r, claytotal_r, ksat_r) %>%
+  group_by(cokey) %>%
+  summarise(across(where(is.numeric),
+                   ~ weighted.mean(., w = hzthk_r, na.rm = TRUE))) %>%
+  mutate(across(wthirdbar_r:claytotal_r, ~replace_na(.x, replace = 1.0))) %>%
+  mutate(across(c(wthirdbar_r:claytotal_r), .fns = ~ `*`(.x, 0.01))) %>%
+  right_join(component, by = "cokey") %>%
+  mutate(across(where(is.double), ~replace_na(.x, 0.001))) %>%
+  mutate(across(where(is.integer), ~as.double(replace_na(.x, 1)))) %>%
+  mutate(wthirdbar_r = ifelse(wthirdbar_r <= wfifteenbar_r, wfifteenbar_r + 0.02, wthirdbar_r))
+
+# Add the data to the mapunit layer
+mapunits_data <- component %>%
+  group_by(mukey) %>%
+  summarise(across(c(wthirdbar_r, wfifteenbar_r, sandtotal_r, claytotal_r, ksat_r, soilDepth, soilDrain, slope_r),
+                   ~ weighted.mean(., w = comppct_r, na.rm = TRUE))) %>%
+  right_join(mapUnits, by = c("mukey" = "MUKEY")) %>%
+  rename(MUKEY = mukey) %>%
+  st_sf()
+
+#----BASEFLOW----#
+# demMN <- rast("D:/Minnesota/Data/output_hh.tif")
+# shapefile <- st_transform(MN.shp, crs = crs(demMN))
+# demMN <- crop(demMN, shapefile) %>% mask(., shapefile)
+# demMN <- project(demMN, templateRaster, method = "near")
+# writeRaster(demMN,
+#             filename = "D:/Minnesota/Data/DEM_30m_UTM15N.tif",
+#             NAflag = 0,
+#             datatype = "FLT4S",
+#             overwrite = TRUE)
+# plot(demMN)
+
+gc()
+
+demMN <- rast("D:/Minnesota/Data/DEM_30m_UTM15N.tif")
+plot(demMN)
+
+wbt_fill_depressions(
+  dem = "D:/Minnesota/Data/DEM_30m_UTM15N.tif",
+  output = "D:/Minnesota/Whitebox_Calculations/FillDepressions_30m_UTM15N.tif"
+)
+
+
+plot(rast("D:/Minnesota/Whitebox_Calculations/FillDepressions_30m_UTM15N.tif"))
+
+wbt_d8_flow_accumulation(
+  input = "D:/Minnesota/Whitebox_Calculations/FillDepressions_30m_UTM15N.tif",
+  output = "D:/Minnesota/Whitebox_Calculations/FlowAccumulation_30m_UTM15N.tif",
+  out_type = "specific contributing area"  # IMPORTANT
+)
+
+plot(rast("D:/Minnesota/Whitebox_Calculations/FlowAccumulation_30m_UTM15N.tif"))
+
+wbt_slope(
+  dem = "D:/Minnesota/Whitebox_Calculations/FillDepressions_30m_UTM15N.tif",
+  output = "D:/Minnesota/Whitebox_Calculations/Slope_30m_UTM15N.tif",
+  units = "radians"
+)
+
+plot(rast("D:/Minnesota/Whitebox_Calculations/Slope_30m_UTM15N.tif"))
+
+wbt_wetness_index(
+  sca = "D:/Minnesota/Whitebox_Calculations/FlowAccumulation_30m_UTM15N.tif",
+  slope = "D:/Minnesota/Whitebox_Calculations/Slope_30m_UTM15N.tif",
+  output = "D:/Minnesota/Whitebox_Calculations/TWI_30m_UTM15N.tif"
+)
+
+baseflow <- rast("D:/Minnesota/Whitebox_Calculations/TWI_30m_UTM15N.tif")
+baseflow <- ifel(baseflow > 15, 0, (1 - baseflow / 15) * 0.5)
+
+baseflow <- clamp(baseflow, lower = 0.01, upper = 1)
+baseflow[is.na(baseflow)] <- 0
+
+writeRaster(baseflow,
+            "D:/Minnesota/Data/Baseflow_30m_UTM15N.tif",
+            datatype = "FLT4S",
+            NAflag = 0,
+            overwrite = TRUE)
+
+#----STORMFLOW----#
+# For stormflow (runoff), use Table 3.4 and eq. 3.2 in https://www.vub.be/WetSpa/downloads/WetSpa_manual.pdf
+soil_s0_table <- data.frame(
+  soil_type = c("Sand", "Loamy sand", "Sandy loam", "Loam", "Silt loam", "Silt", "Sandy clay loam", "Clay loam", "Silty clay loam", "Sandy clay", "Silty clay", "Clay"),
+  code = 1:12,
+  s0 = c(0.68, 0.65, 0.62, 0.59, 0.56, 0.53, 0.5, 0.47, 0.44, 0.41, 0.38, 0.35))
+
+soil_slope_table <- data.frame(
+  soil_type = c("Sand", "Loamy sand", "Sandy loam", "Loam", "Silt loam", "Silt", "Sandy clay loam", "Clay loam", "Silty clay loam", "Sandy clay", "Silty clay", "Clay"),
+  soil_type_short = c("Sa", "LoSa", "SaLo", "Lo", "SiLo", "Si", "SaClLo", "ClLo", "SiClLo", "SaCl", "SiCl", "Cl"),
+  code = 1:12,
+  slope1 = c(0.03, 0.07, 0.10, 0.13, 0.17, 0.20, 0.23, 0.27, 0.30, 0.33, 0.37, 0.40),
+  slope2 = c(0.07, 0.11, 0.14, 0.17, 0.21, 0.24, 0.27, 0.31, 0.34, 0.37, 0.41, 0.44),
+  slope3 = c(0.13, 0.17, 0.20, 0.23, 0.27, 0.30, 0.33, 0.37, 0.40, 0.43, 0.47, 0.50),
+  slope4 = c(0.25, 0.29, 0.32, 0.35, 0.39, 0.42, 0.45, 0.49, 0.52, 0.55, 0.59, 0.62)
+)
+
+mapunits_data$OID <- 1:nrow(mapunits_data)
+
+soil_mat <- data.frame(OID = mapunits_data$OID,
+                       SAND = mapunits_data$sandtotal_r * 100,
+                       CLAY = mapunits_data$claytotal_r * 100,
+                       SILT = 100 - mapunits_data$sandtotal_r * 100 - mapunits_data$claytotal_r * 100) %>%
+  na.omit()
+
+# classify soils by texture
+texture <- data.frame(soiltexture::TT.points.in.classes(tri.data = soil_mat, class.sys = "USDA.TT"))
+names(texture)  <- soil_slope_table[match(names(texture), soil_slope_table$soil_type_short), "code"]
+
+for(i in 1:nrow(texture)){
+  soil_mat$class[i] <- as.numeric(names(texture)[which(texture[i, ] %in% c(1,2,3))])
+}
+
+# join data
+mapunits_data <- left_join(mapunits_data, soil_mat[c("OID", "class")], by = c("OID"))
+mapunits_data$class <- as.numeric(mapunits_data$class)
+gc()
+
+# mapunits_clean <- mapunits_data %>% st_zm(drop = TRUE) %>% st_make_valid() %>% st_collection_extract("POLYGON") %>% st_simplify(dTolerance = 5)
+# class_rast <- terra::rasterize(mapunits_clean, soilGrid, field = "class", touches = TRUE)
+# gc()
+
+s0_rast <- terra::classify(class_rast, rcl = soil_s0_table[, c(2,3)])
+# Calculate slope
+slope <- terrain(demMN, v = "slope", unit = "radians")
+# slope_percent <- terra::app(slope, function(x) tan(x * (2*pi/360)) * 100)
+slope_percent <- tan(slope) * 100
+
+plot(slope)
+plot(slope_percent)
+
+#bin into groups 1:4
+slope_bin <- terra::classify(slope_percent, c(-1, 0.5, 5, 10, 1000)) + 1
+
+s_lookup <- as.matrix(soil_slope_table[, c("slope1", "slope2", "slope3", "slope4")])
+c0_lookup <- soil_s0_table$s0
+s_rast  <- rast(class_rast)
+c0_rast <- rast(class_rast)
+# Stormflow slope parameter (s)
+s_rast <- app(c(class_rast, slope_bin), fun = function(x) {
+  cls <- x[1]
+  slp <- x[2]
+  if (is.na(cls) || is.na(slp)) return(NA)
+  s_lookup[cls, slp]
+})
+
+# # Runoff coefficient (c0)
+# c0_rast <- app(class_rast, fun = function(cls) {
+#   if (is.na(cls)) return(NA)
+#   c0_lookup[cls]
+# })
+
+
+c0_rast <- terra::app(class_rast, function(cls) {
+  out <- rep(NA_real_, length(cls))
+  ok <- !is.na(cls)
+  out[ok] <- c0_lookup[cls[ok]]
+  out
+})
+
+gc()
+
+stormflowRast <- c0_rast + (1-c0_rast) * (s_rast / (s_rast + s0_rast))
+writeRaster(stormflowRast,
+            filename = "D:/Minnesota/Data/Stormflow_30m_UTM15N_WITH_NAs.tif",
+            datatype = "FLT4S",
+            NAflag = 0,
+            overwrite = TRUE)
+
+stormflowRast <- ifel(is.na(stormflowRast), 0, stormflowRast)
+writeRaster(stormflowRast,
+            filename = "D:/Minnesota/Data/Stormflow_30m_UTM15N_WITHOUT_NAs.tif",
+            datatype = "FLT4S",
+            NAflag = 0,
+            overwrite = TRUE)
+
+#----FIELD CAPACITY----#
+mapunits_vect <- vect(mapunits_data)
+fieldCapacityRast <- rasterize(mapunits_data, soilGrid, field = "wthirdbar_r", fun = "mean")
+fieldCapacityRast <- ifel(is.na(fieldCapacityRast), 0, fieldCapacityRast)
+plot(fieldCapacityRast)
+
+writeRaster(fieldCapacityRast,
+            "D:/Minnesota/Data/FieldCapacity_30m_UTM15N.tif",
+            datatype = "FLT4S",
+            NAflag = 0,
+            overwrite = TRUE)
+
+#----WILTPOINT----#
+wiltpointRast <- rasterize(mapunits_data, soilGrid, field = "wfifteenbar_r", fun = "mean")
+wiltpointRast <- ifel(is.na(wiltpointRast), 0, wiltpointRast)
+plot(wiltpointRast)
+
+writeRaster(wiltpointRast,
+            "D:/Minnesota/Data/Wiltpoint_30m_UTM15N.tif",
+            datatype = "FLT4S",
+            NAflag = 0,
+            overwrite = TRUE)
+
+#----SOIL DRAINAGE----#
+soilDrainRast <- rasterize(mapunits_data, soilGrid, field = "soilDrain", fun = "mean")
+values(soilDrainRast) <- ifelse(is.na(values(soilDrainRast)), 0, values(soilDrainRast))
+plot(soilDrainRast)
+
+writeRaster(soilDrainRast,
+            "D:/Minnesota/Data/SoilDrainage_30m_UTM15N.tif",
+            datatype = "FLT4S",
+            NAflag = 0,
+            overwrite = TRUE)
+
+#----SOIL DEPTH----#
+soilDepthRast <- rasterize(mapunits_data, soilGrid, field = "soilDepth", fun = "mean")
+soilDepthRast <- ifel(is.na(soilDepthRast), 0, soilDepthRast)
+plot(soilDepthRast)
+
+writeRaster(soilDepthRast,
+            "D:/Minnesota/Data/SoilDepth_30m_UTM15N.tif",
+            datatype = "FLT4S",
+            NAflag = 0,
+            overwrite = TRUE)
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
