@@ -1,0 +1,103 @@
+---
+title: "Untitled"
+output: pdf_document
+date: "2025-12-27"
+---
+
+```{r, message = FALSE, warning = FALSE}
+library(tidyverse)
+library(tidyterra)
+library(terra)
+library(sf)
+templateRaster <- rast("D:/Minnesota/templateRaster.tif")
+```
+
+# Process the Superior NF wetland areas
+
+```{r}
+# wetlands <- read_sf("D:/Minnesota/MN_geodatabase_wetlands.gdb")
+# nationForests.shp <- st_read("D:/Minnesota/National_Forest_Shapefiles/S_USA.FSCommonNames.shp") %>%
+#   filter(COMMONNAME == "Superior National Forest")
+# shapefile <- st_transform(nationForests.shp, crs = crs(wetlands))
+# bwcaWetlands <- st_crop(wetlands, shapefile) %>% st_intersection(., shapefile)
+# rm(wetlands)
+# st_write(bwcaWetlands, dsn = "D:/Minnesota/SNF_Wetlands/bwcaWetlands.shp")
+```
+
+# Exploratory Analysis
+
+```{r}
+# Read in 
+bwcaWetlands <- st_read("D:/Minnesota/SNF_Wetlands/bwcaWetlands.shp")
+fortypcdRast <- rast("D:/Minnesota/Data/IC_30m_UTM15N.tif")
+
+fortypcdDf <- read_csv("D:/Minnesota/FORTYPCDs.csv")[,-1] %>% `colnames<-`(c("FORTYPCD", "Forest_Type")) %>%
+  mutate(FORTYPCD = str_trim(FORTYPCD, side = "both"))
+fortypcdDf$FORTYPCD <- as.integer(fortypcdDf$FORTYPCD)
+
+
+
+plot(fortypcdRast)
+
+
+
+fortypcdDf <- read_csv("D:/Minnesota/FORTYPCDs.csv")[,-1] %>% `colnames<-`(c("FORTYPCD", "Forest_Type")) %>%
+  mutate(FORTYPCD = str_trim(FORTYPCD, side = "both"))
+fortypcdDf$FORTYPCD <- as.integer(fortypcdDf$FORTYPCD)
+
+# Plot with labels and not just the numbered FORTYPCDs
+r < fortypcdMN
+r <- as.int(r)
+r <- as.factor(r)
+levels(r) <- fortypcdDf
+plot(r)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
