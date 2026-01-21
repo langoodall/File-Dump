@@ -1,0 +1,159 @@
+---
+title: "Untitled"
+output: pdf_document
+date: "2026-01-13"
+---
+
+```{r, message = FALSE, warning = FALSE}
+library(tidyverse)
+library(data.table)
+library(terra)
+library(sf)
+
+templateRaster <- rast("D:/Minnesota/templateRaster.tif")
+MN.shp <- st_read("D:/Minnesota/Shapefiles/mn_county_boundaries.shp") %>% st_union(.) %>% st_cast(., "POLYGON")
+nationForests.shp <- st_read("D:/Minnesota/National_Forest_Shapefiles/S_USA.FSCommonNames.shp") %>%
+  filter(COMMONNAME == "Superior National Forest") %>%
+  st_transform(., crs = crs(templateRaster))
+```
+
+
+
+```{r}
+# Read in total precipitation and mean temperature data
+directory <- "D:/Minnesota/PRISM_MN/Ppt"
+files <- list.files(directory, pattern = "*.tif$", full.names = TRUE)
+
+shapefile <- st_transform(MN.shp, crs = crs(rast(files[1])))
+pptList <- list()
+for (file in files) {
+  raster <- rast(file)
+  raster <- crop(raster, shapefile)
+  raster <- mask(raster, vect(shapefile))
+  name <- basename(file)
+  pptList[[name]] <- raster
+}
+
+pptRast <- pptList[[1]] + pptList[[2]] + pptList[[3]] + pptList[[4]] + pptList[[5]]
+pptRast <- project(pptRast, templateRaster, method = "near")
+
+
+directory <- "D:/Minnesota/PRISM_MN/Temp"
+files <- list.files(directory, pattern = "*.tif$", full.names = TRUE)
+
+tempList <- list()
+for (file in files) {
+  raster <- rast(file)
+  raster <- crop(raster, shapefile) %>% mask(., vect(shapefile))
+  name <- basename(file)
+  tempList[[name]] <- raster
+}
+
+tempRast <- mean(tempList[[1]], tempList[[2]], tempList[[3]], tempList[[4]], tempList[[5]])
+tempRast <- project(tempRast, templateRaster, method = "near")
+
+plot(tempRast)
+plot(pptRast)
+
+
+# Add 0s to NAs
+pptRast[is.na(pptRast)] <- 0
+tempRast[is.na(tempRast)] <- 0
+
+# Stack, crop and mask the rasters
+stack <- c(pptRast, tempRast) %>% crop(., nationForests.shp) %>% mask(., nationForests.shp)
+
+stack$prism_ppt_us_30s_202005_avg_30y[is.na(stack$prism_ppt_us_30s_202005_avg_30y)] <- 0
+stack$prism_tmean_us_30s_202005_avg_30y[is.na(stack$prism_tmean_us_30s_202005_avg_30y)] <- 0
+
+scalePpt <- scale(stack$prism_ppt_us_30s_202005_avg_30y)
+scaleTemp <- scale(stack$prism_tmean_us_30s_202005_avg_30y)
+
+
+scaleStack <- c(scalePpt, scaleTemp)
+
+plot(scaleStack)
+
+scaleDf <- as.data.frame(scaleStack)
+
+x <- kmeans(na.omit(scaleDf), 3, iter.max = 10, nstart = 25)
+
+sqrt(x$tot.withinss)
+
+
+x$betweenss / x$totss
+
+
+
+
+k <- 5:20
+
+results <- data.frame(
+  k = k,
+  meanVarTemp = NA_real_,
+  meanVarPpt  = NA_real_,
+  tot_withinss = NA_real_,
+  var_explained = NA_real_
+)
+
+set.seed(33)
+
+df_clean <- na.omit(scaleDf) %>% `colnames<-`(c("ppt", "temp"))
+
+for (i in seq_along(k)) {
+
+  km <- kmeans(
+    df_clean,
+    centers = k[i],
+    nstart = 25
+  )
+
+  df_clean$cluster <- km$cluster
+
+  tempVar <- aggregate(temp ~ cluster, df_clean, var)
+  pptVar  <- aggregate(ppt ~ cluster, df_clean, var)
+
+  results$meanVarTemp[i] <- mean(tempVar$layer.1)
+  results$meanVarPpt[i]  <- mean(pptVar$layer.2)
+  results$tot_withinss[i] <- km$tot.withinss
+  results$var_explained[i] <- km$betweenss / km$totss
+}
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

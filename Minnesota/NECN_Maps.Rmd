@@ -72,6 +72,53 @@ for (i in seq_along(rasters)) {
 }
 
 # Clay, Sand and Silt
+# Data was acquired from the SoilGrid Maps, the same datasource as above. They come in horizons
+# of 0-5cm, 5-15cm and 15-30cm. I will combine these and get a 0-30cm average content for clay 
+# and sand. Silt will be the remainder
+directory <- "D:/Minnesota/Temporary Soil Folder"
+# Clay
+clayFiles <- list.files(directory, pattern = "Clay", full.names = TRUE)
+clay <- rast(clayFiles)
+clay <- sum(clay, na.rm = TRUE)
+
+sandFiles <- list.files(directory, pattern = "Sand", full.names = TRUE)
+sand <- rast(sandFiles)
+sand <- sum(sand, na.rm = TRUE)
+
+MN.shp <- st_read("C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/MN_Shapefile/mn_county_boundaries.shp")
+shapefile <- st_transform(MN.shp, crs(clay))
+
+# ----- Crop, mask, project -----
+clay <- crop(clay, shapefile)
+clay <- mask(clay, shapefile)
+clay <- terra::project(clay, soilGrid, method = "near")
+
+sand <- crop(sand, shapefile)
+sand <- mask(sand, shapefile)
+sand <- terra::project(sand, soilGrid, method = "near")
+
+
+soil <- c(clay, sand)
+names(soil) <- c("clay", "sand")
+total <- sum(soil, na.rm = TRUE)
+soilPct <- soil / total
+
+soilPct <- clamp(soilPct, lower = 0, upper = 1, values = TRUE)
+soilPct[is.na(soilPct)] <- 0
+
+plot(soilPct)
+
+# writeRaster(soilPct$clay,
+#             filename = "D:/Minnesota/Data/Clay_30m_UTM15N.tif",
+#             datatype = "FLT4S",
+#             NAflag = 0,
+#             overwrite = TRUE)
+# 
+# writeRaster(soilPct$sand,
+#             filename = "D:/Minnesota/Data/Sand_30m_UTM15N.tif",
+#             datatype = "FLT4S",
+#             NAflag = 0,
+#             overwrite = TRUE)
 
 ```
 
@@ -83,13 +130,16 @@ soilGrid <- rast("D:/Minnesota/Data/SoilGrid_30m_UTM15N.tif")
 values(soilGrid) <- values(soilGrid) * 100
 MN.shp <- st_read("C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/MN_Shapefile/mn_county_boundaries.shp")
 unionMN <- st_union(MN.shp)
+  # st_transform(., 5070)
 
+# mapUnits <- read_sf("D:/Minnesota/gSSURGO_MN.gdb", layer = "MUPOLYGON", wkt_filter = st_as_text(unionMN)) %>% st_transform(., 26915)
 mapUnits <- read_sf("D:/Minnesota/gSSURGO_MN.gdb", layer = "MUPOLYGON") %>% st_transform(., 26915)
 mapUnits <- mapUnits %>% st_make_valid(.)
 mapUnits <- mapUnits %>% st_intersection(., unionMN)
 mapUnits$ID <- 1:nrow(mapUnits)
 
 gc()
+
 
 mapunits_clean <- mapUnits |>
   st_zm(drop = TRUE) |>
@@ -231,11 +281,11 @@ baseflow <- ifel(baseflow > 15, 0, (1 - baseflow / 15) * 0.5)
 baseflow <- clamp(baseflow, lower = 0.01, upper = 1)
 baseflow[is.na(baseflow)] <- 0
 
-writeRaster(baseflow,
-            "D:/Minnesota/Data/Baseflow_30m_UTM15N.tif",
-            datatype = "FLT4S",
-            NAflag = 0,
-            overwrite = TRUE)
+# writeRaster(baseflow,
+#             "D:/Minnesota/Data/Baseflow_30m_UTM15N.tif",
+#             datatype = "FLT4S",
+#             NAflag = 0,
+#             overwrite = TRUE)
 
 #----STORMFLOW----#
 # For stormflow (runoff), use Table 3.4 and eq. 3.2 in https://www.vub.be/WetSpa/downloads/WetSpa_manual.pdf
@@ -320,18 +370,18 @@ c0_rast <- terra::app(class_rast, function(cls) {
 gc()
 
 stormflowRast <- c0_rast + (1-c0_rast) * (s_rast / (s_rast + s0_rast))
-writeRaster(stormflowRast,
-            filename = "D:/Minnesota/Data/Stormflow_30m_UTM15N_WITH_NAs.tif",
-            datatype = "FLT4S",
-            NAflag = 0,
-            overwrite = TRUE)
-
-stormflowRast <- ifel(is.na(stormflowRast), 0, stormflowRast)
-writeRaster(stormflowRast,
-            filename = "D:/Minnesota/Data/Stormflow_30m_UTM15N_WITHOUT_NAs.tif",
-            datatype = "FLT4S",
-            NAflag = 0,
-            overwrite = TRUE)
+# writeRaster(stormflowRast,
+#             filename = "D:/Minnesota/Data/Stormflow_30m_UTM15N_WITH_NAs.tif",
+#             datatype = "FLT4S",
+#             NAflag = 0,
+#             overwrite = TRUE)
+# 
+# stormflowRast <- ifel(is.na(stormflowRast), 0, stormflowRast)
+# writeRaster(stormflowRast,
+#             filename = "D:/Minnesota/Data/Stormflow_30m_UTM15N_WITHOUT_NAs.tif",
+#             datatype = "FLT4S",
+#             NAflag = 0,
+#             overwrite = TRUE)
 
 #----FIELD CAPACITY----#
 mapunits_vect <- vect(mapunits_data)
@@ -339,46 +389,46 @@ fieldCapacityRast <- rasterize(mapunits_data, soilGrid, field = "wthirdbar_r", f
 fieldCapacityRast <- ifel(is.na(fieldCapacityRast), 0, fieldCapacityRast)
 plot(fieldCapacityRast)
 
-writeRaster(fieldCapacityRast,
-            "D:/Minnesota/Data/FieldCapacity_30m_UTM15N.tif",
-            datatype = "FLT4S",
-            NAflag = 0,
-            overwrite = TRUE)
+# writeRaster(fieldCapacityRast,
+#             "D:/Minnesota/Data/FieldCapacity_30m_UTM15N.tif",
+#             datatype = "FLT4S",
+#             NAflag = 0,
+#             overwrite = TRUE)
 
 #----WILTPOINT----#
 wiltpointRast <- rasterize(mapunits_data, soilGrid, field = "wfifteenbar_r", fun = "mean")
 wiltpointRast <- ifel(is.na(wiltpointRast), 0, wiltpointRast)
 plot(wiltpointRast)
 
-writeRaster(wiltpointRast,
-            "D:/Minnesota/Data/Wiltpoint_30m_UTM15N.tif",
-            datatype = "FLT4S",
-            NAflag = 0,
-            overwrite = TRUE)
+# writeRaster(wiltpointRast,
+#             "D:/Minnesota/Data/Wiltpoint_30m_UTM15N.tif",
+#             datatype = "FLT4S",
+#             NAflag = 0,
+#             overwrite = TRUE)
 
 #----SOIL DRAINAGE----#
 soilDrainRast <- rasterize(mapunits_data, soilGrid, field = "soilDrain", fun = "mean")
 values(soilDrainRast) <- ifelse(is.na(values(soilDrainRast)), 0, values(soilDrainRast))
 plot(soilDrainRast)
 
-writeRaster(soilDrainRast,
-            "D:/Minnesota/Data/SoilDrainage_30m_UTM15N.tif",
-            datatype = "FLT4S",
-            NAflag = 0,
-            overwrite = TRUE)
+# writeRaster(soilDrainRast,
+#             "D:/Minnesota/Data/SoilDrainage_30m_UTM15N.tif",
+#             datatype = "FLT4S",
+#             NAflag = 0,
+#             overwrite = TRUE)
 
 #----SOIL DEPTH----#
 soilDepthRast <- rasterize(mapunits_data, soilGrid, field = "soilDepth", fun = "mean")
 soilDepthRast <- ifel(is.na(soilDepthRast), 0, soilDepthRast)
 plot(soilDepthRast)
 
-writeRaster(soilDepthRast,
-            "D:/Minnesota/Data/SoilDepth_30m_UTM15N.tif",
-            datatype = "FLT4S",
-            NAflag = 0,
-            overwrite = TRUE)
+# writeRaster(soilDepthRast,
+#             "D:/Minnesota/Data/SoilDepth_30m_UTM15N.tif",
+#             datatype = "FLT4S",
+#             NAflag = 0,
+#             overwrite = TRUE)
 
-
+gc()
 
 ```
 

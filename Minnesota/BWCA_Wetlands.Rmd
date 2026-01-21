@@ -9,6 +9,8 @@ library(tidyverse)
 library(tidyterra)
 library(terra)
 library(sf)
+library(elevatr)
+library(MultiscaleDTM)
 templateRaster <- rast("D:/Minnesota/templateRaster.tif")
 ```
 
@@ -28,33 +30,130 @@ templateRaster <- rast("D:/Minnesota/templateRaster.tif")
 
 ```{r}
 # Read in 
-bwcaWetlands <- st_read("D:/Minnesota/SNF_Wetlands/bwcaWetlands.shp")
+snfWetlands <- st_read("D:/Minnesota/SNF_Wetlands/snfWetlands.shp") %>% st_transform(., 26915)
 fortypcdRast <- rast("D:/Minnesota/Data/IC_30m_UTM15N.tif")
 
 fortypcdDf <- read_csv("D:/Minnesota/FORTYPCDs.csv")[,-1] %>% `colnames<-`(c("FORTYPCD", "Forest_Type")) %>%
   mutate(FORTYPCD = str_trim(FORTYPCD, side = "both"))
 fortypcdDf$FORTYPCD <- as.integer(fortypcdDf$FORTYPCD)
-
-
-
+fortypcdRast <- as.int(fortypcdRast)
+fortypcdRast <- as.factor(fortypcdRast)
+levels(fortypcdRast) <- fortypcdDf
 plot(fortypcdRast)
 
+# Crop and mask SNF fortypcds
+nationForests.shp <- st_read("D:/Minnesota/National_Forest_Shapefiles/S_USA.FSCommonNames.shp") %>%
+  filter(COMMONNAME == "Superior National Forest")
+shapefile <- st_transform(nationForests.shp, crs = crs(fortypcdRast))
+
+snfRast <- crop(fortypcdRast, shapefile) %>% mask(., shapefile)
 
 
-fortypcdDf <- read_csv("D:/Minnesota/FORTYPCDs.csv")[,-1] %>% `colnames<-`(c("FORTYPCD", "Forest_Type")) %>%
-  mutate(FORTYPCD = str_trim(FORTYPCD, side = "both"))
-fortypcdDf$FORTYPCD <- as.integer(fortypcdDf$FORTYPCD)
+plot(snfRast)
 
-# Plot with labels and not just the numbered FORTYPCDs
-r < fortypcdMN
-r <- as.int(r)
-r <- as.factor(r)
-levels(r) <- fortypcdDf
-plot(r)
+plot(shapefile[1])
+
+
+df1 <- extract(fortypcdRast, snfWetlands %>% filter(WETLAND == "Freshwater Forested/Shrub Wetland"))
+df1 %>%
+  group_by(Forest_Type) %>%
+  summarise(n = n()) %>%
+  ggplot(., aes(x = reorder(Forest_Type, -n), y = n, fill = Forest_Type)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 45, hjust = 1))
+
+df2 <- extract(fortypcdRast, snfWetlands %>% filter(WETLAND == "Riverine"))
+df2 %>%
+  group_by(Forest_Type) %>%
+  summarise(n = n()) %>%
+  ggplot(., aes(x = reorder(Forest_Type, -n), y = n, fill = Forest_Type)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 45, hjust = 1))
+
+df3 <- extract(fortypcdRast, snfWetlands %>% filter(WETLAND == "Freshwater Emergent Wetland"))
+df3 %>%
+  group_by(Forest_Type) %>%
+  summarise(n = n()) %>%
+  ggplot(., aes(x = reorder(Forest_Type, -n), y = n, fill = Forest_Type)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
+FEW_Wetland <- snfWetlands[snfWetlands$WETLAND == "Freshwater Emergent Wetland", ]
+FEW_Rast <- rasterize(FEW_Wetland, fortypcdRast, field = "WETLAND")
+
+
+plot(FEW_Rast)
 ```
 
 
+```{r}
+# Get 10m elevation so that we can then determine the topographic position index (TPI)
+snf10mElev <- get_elev_raster(locations = shapefile, z = 10, clip = "bbox")
+snf10mElev <- rast(snf10mElev)
+snf10mElev <- crop(snf10mElev, shapefile) %>% mask(., shapefile)
 
+plot(snf10mElev)
+plot(snfWetlands[2], add = TRUE)
+
+sort(unique(snfWetlands$WETLAND))
+
+# Here I am filtering just to "Freshwater Forested/Shrub Wetland" to start with
+snfWetlands <- snfWetlands %>% filter(WETLAND == "Freshwater Forested/Shrub Wetland")
+snfWetlands_Buffer <- st_buffer(snfWetlands, dist = 100)
+
+# Now I have to clip the elevation raster to the wetlands buffer
+clippedElevation <- crop(snf10mElev, snfWetlands_Buffer) %>% mask(., snfWetlands_Buffer, inverse = TRUE)
+
+
+emptyRast <- rast(extent = ext(snfWetlands_Buffer), resolution = c(10,10), crs = "epsg:26915")
+
+y <- rasterize(snfWetlands_Buffer, emptyRast, touches = TRUE)
+plot(clippedElevation)
+
+
+# class_rast <- terra::rasterize(mapunits_clean, soilGrid, field = "class", touches = TRUE)
+
+x <- MultiscaleDTM::TPI(y, w = c(4,4))
+
+
+plot(y)
+############################
+# Get 10m elevation so that we can then determine the topographic position index (TPI)
+snf10mElev <- get_elev_raster(locations = shapefile, z = 10, clip = "bbox") %>%
+  rast() %>% 
+  crop(., shapefile) %>%
+  mask(., shapefile)
+
+snfWetlands <- snfWetlands %>% filter(WETLAND == "Freshwater Forested/Shrub Wetland")
+snfWetlands_Buffer <- st_buffer(snfWetlands, dist = 100)
+snfWetlands_Buffer <- vect(snfWetlands_Buffer)
+
+elevWetlands <- snf10mElev %>%
+  crop(., snfWetlands_Buffer) %>%
+  mask(., snfWetlands_Buffer)
+
+tpi <- MultiscaleDTM::TPI(elevWetlands, w = c(5,5))
+plot(tpi)
+
+plot(ifel(tpi > 0, 1,
+          ifel(tpi < 0, -1, 0)))
+
+
+# Topographic Wetness Index
+twi <- rast("D:/Minnesota/Whitebox_Calculations/TWI_30m_UTM15N.tif") %>%
+  crop(., shapefile) %>%
+  mask(., shapefile)
+plot(twi)
+
+```
 
 
 
