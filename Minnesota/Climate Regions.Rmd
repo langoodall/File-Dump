@@ -24,6 +24,8 @@ nationForests.shp <- st_read("D:/Minnesota/National_Forest_Shapefiles/S_USA.FSCo
 directory <- "D:/Minnesota/PRISM_MN/Ppt"
 files <- list.files(directory, pattern = "*.tif$", full.names = TRUE)
 
+# For loop to organise precipitation data. Then I sum the precipitation over the growing season
+# to get total growing season precipitation
 shapefile <- st_transform(MN.shp, crs = crs(rast(files[1])))
 pptList <- list()
 for (file in files) {
@@ -33,14 +35,12 @@ for (file in files) {
   name <- basename(file)
   pptList[[name]] <- raster
 }
-
 pptRast <- pptList[[1]] + pptList[[2]] + pptList[[3]] + pptList[[4]] + pptList[[5]]
 pptRast <- project(pptRast, templateRaster, method = "near")
 
-
+# Same again for temnpoerature except now I am interested in average not the total
 directory <- "D:/Minnesota/PRISM_MN/Temp"
 files <- list.files(directory, pattern = "*.tif$", full.names = TRUE)
-
 tempList <- list()
 for (file in files) {
   raster <- rast(file)
@@ -48,13 +48,8 @@ for (file in files) {
   name <- basename(file)
   tempList[[name]] <- raster
 }
-
 tempRast <- mean(tempList[[1]], tempList[[2]], tempList[[3]], tempList[[4]], tempList[[5]])
 tempRast <- project(tempRast, templateRaster, method = "near")
-
-plot(tempRast)
-plot(pptRast)
-
 
 # Add 0s to NAs
 pptRast[is.na(pptRast)] <- 0
@@ -62,32 +57,17 @@ tempRast[is.na(tempRast)] <- 0
 
 # Stack, crop and mask the rasters
 stack <- c(pptRast, tempRast) %>% crop(., nationForests.shp) %>% mask(., nationForests.shp)
-
 stack$prism_ppt_us_30s_202005_avg_30y[is.na(stack$prism_ppt_us_30s_202005_avg_30y)] <- 0
 stack$prism_tmean_us_30s_202005_avg_30y[is.na(stack$prism_tmean_us_30s_202005_avg_30y)] <- 0
-
 scalePpt <- scale(stack$prism_ppt_us_30s_202005_avg_30y)
 scaleTemp <- scale(stack$prism_tmean_us_30s_202005_avg_30y)
-
-
 scaleStack <- c(scalePpt, scaleTemp)
-
-plot(scaleStack)
-
 scaleDf <- as.data.frame(scaleStack)
 
-x <- kmeans(na.omit(scaleDf), 3, iter.max = 10, nstart = 25)
 
-sqrt(x$tot.withinss)
-
-
-x$betweenss / x$totss
-
-
-
-
+# For loop to determine which amount of climate regions s best through balancing computational cost
+# and the accuarate representation of climates in the SNF
 k <- 5:20
-
 results <- data.frame(
   k = k,
   meanVarTemp = NA_real_,
@@ -97,9 +77,7 @@ results <- data.frame(
 )
 
 set.seed(33)
-
 df_clean <- na.omit(scaleDf) %>% `colnames<-`(c("ppt", "temp"))
-
 for (i in seq_along(k)) {
 
   km <- kmeans(
@@ -107,17 +85,74 @@ for (i in seq_along(k)) {
     centers = k[i],
     nstart = 25
   )
-
   df_clean$cluster <- km$cluster
-
   tempVar <- aggregate(temp ~ cluster, df_clean, var)
   pptVar  <- aggregate(ppt ~ cluster, df_clean, var)
-
-  results$meanVarTemp[i] <- mean(tempVar$layer.1)
-  results$meanVarPpt[i]  <- mean(pptVar$layer.2)
+  results$meanVarTemp[i] <- mean(tempVar$temp)
+  results$meanVarPpt[i]  <- mean(pptVar$ppt)
   results$tot_withinss[i] <- km$tot.withinss
   results$var_explained[i] <- km$betweenss / km$totss
 }
+
+# plot(results$k, results$tot_withinss,
+#      type = "b",
+#      xlab = "Number of clusters (k)",
+#      ylab = "Total within-cluster variance")
+# 
+# plot(results$k, results$ratio,
+#      type = "b",
+#      xlab = "Number of clusters (k)",
+#      ylab = "Between / Total SS")
+# 
+# 
+# plot(results$k, results$mean_var_temp,
+#      type = "b",
+#      xlab = "Number of ecoregions",
+#      ylab = "Mean within-ecoregion temp variance")
+# 
+# plot(results$k, results$mean_var_ppt,
+#      type = "b",
+#      xlab = "Number of ecoregions",
+#      ylab = "Mean within-ecoregion precip variance")
+
+
+# Rudimentary elbow plot. ~ 10 looks to be the suitable amount climate regions
+plot(results$k, results$var_explained,
+     type = "b",
+     ylab = "Between / Total SS",
+     xlab = "Number of ecoregions")
+
+gc()
+
+# Let's make a map
+set.seed(33)
+kmFinal <- kmeans(
+  df_clean[, c("ppt", "temp")],
+  centers = 10,
+  nstart = 25
+)
+
+gc()
+
+testRast <- scaleStack[[1]]
+values(testRast) <- NA
+validCells <- complete.cases(scaleDf)
+values(testRast)[validCells] <- kmFinal$cluster
+climateRegionsRast <- mask(testRast, vect(nationForests.shp))
+treeMapMask <- rast("D:/Minnesota/Data/IC_TM-ID_30m_UTM15N.tif")
+shapefile <- st_transform(nationForests.shp, crs(treeMapMask))
+treeMapMask <- crop(treeMapMask, shapefile) %>% mask(., shapefile)
+treeMapMask <- terra::classify(treeMapMask, matrix(c(0,0,0,1,99999,1), ncol = 3, byrow = TRUE))
+climateRegionsRast <- climateRegionsRast %>% mask(., treeMapMask, maskvalue = NA)
+climateRegionsRast <- ifel(is.na(climateRegionsRast), 0, climateRegionsRast)
+
+writeRaster(climateRegionsRast,
+            filename = "D:/Minnesota/Data/ClimateRegions_SNF_30m_UTM15N.tif",
+            datatype = "INT1U",
+            NAflag = NA,
+            overwrite = TRUE)
+
+
 ```
 
 
