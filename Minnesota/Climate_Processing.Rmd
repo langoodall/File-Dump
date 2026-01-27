@@ -1,0 +1,148 @@
+---
+title: "Untitled"
+output: pdf_document
+date: "2026-01-26"
+---
+
+
+```{r, message = FALSE, warning = FALSE}
+library(tidyverse)
+library(terra)
+library(sf)
+library(SPEI)
+library(lubridate)
+library(lme4)
+library(latex2exp)
+library(ncdf4)
+library(climateR)
+library(lubridate)
+options(scipen = 999)
+templateRaster <- rast("D:/Minnesota/templateRaster.tif")
+nationForests.shp <- st_read("D:/Minnesota/National_Forest_Shapefiles/S_USA.FSCommonNames.shp") %>%
+  filter(COMMONNAME == "Superior National Forest") %>%
+  st_transform(., crs = 26915)
+templateRaster <- rast("D:/Minnesota/Data/IC_TM-ID_30m_UTM15N.tif") %>% crop(., nationForests.shp) %>% mask(., nationForests.shp)
+```
+
+# Calculate SPEI
+
+```{r}
+# In this script I calculate SPEI at a yearly period (SPEI-12) using monthly data SPEI-12 was chosen because I am 
+# interested in annual drought indices which are typically associated with mterological drought rather than
+# agricultural drought. First off we need to download the climate data from the gridMET dataset online.
+
+gridmetTemp <- getGridMET(AOI = nationForests.shp, varname = c("tmmx", "tmmn"), startDate = "1979-01-01", endDate = "2025-12-31")
+gridmetPpt <- getGridMET(AOI = nationForests.shp, varname = "pr", startDate = "1979-01-01", endDate = "2025-12-31")
+gridmetRs <- getGridMET(AOI = nationForests.shp, varname = "srad", startDate = "1979-01-01", endDate = "2025-12-31")
+gridmetRh <- getGridMET(AOI = nationForests.shp, varname = c("rmin", "rmax"), startDate = "1979-01-01", endDate = "2025-12-31")
+gridmetWind <- getGridMET(AOI = nationForests.shp, varname = "vs", startDate = "1979-01-01", endDate = "2025-12-31")
+
+
+
+shapefile <- st_transform(nationForests.shp, crs = crs(gridmetTemp$daily_maximum_temperature))
+temp <- lapply(gridmetTemp, function(x) {crop(x, shapefile) %>% mask(., shapefile)})
+ppt <- lapply(gridmetPpt, function(x) {crop(x, shapefile) %>% mask(., shapefile)})
+rs <- lapply(gridmetRs, function(x) {crop(x, shapefile) %>% mask(., shapefile)})
+rh <- lapply(gridmetRh, function(x) {crop(x, shapefile) %>% mask(., shapefile)})
+wind <- lapply(gridmetWind, function(x) {crop(x, shapefile) %>% mask(., shapefile)})
+
+
+
+climateDf <- cbind(terra::global(temp$daily_maximum_temperature - 273.15, "mean", na.rm = TRUE), # Convert from K to C
+                   terra::global(temp$daily_minimum_temperature - 273.15, "mean", na.rm = TRUE), # Convert from K to C
+                   terra::global(ppt$precipitation_amount, "mean", na.rm = TRUE),
+                   terra::global(rs$daily_mean_shortwave_radiation_at_surface * 0.0864, "mean", na.rm = TRUE), # Convert from W/m2 to MJ/m2/day
+                   terra::global(rh$daily_maximum_relative_humidity, "mean", na.rm = TRUE),
+                   terra::global(rh$daily_minimum_relative_humidity, "mean", na.rm = TRUE),
+                   terra::global(wind$daily_mean_wind_speed, "mean", na.rm = TRUE)) %>%
+  `colnames<-`(c("maxTemp", "minTemp", "Ppt", "Rs", "maxRh", "minRh", "WindSpeed")) %>%
+  rownames_to_column() %>%
+  mutate(Date = as.Date(stringr::str_extract(rowname, "\\d{4}-\\d{2}-\\d{2}")),
+         meanTemp = (maxTemp + minTemp) / 2,
+         meanRh = (maxRh + minRh) / 2) %>%
+  dplyr::select(Date, meanTemp, minTemp, maxTemp, Ppt, Rs, meanRh, WindSpeed)
+
+
+
+climateMonthlyDf <- climateDf %>%
+  mutate(month = floor_date(as.Date(Date), "month")) %>%
+  group_by(month) %>%
+  summarise(minTemp = mean(minTemp),
+            maxTemp = mean(maxTemp),
+            Rs = mean(Rs),
+            Rh = mean(meanRh),
+            WindSpeed = mean(WindSpeed),
+            Ppt = sum(Ppt))
+
+
+climateMonthlyDf <- climateDf %>%
+  mutate(month = floor_date(Date, "month")) %>%
+  group_by(month) %>%
+  summarise(minTemp = mean(minTemp),
+            maxTemp = mean(maxTemp),
+            Rs = mean(Rs),
+            Rh = mean(meanRh),
+            WindSpeed = mean(WindSpeed),
+            Ppt = sum(Ppt)) %>%
+  ungroup() %>%
+  mutate(meanTemp = (minTemp + maxTemp)/2)
+
+PET_monthly <- penman(
+  Tmin = climateMonthlyDf$minTemp,
+  Tmax = climateMonthlyDf$maxTemp,
+  Rs = climateMonthlyDf$Rs,
+  RH = climateMonthlyDf$Rh,
+  U2 = climateMonthlyDf$WindSpeed,
+  lat = 48,
+  z = 400
+)
+
+climateMonthlyDf$PET <- PET_monthly
+
+D_monthly <- climateMonthlyDf$Ppt - climateMonthlyDf$PET
+
+D_ts <- ts(D_monthly,
+           start = c(year(min(climateMonthlyDf$month)),
+                     month(min(climateMonthlyDf$month))),
+           frequency = 12)  # monthly
+
+
+SPEI_12 <- spei(D_ts, scale = 12)  # 12-month SPEI
+  
+
+
+SPEI_12
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
