@@ -1,0 +1,253 @@
+---
+title: "Untitled"
+output: pdf_document
+date: "2026-01-26"
+---
+
+```{r, message = FALSE, warning = FALSE}
+library(tidyverse)
+library(terra)
+library(sf)
+library(readxl)
+library(data.table)
+templateRaster <- rast("D:/Minnesota/templateRaster.tif")
+nationForests.shp <- st_read("D:/Minnesota/National_Forest_Shapefiles/S_USA.FSCommonNames.shp") %>%
+  filter(COMMONNAME == "Superior National Forest") %>%
+  st_transform(., crs = crs(templateRaster))
+options(scipen = 999)
+gc()
+```
+
+
+```{r}
+treeMap <- rast("D:/Minnesota/Data/IC_TM-ID_30m_UTM15N.tif") %>% crop(., nationForests.shp) %>% mask(., nationForests.shp)
+terra::activeCat(treeMap) <- 1
+
+plotCounts <- table(values(treeMap)) %>% as.data.frame() %>% rename("TM_ID" = "Var1")
+
+plotData <- data.table::fread("D:/Minnesota/TreeMap/TreeMap2022_CONUS_Tree_Table.csv")
+
+plotData <- plotData %>% filter(TM_ID %in% values(treeMap))
+
+speciesREF <- readxl::read_excel("D:/Minnesota/TreeMap/REF_SPECIES.xlsx")
+
+tlTreesBA <- plotData %>%
+  group_by(TM_ID, SPCD) %>%
+  summarise(plotBA = sum(I((DIA/2)^2), na.rm = TRUE), .groups = "drop") %>%
+  mutate(TM_ID = as.factor(TM_ID)) %>%
+  left_join(plotCounts, by = "TM_ID") %>%
+  mutate(aoiBA = plotBA * Freq) %>%
+  group_by(SPCD) %>%
+  summarise(sppBATotal = sum(aoiBA) / 10000) %>%
+  arrange(sppBATotal) %>%
+  left_join(dplyr::select(speciesREF, c("SPCD", "SPECIES_SYMBOL", "GENUS", "SPECIES"))) %>%
+  mutate(sppBA_Pct = sppBATotal / sum(sppBATotal))
+
+# This is the version that would likely be used going forward because using species with an exceedingly low
+# BA will mean we are simulating species that are "less" ecologically important. Also, 25 vs. 98 species is
+# quite a big difference in regards to computational power. Also, with these 25 species we still have 98.34%
+# of Minnesota's BA. This way we also eliminate random extras that shouldn't be there like Ponderosa pine
+mnSpp <- tlTreesBA %>%
+  arrange(desc(sppBA_Pct * 100)) %>%
+  mutate(cumulativePct = cumsum(sppBA_Pct)) %>%
+  filter(sppBA_Pct > 0.005)
+landscapeSpp <- mnSpp %>% select(SPECIES_SYMBOL) %>% arrange(SPECIES_SYMBOL)
+
+gc()
+
+# Now to create a for loop that binds the TREE tables of MN, MI, and WI
+directory <- "D:/Minnesota/TreeMap/States/"
+files <- list.files(path = directory, pattern = "*TREE.csv", full.names = TRUE)
+treeList <- lapply(files, data.table::fread)
+trees <- do.call(bind_rows, treeList)
+rm(treeList)
+trees <- trees %>% filter(PLT_CN %in% plotData$PLT_CN)
+
+# Now for COND and SITETREE tables
+files <- list.files(path = directory, pattern = "*COND.csv", full.names = TRUE)
+condList <- lapply(files, data.table::fread)
+cond <- do.call(bind_rows, condList)
+rm(condList)
+cond <- cond %>% filter(PLT_CN %in% plotData$PLT_CN)
+
+files <- list.files(path = directory, pattern = "*SITETREE.csv", full.names = TRUE)
+sitetreeList <- lapply(files, data.table::fread)
+sitetree <- do.call(bind_rows, sitetreeList)
+rm(sitetreeList)
+sitetree <- sitetree %>% filter(PLT_CN %in% plotData$PLT_CN)
+
+gc()
+
+#----AGE CALCULATIONS----#    # TODO, find equation for SPCD == 313 (Acer negundo)
+# Fit a linear regression
+treeRegressions <- sitetree %>%
+  filter(!is.na(DIA) & !is.na(AGEDIA) & !is.na(SPCD)) %>%
+  filter(SPCD %in% trees$SPCD) %>%
+  group_by(SPCD) %>%
+  do(model = lm(AGEDIA ~ log(DIA) + 0, data = .)) %>%
+  filter(SPCD %in% mnSpp$SPCD)
+
+sort(unique(treeRegressions$SPCD))
+sort(unique(mnSpp$SPCD))
+
+#----BIOMASS----#
+trees <- trees %>%
+  inner_join(treeRegressions, by = "SPCD") %>%
+  mutate(Age = map2_dbl(model, DIA, ~predict(.x, newdata = tibble(DIA = .y)))) %>%
+  inner_join(mnSpp[,c(1,3)], by = "SPCD")
+
+ggplot(trees, aes(x = SPECIES_SYMBOL, y = Age, fill = SPECIES_SYMBOL)) +
+  geom_boxplot() +
+  theme_classic()
+
+gc()
+
+# Calculate site total biomass
+breaks <- seq(0, 140, 10)
+siteBiomass <- trees %>%
+  mutate(biomassArea = DRYBIO_AG * TPA_UNADJ) %>%
+  mutate(Age = ifelse(Age < 1, 1, Age)) %>%
+  mutate(bin = cut(Age, breaks = breaks, labels = breaks[-1], right = TRUE),
+         bin = as.integer(as.character(bin))) %>%
+  group_by(PLT_CN, SPCD, bin) %>%
+  summarise(biomass = sum(biomassArea, na.rm = TRUE)) %>%
+  mutate(biomass = round(biomass, digits = 0),
+         biomass = biomass * 0.1121) # convert from lb/ac to g/m2
+names(siteBiomass) <- c("PLT_CN", "SPCD", "CohortAge", "CohortBiomass")
+
+
+rm(trees)
+
+siteTotalBiomass <- siteBiomass %>%
+  group_by(PLT_CN) %>%
+  summarise(totalBiomass = sum(CohortBiomass, na.rm = TRUE)) %>%
+  mutate(totalBiomass_MgHa = totalBiomass * 0.01) %>%
+  mutate(CWD_MgHA = totalBiomass_MgHa * 0.19,
+         coarseRoot_MgHa = totalBiomass_MgHa * 0.3,
+         fineRoot_MgHa = totalBiomass_MgHa * 0.1)
+
+siteTotalBiomass2 <- siteTotalBiomass %>%
+  left_join(plotData %>% select(PLT_CN, TM_ID), by = "PLT_CN") %>%
+  mutate(MapCode = TM_ID)
+
+siteTotalBiomass_TM <- siteTotalBiomass2 %>%
+  group_by(MapCode) %>%
+  summarise(
+    CWD_MgHa        = mean(CWD_MgHA, na.rm = TRUE),
+    coarseRoot_MgHa = mean(coarseRoot_MgHa, na.rm = TRUE),
+    fineRoot_MgHa   = mean(fineRoot_MgHa, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+# MapCodeDf <- siteTotalBiomass2 %>%
+#   unnest(MapCode) %>%
+#   mutate(ID = 1:length(unique(MapCode))) %>%
+#   left_join(siteBiomass, by = "PLT_CN") %>%
+#   select(PLT_CN, ID, SPCD, CohortAge, CohortBiomass) %>%
+#   `colnames<-`(c("PLT_CN", "MapCode", "SPCD", "CohortAge", "CohortBiomass"))
+# MapCodeDf$PLT_CN <- as.numeric(MapCodeDf$PLT_CN)
+
+
+MapCodeDf <- siteBiomass %>%
+  left_join(siteTotalBiomass2 %>% select(PLT_CN, MapCode), by = "PLT_CN") %>%
+  select(PLT_CN, MapCode, SPCD, CohortAge, CohortBiomass) %>%
+  mutate(TM_ID = MapCode)
+MapCodeDf$PLT_CN <- as.numeric(MapCodeDf$PLT_CN)
+
+
+# Read in plot tables for all 50 states
+files <- list.files(path = directory, pattern = "*PLOT.csv", full.names = TRUE)
+plotDf <- do.call(rbind, lapply(files, data.table::fread))
+
+mergedMapCodeDf <- plotDf %>%
+  mutate(CN = as.numeric(as.character(CN))) %>%
+  left_join(MapCodeDf, by = c("CN" = "PLT_CN")) %>%
+  filter(!is.na(MapCode))
+
+valuesTreeMap <- values(treeMap) %>% as.data.frame() %>% drop_na() %>% unique() %>% arrange(TM_ID)
+
+# Using MN/WI/MI data we can cover 95.66% of the plots in MN
+threeStatesMapCode <- mergedMapCodeDf %>% filter(MapCode %in% valuesTreeMap$TM_ID) %>% select(MapCode) %>% unique() %>% arrange(MapCode)
+# (nrow(threeStatesMapCode) / nrow(valuesTreeMap)) * 100
+
+
+test <- ifel(treeMap %in% threeStatesMapCode$MapCode, 1, 2)
+plot(test, col = c("green", "black"))
+
+
+medianBiomassValues <- mergedMapCodeDf %>%
+  select(CN, MapCode, SPCD, CohortAge, CohortBiomass) %>%
+  group_by(SPCD, CohortAge) %>%
+  summarise(medianBiomass = median(CohortBiomass, na.rm = TRUE))
+
+# mergedMapCodeDf <- mergedMapCodeDf %>%
+#   mutate(TM_ID = MapCode) %>%
+#   select(CN, TM_ID, MapCode, SPCD, CohortAge, CohortBiomass) %>%
+#   arrange(MapCode) %>%
+#   mutate(MapCode = cumsum(MapCode != lag(MapCode, default = first(MapCode) -1)))
+# 
+# mergedMapCodeDf <- mergedMapCodeDf %>%
+#   left_join(medianBiomassValues, by = c("SPCD", "CohortAge")) %>%
+#   mutate(CohortBiomass = coalesce(CohortBiomass, medianBiomass)) %>%
+#   dplyr::select(-medianBiomass) %>%
+#   drop_na()
+
+siteTotalBiomass2 <- siteTotalBiomass2 %>%
+  arrange(TM_ID) %>%
+  mutate(MapCode = cumsum(MapCode != lag(MapCode, default = first(MapCode) -1)))
+
+
+mapCodeMatrix <- mergedMapCodeDf[,c(2,2,3)] %>% unique() %>% as.matrix()
+
+
+
+finalTreeMap <- terra::subst(treeMap, from = mapCodeMatrix[,1], to = mapCodeMatrix[,3])
+
+plot(finalTreeMap)
+
+
+# Currently finalTreeMap is a categorical raster and needs to be numeric to change the values in it
+# Here I create a cimple numeric version
+finalTreeMap_Num <- as.numeric(finalTreeMap)
+
+gc()
+
+
+finalMapCodeDf <- mergedMapCodeDf %>%
+  dplyr::select(MapCode, SPCD, CohortAge, CohortBiomass) %>%
+  unique() %>%
+  drop_na() %>%
+  arrange(MapCode) %>%
+  left_join(speciesREF %>% dplyr::select(SPECIES_SYMBOL, SPCD), by = "SPCD") %>%
+  dplyr::select(-SPCD) %>%
+  rename("SpeciesName" = "SPECIES_SYMBOL")
+finalMapCodeDf <- finalMapCodeDf[,c(1,4,2,3)]
+
+fwrite(finalMapCodeDf, "D:/Minnesota/SNF Data/snfMapCodeDf.csv")
+
+
+
+sort(unique(finalMapCodeDf$SpeciesName))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

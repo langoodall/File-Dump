@@ -1,0 +1,75 @@
+---
+title: "Untitled"
+output: pdf_document
+date: "2026-02-05"
+---
+
+
+```{r, messages = FALSE, warning = FALSE}
+library(tidyverse)
+library(terra)
+library(sf)
+
+templateRaster <- rast("D:/Minnesota/templateRaster.tif")
+nationForests.shp <- st_read("D:/Minnesota/National_Forest_Shapefiles/S_USA.FSCommonNames.shp") %>%
+  filter(COMMONNAME == "Superior National Forest") %>%
+  st_transform(., crs = crs(templateRaster))
+
+gc()
+```
+
+
+
+
+```{r}
+raster <- rast("D:/Minnesota/BIGMAP/Hosted_AGB_0071_2018_TAMARACK_06062023221359.tif")
+crs <- crs(raster)
+shapefile <- st_transform(nationForests.shp, crs = crs(raster))
+```
+
+
+
+```{r}
+# directory with rasters
+raster_dir <- "D:/Minnesota/BIGMAP"
+
+# get all tif files
+rasterFiles <- list.files(raster_dir, pattern = "\\.tif$", full.names = TRUE)
+
+rasterList <- lapply(rasterFiles, function(f) {
+  r <- rast(f)
+
+  # crop + mask
+  r_out <- crop(r, shapefile) %>% mask(., shapefile)
+})
+
+# extract species name (5th underscore-separated element)
+speciesNames <- sapply(basename(rasterFiles), function(x) {
+  parts <- strsplit(tools::file_path_sans_ext(x), "_")[[1]]
+  paste(parts[5:(length(parts) - 1)], collapse = "_")
+})
+
+# name the list
+names(rasterList) <- speciesNames
+
+
+for (i in seq_along(rasterList)) {
+  writeRaster(
+    rasterList[[i]],
+    file.path("D:/Minnesota/BIGMAP_Processed",
+              paste0(names(rasterList)[i], ".tif")),
+    overwrite = TRUE
+  )
+}
+
+gc()
+
+
+
+```
+
+
+
+
+
+

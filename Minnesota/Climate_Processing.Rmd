@@ -22,6 +22,9 @@ nationForests.shp <- st_read("D:/Minnesota/National_Forest_Shapefiles/S_USA.FSCo
   filter(COMMONNAME == "Superior National Forest") %>%
   st_transform(., crs = 26915)
 templateRaster <- rast("D:/Minnesota/Data/IC_TM-ID_30m_UTM15N.tif") %>% crop(., nationForests.shp) %>% mask(., nationForests.shp)
+northwoods.shp <- st_read("D:/Minnesota/Shapefiles/northwoods.shp") %>%
+  st_transform(., crs = 26915)
+gc()
 ```
 
 # Calculate SPEI
@@ -37,8 +40,7 @@ gridmetRs <- getGridMET(AOI = nationForests.shp, varname = "srad", startDate = "
 gridmetRh <- getGridMET(AOI = nationForests.shp, varname = c("rmin", "rmax"), startDate = "1979-01-01", endDate = "2025-12-31")
 gridmetWind <- getGridMET(AOI = nationForests.shp, varname = "vs", startDate = "1979-01-01", endDate = "2025-12-31")
 
-
-
+# Crop and mask the SNF
 shapefile <- st_transform(nationForests.shp, crs = crs(gridmetTemp$daily_maximum_temperature))
 temp <- lapply(gridmetTemp, function(x) {crop(x, shapefile) %>% mask(., shapefile)})
 ppt <- lapply(gridmetPpt, function(x) {crop(x, shapefile) %>% mask(., shapefile)})
@@ -46,8 +48,7 @@ rs <- lapply(gridmetRs, function(x) {crop(x, shapefile) %>% mask(., shapefile)})
 rh <- lapply(gridmetRh, function(x) {crop(x, shapefile) %>% mask(., shapefile)})
 wind <- lapply(gridmetWind, function(x) {crop(x, shapefile) %>% mask(., shapefile)})
 
-
-
+# Create climateDf and alter units as needed for SPEI calculation
 climateDf <- cbind(terra::global(temp$daily_maximum_temperature - 273.15, "mean", na.rm = TRUE), # Convert from K to C
                    terra::global(temp$daily_minimum_temperature - 273.15, "mean", na.rm = TRUE), # Convert from K to C
                    terra::global(ppt$precipitation_amount, "mean", na.rm = TRUE),
@@ -62,19 +63,7 @@ climateDf <- cbind(terra::global(temp$daily_maximum_temperature - 273.15, "mean"
          meanRh = (maxRh + minRh) / 2) %>%
   dplyr::select(Date, meanTemp, minTemp, maxTemp, Ppt, Rs, meanRh, WindSpeed)
 
-
-
-climateMonthlyDf <- climateDf %>%
-  mutate(month = floor_date(as.Date(Date), "month")) %>%
-  group_by(month) %>%
-  summarise(minTemp = mean(minTemp),
-            maxTemp = mean(maxTemp),
-            Rs = mean(Rs),
-            Rh = mean(meanRh),
-            WindSpeed = mean(WindSpeed),
-            Ppt = sum(Ppt))
-
-
+# Summarise monthly data to be used in SPEI calculation
 climateMonthlyDf <- climateDf %>%
   mutate(month = floor_date(Date, "month")) %>%
   group_by(month) %>%
@@ -87,6 +76,7 @@ climateMonthlyDf <- climateDf %>%
   ungroup() %>%
   mutate(meanTemp = (minTemp + maxTemp)/2)
 
+# Penman calculation
 PET_monthly <- penman(
   Tmin = climateMonthlyDf$minTemp,
   Tmax = climateMonthlyDf$maxTemp,
@@ -98,20 +88,177 @@ PET_monthly <- penman(
 )
 
 climateMonthlyDf$PET <- PET_monthly
+D_monthly <- climateMonthlyDf$Ppt - climateMonthlyDf$PET
+D_ts <- ts(D_monthly, start = c(year(min(climateMonthlyDf$month)), month(min(climateMonthlyDf$month))), frequency = 12)  # monthly
+SPEI_12 <- spei(D_ts, scale = 12) # 12-month SPEI
+  
+
+SPEI_12
+
+as.data.frame(SPEI_12$fitted)
+
+
+
+```
+
+
+
+```{r}
+gridmetTemp <- getGridMET(AOI = nationForests.shp, varname = c("tmmx", "tmmn"), startDate = "1979-01-01", endDate = "2025-12-31")
+gridmetPpt <- getGridMET(AOI = nationForests.shp, varname = "pr", startDate = "1979-01-01", endDate = "2025-12-31")
+gridmetRs <- getGridMET(AOI = nationForests.shp, varname = "srad", startDate = "1979-01-01", endDate = "2025-12-31")
+gridmetRh <- getGridMET(AOI = nationForests.shp, varname = c("rmin", "rmax"), startDate = "1979-01-01", endDate = "2025-12-31")
+gridmetWind <- getGridMET(AOI = nationForests.shp, varname = "vs", startDate = "1979-01-01", endDate = "2025-12-31")
+
+shapefile <- st_transform(nationForests.shp, crs = crs(gridmetTemp$daily_maximum_temperature))
+
+temp <- lapply(gridmetTemp, function(x) crop(x, shapefile) |> mask(shapefile))
+ppt  <- lapply(gridmetPpt,  function(x) crop(x, shapefile) |> mask(shapefile))
+rs   <- lapply(gridmetRs,   function(x) crop(x, shapefile) |> mask(shapefile))
+rh   <- lapply(gridmetRh,   function(x) crop(x, shapefile) |> mask(shapefile))
+wind <- lapply(gridmetWind, function(x) crop(x, shapefile) |> mask(shapefile))
+
+climateDf <- cbind(
+  terra::global(temp$daily_maximum_temperature - 273.15, "mean", na.rm = TRUE),
+  terra::global(temp$daily_minimum_temperature - 273.15, "mean", na.rm = TRUE),
+  terra::global(ppt$precipitation_amount, "mean", na.rm = TRUE),
+  terra::global(rs$daily_mean_shortwave_radiation_at_surface * 0.0864, "mean", na.rm = TRUE),
+  terra::global(rh$daily_maximum_relative_humidity, "mean", na.rm = TRUE),
+  terra::global(rh$daily_minimum_relative_humidity, "mean", na.rm = TRUE),
+  terra::global(wind$daily_mean_wind_speed, "mean", na.rm = TRUE)) %>%
+  `colnames<-`(c("maxTemp", "minTemp", "Ppt", "Rs", "maxRh", "minRh", "WindSpeed")) |>
+  rownames_to_column("rowname") %>%
+  mutate(Date = as.Date(str_extract(rowname, "\\d{4}-\\d{2}-\\d{2}")),
+         meanTemp = (maxTemp + minTemp) / 2,
+         meanRh   = (maxRh + minRh) / 2) %>%
+  select(Date, meanTemp, minTemp, maxTemp, Ppt, Rs, meanRh, WindSpeed)
+
+
+climateMonthlyDf <- climateDf %>%
+  mutate(month = floor_date(Date, "month")) %>%
+  group_by(month) %>%
+  summarise(
+    minTemp   = mean(minTemp, na.rm = TRUE),
+    maxTemp   = mean(maxTemp, na.rm = TRUE),
+    Rs        = mean(Rs, na.rm = TRUE),
+    Rh        = mean(meanRh, na.rm = TRUE),
+    WindSpeed = mean(WindSpeed, na.rm = TRUE),
+    Ppt       = sum(Ppt, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(meanTemp = (minTemp + maxTemp) / 2)
+
+PET_daily <- penman(
+  Tmin = climateMonthlyDf$minTemp,
+  Tmax = climateMonthlyDf$maxTemp,
+  Rs   = climateMonthlyDf$Rs,
+  RH   = climateMonthlyDf$Rh,
+  U2   = climateMonthlyDf$WindSpeed,
+  lat  = 48,
+  z    = 400
+)
+
+# Convert mm/day → mm/month
+PET_monthly <- PET_daily * days_in_month(climateMonthlyDf$month)
+
+climateMonthlyDf$PET <- PET_monthly
 
 D_monthly <- climateMonthlyDf$Ppt - climateMonthlyDf$PET
 
-D_ts <- ts(D_monthly,
-           start = c(year(min(climateMonthlyDf$month)),
-                     month(min(climateMonthlyDf$month))),
-           frequency = 12)  # monthly
+D_ts <- ts(
+  D_monthly,
+  start = c(year(min(climateMonthlyDf$month)),
+            month(min(climateMonthlyDf$month))),
+  frequency = 12
+)
+
+SPEI_12 <- spei(
+  D_ts,
+  scale = 12,
+  na.rm = TRUE
+)
+
+speiDf <- data.frame(
+  month = climateMonthlyDf$month,
+  SPEI_12 = as.numeric(SPEI_12$fitted)
+) %>%
+  mutate(Status = case_when(
+    SPEI_12 >= -2, "DO"
+  ))
+
+# Variable yet not significantly changing drought conditions for the SNF/BWCA
+speiDf$time_num <- as.numeric(speiDf$month)
+summary(lm(SPEI_12 ~ time_num, data = speiDf))
+
+ggplot(speiDf, aes(x = time_num, y = SPEI_12)) +
+  geom_line() +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  theme_classic() +
+  stat_function(fun = function(x){-0.198431684 + 0.000015864*x}, color = "red", size = 1.2)
+```
 
 
-SPEI_12 <- spei(D_ts, scale = 12)  # 12-month SPEI
-  
+
+# Northwoods
+
+```{r}
+gridmetSPEI12 <- getGridMET(AOI = northwoods.shp, varname = "spei1y", startDate = "2000-01-01", endDate = "2025-12-31")
 
 
-SPEI_12
+shapefile <- st_transform(northwoods.shp, crs = crs(gridmetSPEI12$spei))
+
+
+# Your SpatRaster
+spei_raster <- gridmetSPEI12$spei  # continuous SPEI values
+
+# Extract dates from layer names
+layer_dates <- as.Date(
+  sub("spei1y_", "", names(spei_raster)),  # remove prefix
+  format = "%Y-%m-%d"
+)
+
+# Identify last date per year
+years <- format(layer_dates, "%Y")
+last_dates <- tapply(layer_dates, years, max)
+last_dates <- as.Date(last_dates, origin = "1970-01-01")
+
+# Match last dates to layer indices
+last_layers <- which(layer_dates %in% last_dates)
+
+# Subset raster to one layer per year
+spei_yearly_raster <- spei_raster[[last_layers]]
+
+plot(spei_yearly_raster)
+
+spei1y <- lapply(spei_yearly_raster, function(x) crop(x, shapefile) |> mask(shapefile))
+
+lapply(spei1y, function(x) plot(x))
+
+lapply(spei1y, as.data.frame) %>%
+  do.call(cbind, .) %>%
+  pivot_longer(cols = everything(), names_to = "layer", values_to = "spei") %>%
+  mutate(year = sub(".*(\\d{4}).*", "\\1", layer),
+         year = as.factor(year)) %>%
+  ggplot(aes(x = year, y = spei)) +
+  geom_boxplot() +
+  theme_bw() +
+  labs(x = "Year", y = "SPEI (12-month)", title = "Yearly SPEI Distribution") +
+  geom_hline(yintercept =  0, color = "blue") +
+  geom_hline(yintercept =  -1, color = "red") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+```
+
+# Variable yet not significantly changing drought conditions for the SNF/BWCA
+speiDf$time_num <- as.numeric(speiDf$month)
+summary(lm(SPEI_12 ~ time_num, data = speiDf))
+
+ggplot(speiDf, aes(x = time_num, y = SPEI_12)) +
+  geom_line() +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  theme_classic() +
+  stat_function(fun = function(x){-0.198431684 + 0.000015864*x}, color = "red", size = 1.2)
 
 ```
 
@@ -120,7 +267,270 @@ SPEI_12
 
 
 
+```{r}
+gridmetTemp <- getGridMET(AOI = northwoods.shp, varname = c("tmmx", "tmmn"), startDate = "2000-01-01", endDate = "2025-12-31")
+gridmetPpt <- getGridMET(AOI = northwoods.shp, varname = "pr", startDate = "2000-01-01", endDate = "2025-12-31")
+gridmetRs <- getGridMET(AOI = northwoods.shp, varname = "srad", startDate = "2000-01-01", endDate = "2025-12-31")
+gridmetRh <- getGridMET(AOI = northwoods.shp, varname = c("rmin", "rmax"), startDate = "2000-01-01", endDate = "2025-12-31")
+gridmetWind <- getGridMET(AOI = northwoods.shp, varname = "vs", startDate = "2000-01-01", endDate = "2025-12-31")
 
+gridmetSPEI12 <- getGridMET(
+  AOI = northwoods.shp,
+  varname = "spei1y",
+  startDate = "2000-01-01",
+  endDate = "2025-12-31"
+)
+
+
+
+plot(gridmetSPEI12$spei)
+
+gc()
+
+shapefile <- st_transform(northwoods.shp, crs = crs(gridmetTemp$daily_maximum_temperature))
+
+temp <- lapply(gridmetTemp, function(x) crop(x, shapefile) |> mask(shapefile))
+ppt  <- lapply(gridmetPpt,  function(x) crop(x, shapefile) |> mask(shapefile))
+rs   <- lapply(gridmetRs,   function(x) crop(x, shapefile) |> mask(shapefile))
+rh   <- lapply(gridmetRh,   function(x) crop(x, shapefile) |> mask(shapefile))
+wind <- lapply(gridmetWind, function(x) crop(x, shapefile) |> mask(shapefile))
+
+spei1y <- lapply(gridmetSPEI12, function(x) crop(x, shapefile) |> mask(shapefile))
+
+
+plot(spei1y$spei)
+```
+climateDf <- cbind(
+  terra::global(temp$daily_maximum_temperature - 273.15, "mean", na.rm = TRUE),
+  terra::global(temp$daily_minimum_temperature - 273.15, "mean", na.rm = TRUE),
+  terra::global(ppt$precipitation_amount, "mean", na.rm = TRUE),
+  terra::global(rs$daily_mean_shortwave_radiation_at_surface * 0.0864, "mean", na.rm = TRUE),
+  terra::global(rh$daily_maximum_relative_humidity, "mean", na.rm = TRUE),
+  terra::global(rh$daily_minimum_relative_humidity, "mean", na.rm = TRUE),
+  terra::global(wind$daily_mean_wind_speed, "mean", na.rm = TRUE)) %>%
+  `colnames<-`(c("maxTemp", "minTemp", "Ppt", "Rs", "maxRh", "minRh", "WindSpeed")) |>
+  rownames_to_column("rowname") %>%
+  mutate(Date = as.Date(str_extract(rowname, "\\d{4}-\\d{2}-\\d{2}")),
+         meanTemp = (maxTemp + minTemp) / 2,
+         meanRh   = (maxRh + minRh) / 2) %>%
+  select(Date, meanTemp, minTemp, maxTemp, Ppt, Rs, meanRh, WindSpeed)
+
+gc()
+
+
+climateMonthlyDf <- climateDf %>%
+  mutate(month = floor_date(Date, "month")) %>%
+  group_by(month) %>%
+  summarise(
+    minTemp   = mean(minTemp, na.rm = TRUE),
+    maxTemp   = mean(maxTemp, na.rm = TRUE),
+    Rs        = mean(Rs, na.rm = TRUE),
+    Rh        = mean(meanRh, na.rm = TRUE),
+    WindSpeed = mean(WindSpeed, na.rm = TRUE),
+    Ppt       = sum(Ppt, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(meanTemp = (minTemp + maxTemp) / 2)
+
+PET_daily <- penman(
+  Tmin = climateMonthlyDf$minTemp,
+  Tmax = climateMonthlyDf$maxTemp,
+  Rs   = climateMonthlyDf$Rs,
+  RH   = climateMonthlyDf$Rh,
+  U2   = climateMonthlyDf$WindSpeed,
+  lat  = 48,
+  z    = 400
+)
+
+# Convert mm/day → mm/month
+PET_monthly <- PET_daily * days_in_month(climateMonthlyDf$month)
+
+climateMonthlyDf$PET <- PET_monthly
+
+D_monthly <- climateMonthlyDf$Ppt - climateMonthlyDf$PET
+
+D_ts <- ts(
+  D_monthly,
+  start = c(year(min(climateMonthlyDf$month)),
+            month(min(climateMonthlyDf$month))),
+  frequency = 12
+)
+
+SPEI_12 <- spei(
+  D_ts,
+  scale = 12,
+  na.rm = TRUE
+)
+
+speiDf <- data.frame(
+  month = climateMonthlyDf$month,
+  SPEI_12 = as.numeric(SPEI_12$fitted)
+) %>%
+  mutate(Status = case_when(
+    SPEI_12 >= -2, "DO"
+  ))
+
+# Variable yet not significantly changing drought conditions for the SNF/BWCA
+speiDf$time_num <- as.numeric(speiDf$month)
+summary(lm(SPEI_12 ~ time_num, data = speiDf))
+
+ggplot(speiDf, aes(x = time_num, y = SPEI_12)) +
+  geom_line() +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  theme_classic() +
+  stat_function(fun = function(x){-0.198431684 + 0.000015864*x}, color = "red", size = 1.2)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+gc()
+
+#gridmetTemp <- getGridMET(AOI = nationForests.shp, varname = c("tmmx", "tmmn"), startDate = "1979-01-01", endDate = "2025-12-31")
+#gridmetPpt <- getGridMET(AOI = nationForests.shp, varname = "pr", startDate = "1979-01-01", endDate = "2025-12-31")
+#gridmetRs <- getGridMET(AOI = nationForests.shp, varname = "srad", startDate = "1979-01-01", endDate = "2025-12-31")
+#gridmetRh <- getGridMET(AOI = nationForests.shp, varname = c("rmin", "rmax"), startDate = "1979-01-01", endDate = "2025-12-31")
+#gridmetWind <- getGridMET(AOI = nationForests.shp, varname = "vs", startDate = "1979-01-01", endDate = "2025-12-31")
+
+shapefile <- st_transform(nationForests.shp, crs = crs(gridmetTemp$daily_maximum_temperature))
+
+temp <- lapply(gridmetTemp, function(x) crop(x, shapefile) |> mask(shapefile))
+ppt  <- lapply(gridmetPpt,  function(x) crop(x, shapefile) |> mask(shapefile))
+rs   <- lapply(gridmetRs,   function(x) crop(x, shapefile) |> mask(shapefile))
+rh   <- lapply(gridmetRh,   function(x) crop(x, shapefile) |> mask(shapefile))
+wind <- lapply(gridmetWind, function(x) crop(x, shapefile) |> mask(shapefile))
+
+aoi <- st_transform(
+  nationForests.shp,
+  crs = crs(temp$daily_maximum_temperature)
+)
+
+tmmx <- crop(temp$daily_maximum_temperature, aoi) |> mask(aoi) - 273.15
+tmmn <- crop(temp$daily_minimum_temperature, aoi) |> mask(aoi) - 273.15
+ppt  <- crop(ppt$precipitation_amount, aoi) |> mask(aoi)
+rs   <- crop(rs$daily_mean_shortwave_radiation_at_surface, aoi) |> mask(aoi) * 0.0864
+rhx  <- crop(rh$daily_maximum_relative_humidity, aoi) |> mask(aoi)
+rhn  <- crop(rh$daily_minimum_relative_humidity, aoi) |> mask(aoi)
+wind <- crop(wind$daily_mean_wind_speed, aoi) |> mask(aoi)
+
+# Monthly precipitation sum
+ppt_m <- tapp(ppt, "months", sum, na.rm = TRUE)
+
+# Monthly means
+tmmx_m <- tapp(tmmx, "months", mean, na.rm = TRUE)
+tmmn_m <- tapp(tmmn, "months", mean, na.rm = TRUE)
+rs_m   <- tapp(rs,   "months", mean, na.rm = TRUE)
+rh_m   <- tapp((rhx + rhn) / 2, "months", mean, na.rm = TRUE)
+wind_m <- tapp(wind, "months", mean, na.rm = TRUE)
+
+
+n <- nlyr(tmmx_m)
+rasters <- list(tmmx_m, tmmn_m, ppt_m, rs_m, rh_m, wind_m)
+stacked_by_layer <- lapply(1:n, function(i) {
+  # Extract the i-th layer from each raster
+  layers_i <- lapply(rasters, function(r) r[[i]])
+  # Combine them into a single SpatRaster
+  do.call(c, layers_i)
+})
+
+final_stack <- do.call(c, stacked_by_layer)
+
+
+library(terra)
+library(SPEI)
+
+n_months <- nlyr(tmmx_m)  # number of months in your series
+n_vars   <- length(rasters)  # should be 6: tmmx, tmmn, ppt, rs, rh, wind
+
+# Split final_stack by month
+final_by_month <- lapply(1:n_months, function(i) {
+  start <- (i - 1) * n_vars + 1
+  end   <- i * n_vars
+  final_stack[[start:end]]
+})
+
+# Compute PET for each month
+PET_m <- lapp(
+  rast(final_by_month),  # terra can handle a list of SpatRasters
+  fun = function(Tmax, Tmin, P, Rs, RH, U2) {
+    penman(Tmin = Tmin,
+           Tmax = Tmax,
+           Rs   = Rs,
+           RH   = RH,
+           U2   = U2,
+           lat  = 48,
+           z    = 400)
+  }
+)
+
+
+plot(final_by_month[[1]])
+
+
+```
+
+
+PET_daily <- lapp(
+  c(tmmn_m, tmmx_m, rs_m, rh_m, wind_m),
+  fun = function(Tmin, Tmax, Rs, RH, U2) {
+    penman(
+      Tmin = Tmin,
+      Tmax = Tmax,
+      Rs   = Rs,
+      RH   = RH,
+      U2   = U2,
+      lat  = 48,   # ideally spatialized
+      z    = 400   # ideally spatialized
+    )
+  }
+)
+
+nlyr(tmmx_m) == nlyr(tmmn_m) &&
+nlyr(tmmx_m) == nlyr(rs_m) &&
+nlyr(tmmx_m) == nlyr(rh_m) &&
+nlyr(tmmx_m) == nlyr(wind_m)
+
+
+
+```
+gc()
+
+months_vec <- time(ppt_m)
+PET_m <- PET_daily * days_in_month(as.Date(months_vec))
+
+D_m <- ppt_m - PET_m
+
+spei_12 <- app(
+  D_m,
+  fun = function(x) {
+    if (all(is.na(x))) return(rep(NA, length(x)))
+    as.numeric(spei(x, scale = 12, na.rm = TRUE)$fitted)
+  }
+)
+
+spei_mean <- global(spei_12, mean, na.rm = TRUE)
+
+spei_df <- data.frame(
+  month = as.Date(time(spei_12)),
+  SPEI_12 = spei_mean[, 1]
+)
+
+plot(spei_12[[c(100, 200, 300)]])
+
+plot(spei_df$month, spei_df$SPEI_12, type = "l")
+abline(h = c(-1, -2), col = "red", lty = 2)
+
+
+```
 
 
 
