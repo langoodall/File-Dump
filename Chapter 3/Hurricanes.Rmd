@@ -1,0 +1,574 @@
+---
+title: "Untitled"
+output: pdf_document
+date: "2025-10-09"
+---
+
+```{r, warning = FALSE, message = FALSE}
+library(tidyverse)
+library(terra)
+library(sf)
+library(educate)
+library(AICcmodavg)
+library(glmmTMB)
+library(DHARMa)
+library(performance)
+options(scipen = 999)
+templateRaster <- rast("D:/Landis Outputs/Raster Template/templateRaster.tif")
+Piedmont.shp <- st_read("C:/Users/lagoodal/Desktop/All Raster Layers/standsraster/Clipped Shapefile/clippedPiedmont.shp")
+```
+
+# Exploratory Analysis Plots
+## 
+
+```{r}
+directory <- "D:/Hurricane_LANDIS"
+climates <- c("HINT", "NORM")
+scenarios <- c("HSLV", "LSLV")
+prescriptions <- c("Resilience", "Resistance", "Transition")
+runs <- paste0("run", 1:3)
+
+dfList <- list()
+
+for (climate in climates) {
+  for (scenario in scenarios) {
+    for (prescription in prescriptions) {
+      for (run in runs) {
+        filePath <- file.path(directory, climate, scenario, prescription, run)
+        csvPath <- file.path(filePath, "hurricane-events-log.csv")
+        
+        if (!file.exists(csvPath)) {
+          message("Skipping (file not found): ", csvPath)
+          next
+        }
+        
+        # only runs if the file exists
+        df <- read_csv(csvPath)
+        df$RCP <- climate
+        df$Model <- scenario
+        df$Prescription <- prescription
+        df$Run <- run
+        df <- df[-12]
+        
+        name <- paste(climate, scenario, prescription, run, sep = "_")
+        dfList[[name]] <- df
+        message("Read file: ", csvPath)
+        gc()
+      }
+    }
+  }
+}
+
+hurricaneDf <- do.call(bind_rows, dfList)
+
+# The mortality values in this table are in Tg (1 Tg is 1 million metric tons (Mg))
+hurricaneDf <- hurricaneDf %>% mutate(Scenario = paste(Model, RCP, sep = "_"))
+
+# # Zero Inflated Model
+# m_zi_tweedie <- glmmTMB(
+#   BiomassMortality ~ LandfallMaxWindSpeed,
+#   ziformula = ~1,  # or ~ LandfallMaxWindSpeed if you suspect zeros vary with wind
+#   family = tweedie(link = "log"),
+#   data = hurricaneDf
+# )
+# summary(m_zi_tweedie)
+# 
+# res <- simulateResiduals(m_zi_tweedie)
+# plot(res)
+# testDispersion(res)
+# testZeroInflation(res)
+# 
+# newdat <- data.frame(LandfallMaxWindSpeed = seq(min(hurricaneDf$LandfallMaxWindSpeed),
+#                                                 max(hurricaneDf$LandfallMaxWindSpeed), length = 100))
+# 
+# # predicted mean biomass mortality including zero-inflation
+# newdat$pred <- predict(m_zi_tweedie, newdata = newdat, type = "response")
+# 
+# ggplot(hurricaneDf, aes(LandfallMaxWindSpeed, BiomassMortality)) +
+#   geom_point(alpha = 1) +
+#   geom_line(data = newdat, aes(y = pred), color = "firebrick1", size = 1.2, linetype = "solid") +
+#   labs(x = "Max Wind Speed (km/h)", y = "Biomass Mortality (Tg)") +
+#   theme_classic()
+
+# ggsave(width = 10, height = 6, dpi = 300,
+#        filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Images/Hurricane_Mortality.png")
+
+hurricaneDf %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance","Resilience","Transition"))) %>%
+  group_by(Prescription, Model, RCP) %>%
+  summarise(Total_Mortality = sum(BiomassMortality), .groups = "drop") %>%
+  group_by(Prescription, Model, RCP) %>%
+  summarise(Total_Mortality = mean(Total_Mortality), .groups = "drop") %>%
+  ggplot(., aes(x = Prescription, y = Total_Mortality, fill = Prescription)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  facet_grid(RCP ~ Model) +
+  scale_fill_manual(values = c("#66c2a5","#fc8d62","#542788")) +
+  scale_y_continuous(name = "Total Biomass Mortality (Pg)", breaks = seq(0,3e3,1e3), labels = seq(0,3,1))
+
+# Cumulative biomass mortality bar plot with SE errorbars
+hurricaneDf %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance","Resilience","Transition"))) %>%
+  group_by(Prescription, Model, RCP, Run) %>%
+  summarise(Total_Mortality = sum(BiomassMortality), .groups = "drop") %>%
+  group_by(Prescription, Model, RCP) %>%
+  summarise( n_runs = n(), Sum_Total = sum(Total_Mortality), SD_runs  = sd(Total_Mortality), SE_sum   = SD_runs * sqrt(n_runs), .groups = "drop") %>%
+  ggplot(., aes(x = Prescription, y = Sum_Total, fill = Prescription)) +
+  geom_bar(stat = "identity") +
+  geom_errorbar(aes(ymin = Sum_Total - SE_sum, ymax = Sum_Total + SE_sum), width = 0.2, linewidth = 0.6) +
+  facet_grid(RCP ~ Model) +
+  theme_classic() +
+  scale_fill_manual(values = c("#66c2a5","#fc8d62","#542788")) +
+  scale_y_continuous(name = "Total Biomass Mortality (Pg)",breaks = seq(0, 3e3, 1e3), labels = seq(0, 3, 1))
+
+ggsave(width = 10, height = 6, dpi = 600,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Images/Cumulative_Mortality_BarPlot.png")
+
+hurricaneDf %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance","Resilience","Transition"))) %>%
+  group_by(Prescription, Model, RCP, Time) %>%
+  summarise(Total_Mortality = sum(BiomassMortality), .groups = "drop") %>%
+  group_by(Prescription, RCP, Model) %>%
+  arrange(Prescription, RCP, Model, Time) %>%
+  mutate(CumulativeMortality = cumsum(Total_Mortality), Scenario = paste(Prescription, Model, RCP, sep = "_")) %>%
+  ggplot(., aes(x = Time, y = CumulativeMortality, col = Scenario)) +
+  geom_line(size = 1) +
+  theme_classic() +
+  scale_x_continuous(name = "Year", breaks = seq(0,80,20), labels = seq(2020,2100,20)) +
+  scale_y_continuous(name = "Cumulative Mortality (Pg)", breaks = seq(0,3e3,1e3), labels = seq(0,3,1))
+  
+hurricaneDf %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance","Resilience","Transition"))) %>%
+  group_by(Model, RCP, Time) %>%
+  summarise(Total_Mortality = mean(BiomassMortality), .groups = "drop") %>%
+  group_by(RCP, Model) %>%
+  arrange(RCP, Model, Time) %>%
+  mutate(CumulativeMortality = cumsum(Total_Mortality), Scenario = paste(Model, RCP, sep = "_")) %>%
+  ggplot(., aes(x = Time, y = CumulativeMortality, col = Scenario)) +
+  geom_line(size = 1, alpha = 1) +
+  # geom_smooth() +
+  theme_classic() +
+  scale_x_continuous(name = "Year", breaks = seq(0,80,20), labels = seq(2020,2100,20)) +
+  scale_y_continuous(name = "Cumulative Mortality (Pg)", breaks = seq(0,3e3,1e3), labels = seq(0,3,1))
+
+# Hurricane summary dataframe
+dfList <- list()
+for (climate in climates) {
+  for (scenario in scenarios) {
+    for (prescription in prescriptions) {
+      for (run in runs) {
+        filePath <- file.path(directory, climate, scenario, prescription, run)
+        csvPath <- file.path(filePath, "hurricane-summary-log.csv")
+        
+        if (!file.exists(csvPath)) {
+          message("Skipping (file not found): ", csvPath)
+          next
+        }
+        
+        # only runs if the file exists
+        df <- read_csv(csvPath)
+        df$RCP <- climate
+        df$Model <- scenario
+        df$Prescription <- prescription
+        df$Run <- run
+        df <- df[-3]
+        
+        name <- paste(climate, scenario, prescription, run, sep = "_")
+        dfList[[name]] <- df
+        message("Read file: ", csvPath)
+      }
+    }
+  }
+}
+
+hurricaneSummaryDf <- do.call(rbind, dfList)
+
+# Timeseries of hurricane events
+hurricaneSummaryDf %>%
+  group_by(Year, RCP, Model, Prescription) %>%
+  summarise(NumberEvents = mean(NumberEvents), .groups = "drop") %>%
+  ggplot(., aes(x = Year, y = NumberEvents, colour = Prescription)) +
+  geom_line(size = 1) +
+  theme_classic() +
+  facet_grid(RCP ~ Model)
+
+# Bar plot of total hurricane events by RCP, GCM, and Prescription
+hurricaneSummaryDf %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance", "Resilience", "Transition"))) %>%
+  group_by(RCP, Model, Prescription, Year) %>%
+  summarise(NumberEvents = mean(NumberEvents), .groups = "drop") %>%
+  group_by(RCP, Model, Prescription) %>%
+  summarise(NumberEvents = sum(NumberEvents), .groups = "drop") %>%
+  ggplot(., aes(x = Model, y = NumberEvents, fill = Prescription)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  scale_y_continuous(name = "Total Hurricane Events") +
+  theme_classic() +
+  facet_grid(~ RCP) +
+  scale_fill_manual(values = c("#66c2a5", "#fc8d62", "#542788"))
+
+ggsave(width = 10, height = 6, dpi = 300,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Images/Count_Hurricane_Events.png")
+
+hurricaneSummaryDf %>%
+  group_by(RCP, Model, Prescription, Year) %>%
+  summarise(NumberEvents = mean(NumberEvents), .groups = "drop") %>%
+  group_by(RCP, Model, Prescription) %>%
+  summarise(NumberEvents = sum(NumberEvents), .groups = "drop")
+
+modelColours <- c(
+  "HINT_HSLV" = "#762A83",
+  "HINT_LSLV" = "#B756C8",
+  "NORM_HSLV" = "#407C3C",
+  "NORM_LSLV" = "#6DB668"
+)
+
+hurricaneSummaryDf %>%
+  group_by(Year, RCP, Model) %>%
+  summarise(NumberEvents = mean(NumberEvents), .groups = "drop") %>%
+  group_by(RCP, Model) %>%
+  arrange(RCP, Model, Year) %>%
+  mutate(CumulativeEvents = cumsum(NumberEvents), Scenario = paste(RCP, Model, sep = "_")) %>%
+  ggplot(aes(x = Year, y = CumulativeEvents, colour = Scenario)) +
+  geom_line(size = 1) +
+  scale_colour_manual(values = modelColours) +
+  theme_classic() +
+  scale_x_continuous(name = "Year", breaks = seq(0, 80, 20), labels = seq(2020, 2100, 20)) +
+  scale_y_continuous(name = "Cumulative Storm Events", breaks = seq(0, 30, 5), labels = seq(0, 30, 5))
+
+ggsave(width = 10, height = 6, dpi = 300,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Images/Cumulative_Hurricane_Events.png")
+
+hurricaneSummaryDf %>%
+  group_by(Year, RCP, Model) %>%
+  summarise(NumberEvents = mean(NumberEvents), .groups = "drop") %>%
+  group_by(RCP, Model) %>%
+  arrange(RCP, Model, Year) %>%
+  mutate(CumulativeEvents = cumsum(NumberEvents), Scenario = paste(RCP, Model, sep = "_")) 
+
+
+# ggsave(width = 10, height = 6, dpi = 300,
+#        filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Images/Cumulative_Hurricane_Timeseries.png")
+
+
+hurricane_events <- hurricaneDf %>%
+  # keep only events that actually affected the study area, if desired
+  filter(ImpactsStudyArea) %>%                      
+  group_by(RCP, Model, Prescription, Run, Time, HurricaneNumber) %>%
+  summarise(MaxWS = max(LandfallMaxWindSpeed, na.rm = TRUE), .groups = "drop") %>%
+  mutate(
+    Hurricane_Category = case_when(
+      MaxWS >= 119 & MaxWS <= 153 ~ "1",
+      MaxWS >= 154 & MaxWS <= 177 ~ "2",
+      MaxWS >= 178 & MaxWS <= 208 ~ "3",
+      MaxWS >= 209 & MaxWS <= 251 ~ "4",
+      MaxWS > 251                   ~ "5",
+      TRUE                          ~ "TS"
+    )
+  )
+
+# 2) If you only want hurricanes (exclude TS), filter here
+hurricane_events_hurr <- hurricane_events
+
+# A) TOTAL events per scenario (sum across runs)
+counts_total <- hurricane_events %>%
+  count(RCP, Model, Prescription, Hurricane_Category, name = "NumberEvents")
+
+# B) MEAN events per run per scenario (average across runs)
+counts_mean_per_run <- hurricane_events_hurr %>%
+  count(Run, RCP, Model, Prescription, Hurricane_Category) %>%
+  group_by(RCP, Model, Prescription, Hurricane_Category) %>%
+  summarise(NumberEvents = mean(n), .groups = "drop")
+
+counts_mean_per_run %>%  # or counts_total
+  ggplot(aes(x = Model, y = NumberEvents, fill = Hurricane_Category)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_grid(~ RCP) +
+  ylab("Number of Storm Events") +
+  theme_classic()
+  
+ggsave(width = 10, height = 6, dpi = 600,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Images/Hurricane_Categories.png")
+
+
+
+
+
+plot(Piedmont.shp[2], col = NA, border = "red", lwd = 5)
+
+ggplot() +
+  geom_sf(data = Piedmont.shp[2], fill = NA, col = "red", size = 2) +
+  theme_classic() +
+  theme(
+    plot.background  = element_rect(fill = "transparent", color = NA),
+    panel.background = element_rect(fill = "transparent", color = NA)
+  )
+
+ggsave(width = 10, height = 6, dpi = 600,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Images/Piedmont_Outline.png")
+```
+
+
+
+# Hurricane Rasters
+
+```{r}
+# Mortality rasters for loop to read in and wrangle raster data
+rasterList <- list()
+for (climate in climates) {
+  for (scenario in scenarios) {
+    for (prescription in prescriptions) {
+      for (run in runs) {
+        hurricaneDir <- file.path(directory, climate, scenario, prescription, run, "hurricane")
+        if (!dir.exists(hurricaneDir)) {
+          message("Skipping (directory not found: ", hurricaneDir)
+          next
+        }
+        mortalityRasters <- list.files(hurricaneDir, pattern = "mortality.*\\.tif$", full.names = TRUE, ignore.case = TRUE)
+        if(length(mortalityRasters) == 0) {
+          message("No mortality rasters found in: ", hurricaneDir)
+          next
+        }
+        for (rasterPath in mortalityRasters) {
+          message("Reading raster: ", rasterPath)
+          r <- rast(rasterPath)
+          name <- paste(climate, scenario, prescription, run, names(r), sep = "_")
+          names(r) <- name
+          crs(r) <- crs(templateRaster)
+          ext(r) <- ext(templateRaster)
+          r <- r %>% flip()
+          r[r == 0] <- NA
+          rasterList[[name]] <- r
+        }
+      }
+    }
+  }
+}
+
+# Convert into a dataframe for plotting with ggplot
+dfList <- lapply(rasterList, function(r) {
+  df <- as.data.frame(r, xy = TRUE)
+  names(df)[3] <- "mortality"
+  nameParts <- str_split(names(r), "_")[[1]]
+  RCP <- nameParts[1]
+  Model <- nameParts[2]
+  Prescription <- nameParts[3]
+  Run <- nameParts[4]
+  fileName <- nameParts[5]
+  matches <- str_match(fileName, "mortality-(\\d+)-(\\d+)")
+  Year <- matches[,2]
+  Hurricane <- matches[,3]
+  df %>% mutate(RCP=RCP, Model=Model, Prescription=Prescription, Run=Run,
+                Year=as.integer(Year), Hurricane=as.integer(Hurricane))
+})
+
+# Combine all data frames into one big table
+allMortalityDF <- do.call(bind_rows, dfList)
+
+# Number of storm events per cell
+allMortalityDF$Hurricane <- as.numeric(as.character(allMortalityDF$Hurricane))
+
+gc()
+
+x <- allMortalityDF %>%
+  mutate(HurricaneEvent = ifelse(Hurricane > 0, 1, 0)) %>%
+  group_by(x, y, RCP, Model, Prescription, Year) %>% 
+  summarise(yearly_event = max(HurricaneEvent), .groups = "drop") %>% 
+  group_by(x, y, RCP, Model, Prescription) %>%
+  summarise(total_hurricanes = sum(yearly_event), .groups = "drop")
+
+
+x %>%
+  group_by(x, y, Model, Prescription) %>%
+  summarise(hurricanes = mean(total_hurricanes, na.rm = TRUE), .groups = "drop") %>%
+  ggplot(.) +
+  geom_raster(aes(x = x, y = y, fill = hurricanes)) +
+  geom_sf(data = Piedmont.shp, fill = NA, color = "black", linewidth = 0.4) +
+  scale_fill_viridis_c() +
+  coord_sf() +
+  theme_minimal() +
+  facet_grid(Prescription ~ Model)
+
+```
+df <- allMortalityDF %>%
+  group_by(x, y, RCP, Model, Prescription) %>%
+  summarise(avg_Hurricane = mean(Hurricane, na.rm = TRUE), .groups = "drop") %>%
+  group_by(x, y, RCP, Model) %>%
+  summarise(total_Hurricane = sum(avg_Hurricane), .groups = "drop")
+
+
+vmin <- min(df$total_Hurricane, na.rm = TRUE)
+vmax <- max(df$total_Hurricane, na.rm = TRUE)
+ggplot(df) +
+  geom_raster(aes(x = x, y = y, fill = total_Hurricane)) +
+  geom_sf(data = Piedmont.shp, fill = NA, color = "black", linewidth = 0.4) +
+  coord_sf() +
+  theme_minimal() +
+  facet_grid(RCP ~ Model) +
+  scale_fill_gradientn(
+    colours = c("red", "red", "yellow", "dodgerblue"),
+    # explicitly rescale to 0–1 across data range
+    values = scales::rescale(c(vmin, 3, 4, vmax), from = c(vmin, vmax)),
+    limits = c(vmin, vmax),
+    oob = scales::squish,
+    name = "Average Storm Events"
+  )
+
+ggplot(df) +
+  geom_raster(aes(x = x, y = y, fill = total_Hurricane)) +
+  geom_sf(data = Piedmont.shp, fill = NA, color = "black", linewidth = 0.4) +
+  coord_sf() +
+  theme_minimal() +
+  facet_grid(RCP ~ Model) +
+  scale_fill_gradientn(
+    colours = c("red", "yellow", "dodgerblue"),  # clean 3-color gradient
+    values = scales::rescale(c(vmin, (vmin + vmax)/2, vmax), from = c(vmin, vmax)),  # make yellow the midpoint
+    limits = c(vmin, vmax),
+    oob = scales::squish,
+    name = "Average Storm Events"
+  )
+
+df %>%
+  mutate(
+    Hurricane_Bin = case_when(
+      total_Hurricane < 1 ~ 1,
+      total_Hurricane >= 6 ~ 6,
+      TRUE ~ floor(total_Hurricane)
+    ) %>%
+      as.character() %>%  # ✅ ensure levels are "1", "2", ..., "6"
+      factor(levels = as.character(1:6))
+  ) %>%
+ggplot(.) +
+  geom_raster(aes(x = x, y = y, fill = Hurricane_Bin)) +
+  geom_sf(data = Piedmont.shp, fill = NA, color = "black", linewidth = 0.4) +
+  coord_sf() +
+  theme_minimal() +
+  facet_grid(RCP ~ Model) +
+  scale_fill_manual(
+    values = c(
+      "1" = "#d73027",
+      "2" = "#f46d43",
+      "3" = "#fdae61",
+      "4" = "#abd9e9",
+      "5" = "#74add1",
+      "6" = "#4575b4"
+    ),
+    name = "Hurricane Category"
+  )
+
+
+ggsave(width = 25, height = 10, dpi = 300,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Images/Hurricane_Events_Map.png")
+
+
+# # Mortality Map, values are Mg (metric tons), but some are really high because they
+# # have been hit multiple times
+df2 <- allMortalityDF %>%
+  group_by(x, y, RCP, Model) %>%
+  summarise(Mortality = mean(mortality, na.rm = TRUE))
+# 
+# 
+# # Cap values for coloring (optional, used in the scale)
+df2$Mortality_capped <- pmin(df2$Mortality, 1001)  # 1001 to allow red for >1000
+
+# Plot of average mortality over the simulation period. All values > 1000 are coloured red
+ggplot(df2) +
+  geom_raster(aes(x = x, y = y, fill = Mortality_capped)) +
+  geom_sf(data = Piedmont.shp, fill = NA, color = "black", linewidth = 0.4) +
+  coord_sf() +
+  theme_minimal() +
+  facet_grid(RCP ~ Model) +
+  scale_fill_gradientn(
+    colors = c("green", "blue", "red"),          # gradient green → blue → red
+    values = scales::rescale(c(0, 1000, 1001)), # 0–1000 = gradient, >1000 = red
+    limits = c(0, 1001),
+    na.value = "grey80",
+    guide = guide_colorbar(barheight = 10)
+  ) +
+  labs(fill = "Mortality")
+
+ggsave(width = 25, height = 10, dpi = 300,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Images/Average_Mortality_Map.png")
+
+
+hurricaneDf %>%
+  group_by(RCP, Model, Prescription, Time, HurricaneNumber) %>%
+  summarise(BiomassMortality = mean(BiomassMortality), .groups = "drop") %>%
+  group_by(RCP, Model, Prescription) %>%
+  summarise(BiomassMortality = sum(BiomassMortality)) %>%
+  ggplot(., aes(x = Prescription, y = BiomassMortality, fill = Prescription)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  theme_classic() +
+  facet_grid(RCP ~ Model)
+
+ggsave(width = 10, height = 6, dpi = 300,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Images/Total_Hurricane_Mortality.png")
+
+hurricaneDf %>%
+  group_by(RCP, Model, Prescription, Time, HurricaneNumber) %>%
+  summarise(BiomassMortality = mean(BiomassMortality), .groups = "drop") %>%
+  group_by(RCP, Model, Prescription) %>%
+  summarise(BiomassMortality = sum(BiomassMortality)) %>%
+  arrange(BiomassMortality, .by_group = TRUE)
+```
+
+
+
+
+```{r}
+stormDf <- data.table::fread("D:/Hurricane_LANDIS/hurricaneEvents.csv")
+
+stormDf %>%
+  group_by(x, y, Model, Prescription) %>%
+  summarise(hurricanes = mean(total_hurricanes), .groups = "drop") %>%
+  ggplot(.) +
+  geom_raster(aes(x = x, y = y, fill = hurricanes)) +
+  geom_sf(data = Piedmont.shp, fill = NA, color = "black", linewidth = 0.4) +
+  scale_fill_viridis_c() +
+  coord_sf() +
+  theme_minimal() +
+  facet_grid(Prescription ~ Model)
+
+
+
+
+x %>%
+  group_by(x, y, Model, Prescription) %>%
+  summarise(hurricanes = mean(total_hurricanes, na.rm = TRUE), .groups = "drop") %>%
+  ggplot(.) +
+  geom_raster(aes(x = x, y = y, fill = hurricanes)) +
+  geom_sf(data = Piedmont.shp, fill = NA, color = "black", linewidth = 0.4) +
+  scale_fill_viridis_c() +
+  coord_sf() +
+  theme_minimal() +
+  facet_grid(Prescription ~ Model)
+
+cumulativeStormDf <- data.table::fread("D:/Hurricane_LANDIS/hurricaneCumulative.csv")
+
+cumulativeStormDf %>%
+  mutate(Scenario = paste(Prescription, RCP, Model, sep = "_")) %>%
+  ggplot(.) +
+  geom_raster(aes(x = x, y = y, fill = total_hurricanes)) +
+  geom_sf(data = Piedmont.shp, fill = NA, color = "black", linewidth = 0.4) +
+  scale_fill_viridis_c() +
+  coord_sf() +
+  theme_minimal() +
+  facet_wrap(~ Scenario)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

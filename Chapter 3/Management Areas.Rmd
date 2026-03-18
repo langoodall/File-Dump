@@ -1,0 +1,114 @@
+---
+title: "Untitled"
+output: pdf_document
+date: "2024-11-13"
+---
+
+
+```{r}
+library(tidyverse)
+library(terra)
+library(sf)
+```
+
+# Management Areas
+
+```{r}
+# Read in counties shapefile and filter to the 3 counties of interest
+countiesNC <- st_read("C:/Users/lagoodal/Desktop/nc_eco_l3/North_Carolina_State_and_County_Boundary_Polygons.shp")
+threeCounties <- countiesNC %>% filter(County %in% c("Anson", "Montgomery", "Richmond")) %>%
+  st_as_sf(.) %>%
+  st_transform(., crs = "EPSG:26917")
+
+# Select just the County column
+threeCounties <- threeCounties[2]
+
+# Create a new column for LANDIS management areas
+threeCounties <- threeCounties %>%
+  mutate(ID = ifelse(.$County == "Anson", 1,
+                     ifelse(.$County == "Richmond", 2, 3)))
+
+# Rasterize to the template raster
+templateRaster <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Three_Counties_Rasters/templateRaster.tif")
+ManagementAreaRast <- rasterize(threeCounties, templateRaster, field = "ID")
+plot(ManagementAreaRast)
+
+writeRaster(ManagementAreaRast,
+            filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Three_Counties_Rasters/Harvest/ManagementAreas.tif",
+            datatype = "INT1U",
+            NAflag = 0,
+            overwrite = TRUE)
+
+
+# Create Management Area 4 which will be plantation
+
+ManagementAreaRast
+
+ICMap <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Rasters/TCTreeMap.tif")
+plot(ICMap)
+
+mapCodeDf <- read_csv("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/MapCodeDf.csv")
+
+plantationCodes <- mapCodeDf %>%
+  filter(MapCode != 0) %>%
+  group_by(MapCode) %>%
+  mutate(total = sum(CohortBiomass),
+         percent = (CohortBiomass / total) * 100) %>%
+  group_by(MapCode, SpeciesName) %>%
+  summarise(total_percent = sum(percent)) %>%
+  group_by(MapCode) %>%
+  filter((any(SpeciesName == "PITA" & total_percent >= 80)) | 
+         (any(SpeciesName == "PIPA2" & total_percent >= 80))) %>%
+  select(MapCode) %>%
+  unique()
+  
+x <- ICMap %>%
+  as.data.frame() %>%
+  filter(tl_id %in% plantationCodes$MapCode)
+maskRastPlantation <- ifel(ICMap %in% x$tl_id, 4, 0)
+
+
+# Mask out the Management Areas map
+maskedMA <- mask(ManagementAreaRast, maskRastPlantation, maskvalues = 4)
+allMARast <- ifel(is.na(maskedMA), 4, maskedMA)
+allMARast <- mask(allMARast, ManagementAreaRast)
+
+# Bring in standRast from Stands Map.Rmd
+standRast <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment OG/Harvest/standRast.tif")
+allMARast <- mask(allMARast, standRast)
+
+writeRaster(allMARast,
+            filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment OG/Harvest/ManagementAreas4.tif",
+            datatype = "INT1U",
+            NAflag = 0,
+            overwrite = TRUE)
+
+
+```
+
+
+# Stands Map
+
+```{r}
+templateRaster <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Three_Counties_Rasters/templateRaster.tif")
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

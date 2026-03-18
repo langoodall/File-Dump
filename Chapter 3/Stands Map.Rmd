@@ -1,0 +1,552 @@
+---
+title: "Stands Map"
+output: pdf_document
+date: "2024-11-12"
+---
+
+```{r, message = FALSE, warning = FALSE}
+library(tidyverse)
+library(terra)
+library(sf)
+templateRaster <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Three_Counties_Rasters/templateRaster.tif")
+```
+
+
+
+```{r}
+# Read in 3 counties shapefile and the HUC 12 watershed of NC
+threeCounties.Shp <- st_read("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Three_Counties_Rasters/Shapefile/threeCounties.shp")
+watershedsHUC <- st_read("C:/Users/lagoodal/Desktop/All Raster Layers/HUC 8 Watersheds/Shape/WBDHU12.shp")
+
+# Project the shapefile to the watershed shapefile, then crop and mask
+threeCounties.Shp <- threeCounties.Shp %>%
+  st_transform(., crs = crs(watershedsHUC))
+watershedsHUC <- watershedsHUC %>%
+  st_crop(., threeCounties.Shp) %>%
+  st_intersection(., threeCounties.Shp)
+
+# Add in county borders to act as extra stand divisions which will then
+# match our future management areas
+countiesNC <- st_read("C:/Users/lagoodal/Desktop/nc_eco_l3/North_Carolina_State_and_County_Boundary_Polygons.shp")
+threeCounties <- countiesNC %>%
+  st_as_sf() %>%
+  filter(County %in% c("Anson", "Montgomery", "Richmond")) %>%
+  st_transform(., crs = crs(watershedsHUC))
+watershedsHUC <- watershedsHUC %>% st_intersection(., threeCounties)
+
+
+plot(watershedsHUC[12])
+plot(threeCounties[2])
+
+# st_write(threeCounties[2],
+#          dsn = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Shapefiles/ThreeCounties.shp")
+```
+
+
+
+```{r}
+# Create a shapefile that has the major roads in the 3 county region, which is
+# also bounded by the 3 counties border
+roadsNC <- st_read("C:/Users/lagoodal/Desktop/Dissertation Stuff/Data/County Roads/State_Maintained_Roads.shp")
+roadsNC <- roadsNC[2]
+threeCounties.Shp <- threeCounties.Shp %>% st_transform(., crs = crs(roadsNC))
+intersection_result <- st_intersection(roadsNC, threeCounties.Shp)
+plot(intersection_result)
+
+
+# st_write(intersection_result[2],
+#          dsn = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Shapefiles/roadsTC.shp")
+
+```
+
+
+# Bring back from QGIS
+
+```{r}
+ManagementAreaRast <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment OG/Harvest/ManagementAreas4.tif")
+standsTC <- st_read("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Shapefiles/standsTC.shp") %>%
+  st_transform(., crs = "EPSG:26917") %>%
+  mutate(StandID = 1:nrow(.))
+plot(standsTC[7])
+
+templateRaster <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Three_Counties_Rasters/templateRaster.tif")
+
+standRast <- rasterize(standsTC, templateRaster, field = "StandID")
+
+# Now some more stands are straddling two management areas
+# Stand 1291
+x <- ifel(standRast == 1291, 1, NA)
+stack <- c(x, ManagementAreaRast)
+df <- as.data.frame(stack, cell = TRUE) %>%
+  filter(StandID == 1) %>%
+  mutate(row = (cell - 1) %/% 1121 + 1,
+         col = (cell - 1) %% 1121 + 1)
+df %>% filter(ID == 4)
+ManagementAreaRast[527,810] <- 2
+ManagementAreaRast[529,806] <- 2
+ManagementAreaRast[529,820] <- 2
+ManagementAreaRast[529,828] <- 2
+ManagementAreaRast[530,806] <- 2
+ManagementAreaRast[530,812] <- 2
+ManagementAreaRast[530,813] <- 2
+ManagementAreaRast[531,810] <- 2
+ManagementAreaRast[531,811] <- 2
+ManagementAreaRast[532,801] <- 2
+ManagementAreaRast[532,807] <- 2
+ManagementAreaRast[532,810] <- 2
+ManagementAreaRast[533,800] <- 2
+ManagementAreaRast[534,800] <- 2
+ManagementAreaRast[534,821] <- 2
+ManagementAreaRast[534,822] <- 2
+ManagementAreaRast[534,829] <- 2
+ManagementAreaRast[535,799] <- 2
+ManagementAreaRast[535,800] <- 2
+ManagementAreaRast[535,814] <- 2
+ManagementAreaRast[535,823] <- 2
+ManagementAreaRast[535,832] <- 2
+ManagementAreaRast[535,838] <- 2
+ManagementAreaRast[536,792] <- 2
+ManagementAreaRast[536,802] <- 2
+ManagementAreaRast[536,803] <- 2
+ManagementAreaRast[536,814] <- 2
+ManagementAreaRast[536,816] <- 2
+ManagementAreaRast[536,831] <- 2
+ManagementAreaRast[536,837] <- 2
+ManagementAreaRast[536,839] <- 2
+ManagementAreaRast[536,843] <- 2
+ManagementAreaRast[537,791] <- 2
+ManagementAreaRast[537,802] <- 2
+ManagementAreaRast[537,810] <- 2
+ManagementAreaRast[538,810] <- 2
+ManagementAreaRast[538,819] <- 2
+ManagementAreaRast[539,802] <- 2
+ManagementAreaRast[539,803] <- 2
+ManagementAreaRast[539,822] <- 2
+ManagementAreaRast[540,787] <- 2
+ManagementAreaRast[540,796] <- 2
+ManagementAreaRast[540,802] <- 2
+ManagementAreaRast[540,813] <- 2
+ManagementAreaRast[540,836] <- 2
+ManagementAreaRast[541,805] <- 2
+ManagementAreaRast[541,812] <- 2
+ManagementAreaRast[542,812] <- 2
+ManagementAreaRast[542,818] <- 2
+ManagementAreaRast[542,822] <- 2
+ManagementAreaRast[543,797] <- 2
+ManagementAreaRast[543,814] <- 2
+ManagementAreaRast[543,824] <- 2
+ManagementAreaRast[543,825] <- 2
+ManagementAreaRast[543,831] <- 2
+ManagementAreaRast[543,835] <- 2
+ManagementAreaRast[543,837] <- 2
+ManagementAreaRast[544,786] <- 2
+ManagementAreaRast[544,811] <- 2
+ManagementAreaRast[544,834] <- 2
+ManagementAreaRast[545,784] <- 2
+ManagementAreaRast[545,810] <- 2
+ManagementAreaRast[546,835] <- 2
+ManagementAreaRast[547,788] <- 2
+ManagementAreaRast[547,817] <- 2
+ManagementAreaRast[547,818] <- 2
+ManagementAreaRast[547,830] <- 2
+ManagementAreaRast[548,817] <- 2
+ManagementAreaRast[548,819] <- 2
+ManagementAreaRast[549,788] <- 2
+ManagementAreaRast[549,804] <- 2
+ManagementAreaRast[549,821] <- 2
+ManagementAreaRast[549,829] <- 2
+ManagementAreaRast[549,830] <- 2
+ManagementAreaRast[549,831] <- 2
+ManagementAreaRast[549,833] <- 2
+ManagementAreaRast[550,803] <- 2
+ManagementAreaRast[550,817] <- 2
+ManagementAreaRast[550,823] <- 2
+ManagementAreaRast[551,788] <- 2
+ManagementAreaRast[551,804] <- 2
+ManagementAreaRast[551,811] <- 2
+ManagementAreaRast[551,827] <- 2
+ManagementAreaRast[552,810] <- 2
+ManagementAreaRast[552,818] <- 2
+ManagementAreaRast[552,825] <- 2
+ManagementAreaRast[552,828] <- 2
+ManagementAreaRast[553,809] <- 2
+ManagementAreaRast[553,822] <- 2
+ManagementAreaRast[553,824] <- 2
+ManagementAreaRast[554,787] <- 2
+ManagementAreaRast[554,798] <- 2
+ManagementAreaRast[554,826] <- 2
+ManagementAreaRast[555,826] <- 2
+ManagementAreaRast[556,818] <- 2
+ManagementAreaRast[556,822] <- 2
+ManagementAreaRast[556,824] <- 2
+ManagementAreaRast[556,826] <- 2
+ManagementAreaRast[557,801] <- 2
+ManagementAreaRast[557,824] <- 2
+ManagementAreaRast[558,786] <- 2
+ManagementAreaRast[558,800] <- 2
+ManagementAreaRast[558,816] <- 2
+ManagementAreaRast[558,817] <- 2
+ManagementAreaRast[559,785] <- 2
+ManagementAreaRast[560,800] <- 2
+ManagementAreaRast[563,815] <- 2
+ManagementAreaRast[564,790] <- 2
+ManagementAreaRast[564,814] <- 2
+ManagementAreaRast[565,802] <- 2
+ManagementAreaRast[566,804] <- 2
+
+writeRaster(ManagementAreaRast,
+            filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment OG/Harvest/ManagementAreas4.tif",
+            datatype = "INT1U",
+            NAflag = 0,
+            overwrite = TRUE)
+
+```
+
+# I need to edit some of the stands because they are straddling two different MAs
+# Stand 1258
+x <- ifel(standRast == 1258, 1, NA)
+stack <- c(x, ManagementAreaRast)
+df <- as.data.frame(stack, cell = TRUE) %>%
+  filter(StandID == 1) %>%
+  mutate(row = (cell - 1) %/% 1121 + 1,
+         col = (cell - 1) %% 1121 + 1)
+df %>% filter(ID == 3)
+standRast[562,482] <- 2
+standRast[564,453] <- 2
+
+# Stand 1259
+x <- ifel(standRast == 1259, 1, NA)
+stack <- c(x, ManagementAreaRast)
+df <- as.data.frame(stack, cell = TRUE) %>%
+  filter(StandID == 1) %>%
+  mutate(row = (cell - 1) %/% 1121 + 1,
+         col = (cell - 1) %% 1121 + 1)
+df %>% filter(ID == 2)
+standRast[564,470] <- 3
+
+plot(standRast)
+plot(ManagementAreaRast)
+
+writeRaster(standRast,
+            filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment OG/Harvest/standRast.tif",
+            NAflag = 0,
+            datatype = "INT4S",
+            overwrite = TRUE)
+
+
+# There are some discrepancies between the stand raster and the management area raster.
+# ManagementAreaRast had a few more active cells than standRast. I will sort those out now
+
+maskStand <- !is.na(standRast)
+ManagementAreaRast[!maskStand] <- NA
+
+writeRaster(ManagementAreaRast,
+            filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Harvest/ManagementAreas.tif",
+            datatype = "INT1U",
+            NAflag = 0,
+            overwrite = TRUE)
+
+# Now some more stands are straddling two management areas
+# Stand 1291
+x <- ifel(standRast == 1291, 1, NA)
+stack <- c(x, ManagementAreaRast)
+df <- as.data.frame(stack, cell = TRUE) %>%
+  filter(StandID == 1) %>%
+  mutate(row = (cell - 1) %/% 1121 + 1,
+         col = (cell - 1) %% 1121 + 1)
+df %>% filter(ID == 3)
+ManagementAreaRast[526,811] <- 2
+ManagementAreaRast[527,817] <- 2
+
+# Stand 1280
+x <- ifel(standRast == 1280, 1, NA)
+stack <- c(x, ManagementAreaRast)
+df <- as.data.frame(stack, cell = TRUE) %>%
+  filter(StandID == 1) %>%
+  mutate(row = (cell - 1) %/% 1121 + 1,
+         col = (cell - 1) %% 1121 + 1)
+df %>% filter(ID == 3)
+ManagementAreaRast[528,652] <- 2
+ManagementAreaRast[528,671] <- 2
+ManagementAreaRast[529,625] <- 2
+ManagementAreaRast[529,674] <- 2
+ManagementAreaRast[530,628] <- 2
+
+# Stand 1283
+x <- ifel(standRast == 1283, 1, NA)
+stack <- c(x, ManagementAreaRast)
+df <- as.data.frame(stack, cell = TRUE) %>%
+  filter(StandID == 1) %>%
+  mutate(row = (cell - 1) %/% 1121 + 1,
+         col = (cell - 1) %% 1121 + 1)
+df %>% filter(ID == 2)
+ManagementAreaRast[528,754] <- 3
+ManagementAreaRast[531,750] <- 3
+
+# Stand 1282
+x <- ifel(standRast == 1282, 1, NA)
+stack <- c(x, ManagementAreaRast)
+df <- as.data.frame(stack, cell = TRUE) %>%
+  filter(StandID == 1) %>%
+  mutate(row = (cell - 1) %/% 1121 + 1,
+         col = (cell - 1) %% 1121 + 1)
+df %>% filter(ID == 3)
+ManagementAreaRast[528,762] <- 2
+ManagementAreaRast[529,764] <- 2
+
+# Stand 1345
+x <- ifel(standRast == 1345, 1, NA)
+stack <- c(x, ManagementAreaRast)
+df <- as.data.frame(stack, cell = TRUE) %>%
+  filter(StandID == 1) %>%
+  mutate(row = (cell - 1) %/% 1121 + 1,
+         col = (cell - 1) %% 1121 + 1)
+df %>% filter(ID == 3)
+ManagementAreaRast[530,704] <- 2
+ManagementAreaRast[534,728] <- 2
+
+# Stand 1298
+x <- ifel(standRast == 1298, 1, NA)
+stack <- c(x, ManagementAreaRast)
+df <- as.data.frame(stack, cell = TRUE) %>%
+  filter(StandID == 1) %>%
+  mutate(row = (cell - 1) %/% 1121 + 1,
+         col = (cell - 1) %% 1121 + 1)
+df %>% filter(ID == 2)
+ManagementAreaRast[521,606] <- 3
+ManagementAreaRast[532,589] <- 3
+ManagementAreaRast[536,583] <- 3
+
+# Stand 1301
+x <- ifel(standRast == 1301, 1, NA)
+stack <- c(x, ManagementAreaRast)
+df <- as.data.frame(stack, cell = TRUE) %>%
+  filter(StandID == 1) %>%
+  mutate(row = (cell - 1) %/% 1121 + 1,
+         col = (cell - 1) %% 1121 + 1)
+df %>% filter(ID == 3)
+ManagementAreaRast[557,877] <- 2
+ManagementAreaRast[557,878] <- 2
+ManagementAreaRast[557,879] <- 2
+
+# Stand 1237
+x <- ifel(standRast == 1237, 1, NA)
+stack <- c(x, ManagementAreaRast)
+df <- as.data.frame(stack, cell = TRUE) %>%
+  filter(StandID == 1) %>%
+  mutate(row = (cell - 1) %/% 1121 + 1,
+         col = (cell - 1) %% 1121 + 1)
+df %>% filter(ID == 2)
+ManagementAreaRast[564,434] <- 3
+
+# Stand 1184
+x <- ifel(standRast == 1184, 1, NA)
+stack <- c(x, ManagementAreaRast)
+df <- as.data.frame(stack, cell = TRUE) %>%
+  filter(StandID == 1) %>%
+  mutate(row = (cell - 1) %/% 1121 + 1,
+         col = (cell - 1) %% 1121 + 1)
+df %>% filter(ID == 3)
+ManagementAreaRast[576,416] <- 2
+ManagementAreaRast[578,412] <- 2
+ManagementAreaRast[583,406] <- 2
+
+# Stand 1153
+x <- ifel(standRast == 1153, 1, NA)
+stack <- c(x, ManagementAreaRast)
+df <- as.data.frame(stack, cell = TRUE) %>%
+  filter(StandID == 1) %>%
+  mutate(row = (cell - 1) %/% 1121 + 1,
+         col = (cell - 1) %% 1121 + 1)
+df %>% filter(ID == 3)
+ManagementAreaRast[591,392] <- 2
+
+# Stand 3
+x <- ifel(standRast == 3, 1, NA)
+stack <- c(x, ManagementAreaRast)
+df <- as.data.frame(stack, cell = TRUE) %>%
+  filter(StandID == 1) %>%
+  mutate(row = (cell - 1) %/% 1121 + 1,
+         col = (cell - 1) %% 1121 + 1)
+df %>% filter(ID == 2)
+ManagementAreaRast[564,470] <- 1
+
+# Stand 2
+x <- ifel(standRast == 2, 1, NA)
+stack <- c(x, ManagementAreaRast)
+df <- as.data.frame(stack, cell = TRUE) %>%
+  filter(StandID == 1) %>%
+  mutate(row = (cell - 1) %/% 1121 + 1,
+         col = (cell - 1) %% 1121 + 1)
+df %>% filter(ID == 3)
+ManagementAreaRast[562,482] <- 1
+ManagementAreaRast[564,453] <- 1
+
+
+# writeRaster(ManagementAreaRast,
+#             filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Harvest/ManagementAreas.tif",
+#             datatype = "INT1U",
+#             NAflag = 0,
+#             overwrite = TRUE)
+```
+
+
+```{r}
+plot(rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Harvest/biomass-harvest-prescripts-5.img") %>% flip())
+plot(rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Harvest/biomass-harvest-prescripts-10.img") %>% flip())
+plot(rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Harvest/biomass-harvest-prescripts-15.img") %>% flip())
+plot(rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Harvest/biomass-harvest-prescripts-20.img") %>% flip())
+plot(rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Harvest/biomass-harvest-prescripts-25.img") %>% flip())
+plot(rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Harvest/biomass-harvest-prescripts-30.img") %>% flip())
+plot(rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Harvest/biomass-harvest-prescripts-35.img") %>% flip())
+plot(rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Harvest/biomass-harvest-prescripts-40.img") %>% flip())
+plot(rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Harvest/biomass-harvest-prescripts-45.img") %>% flip())
+plot(rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Harvest/biomass-harvest-prescripts-50.img") %>% flip())
+plot(rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Harvest/biomass-harvest-prescripts-55.img") %>% flip())
+plot(rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Harvest/biomass-harvest-prescripts-60.img") %>% flip())
+plot(rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Harvest/biomass-harvest-prescripts-65.img") %>% flip())
+plot(rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Harvest/biomass-harvest-prescripts-70.img") %>% flip())
+plot(rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Harvest/biomass-harvest-prescripts-75.img") %>% flip())
+plot(rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Harvest/biomass-harvest-prescripts-80.img") %>% flip())
+plot(rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Harvest/biomass-harvest-prescripts-85.img") %>% flip())
+plot(rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Harvest/biomass-harvest-prescripts-90.img") %>% flip())
+plot(rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Harvest/biomass-harvest-prescripts-95.img") %>% flip())
+plot(rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Harvest/biomass-harvest-prescripts-100.img") %>% flip())
+
+get_position <- function(number) {
+  adjusted_number <- number - 2
+  set_number <- (adjusted_number %/% 3) + 1
+  position_in_set <- adjusted_number %% 3 + 1
+  return(list(set_number = set_number, position_in_set = position_in_set))
+}
+
+# Example usage
+get_position(40)
+
+filepath <- "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Harvest/"
+files <- list.files(filepath, pattern = "\\.img$", full.names = TRUE)
+files <- files[1:20]
+
+rasterList <- list()
+for (file in files) {
+  path <- file
+  raster <- rast(path)
+  raster <- flip(raster)
+  ext(raster) <- ext(templateRaster)
+  crs(raster) <- crs(templateRaster)
+  rasterList[[file]] <- raster
+}
+
+results <- list()
+
+for (i in rasterList) {
+  df <- i
+  df <- as.data.frame(df)
+  colnames(df) <- "Prescription"
+  df <- filter(df, df$Prescription > 1)
+  df <- df %>% group_by(Prescription) %>% summarise(n = n())
+  df <- df %>% mutate(Timestep = varnames(i))
+  results[[length(results) + 1]] <- df
+}
+
+allDf <- do.call(rbind, results)
+allDf$Timestep <- gsub("[^0-9]", "", allDf$Timestep)
+allDf$Timestep <- as.numeric(allDf$Timestep)
+
+prescriptionNames <- data.frame(Index = 2:88,
+  Prescription = c("Thinning_1A","Thinning_1B","Thinning_1C","Thinning_2A","Thinning_2B","Thinning_2C","Thinning_3A","Thinning_3B","Thinning_3C","Thinning_4A","Thinning_4B","Thinning_4C","Thinning_5A","Thinning_5B","Thinning_5C","Thinning_OakA","Thinning_OakB","Thinning_OakC","Thinning_PineA","Thinning_PineB","Thinning_PineC","Thinning_HardwoodA","Thinning_HardwoodB","Thinning_HardwoodC","Thinning_SoftwoodA","Thinning_SoftwoodB","Thinning_SoftwoodC","PineSeedTree_A","PineSeedTree_B","PineSeedTree_C","OakSeedTree_A","OakSeedTree_B","OakSeedTree_C","HickorySeedTree_A","HickorySeedTree_B","HickorySeedTree_C","MesicHardwoodSeedTree_A","MesicHardwoodSeedTree_B","MesicHardwoodSeedTree_C","XericHardwoodSeedTree_A","XericHardwoodSeedTree_B","XericHardwoodSeedTree_C","OakShelterwood_A","OakShelterwood_B","OakShelterwood_C","PineShelterwood_A","PineShelterwood_B","PineShelterwood_C","HickoryShelterwood_A","HickoryShelterwood_B","HickoryShelterwood_C","MesicHardwoodShelterwood_A","MesicHardwoodShelterwood_B","MesicHardwoodShelterwood_C","XericHardwoodShelterwood_A","XericHardwoodShelterwood_B","XericHardwoodShelterwood_C","OakPatchcut_A","OakPatchcut_B","OakPatchcut_C", "PinePatchcut_A","PinePatchcut_B","PinePatchcut_C","HickoryPatchcut_A","HickoryPatchcut_B","HickoryPatchcut_C","MesicHardwoodPatchcut_A","MesicHardwoodPatchcut_B","MesicHardwoodPatchcut_C","XericHardwoodPatchcut_A","XericHardwoodPatchcut_B","XericHardwoodPatchcut_C","OakVDT_A","OakVDT_B","OakVDT_C","PineVDT_A","PineVDT_B","PineVDT_C","HickoryVDT_A","HickoryVDT_B","HickoryVDT_C","MesicHardwoodVDT_A","MesicHardwoodVDT_B","MesicHardwoodVDT_C","XericHardwoodVDT_A","XericHardwoodVDT_B","XericHardwoodVDT_C"))
+
+allDf <- inner_join(prescriptionNames, allDf, by = c("Index" = "Prescription"))
+
+sort(unique(allDf$Prescription))
+
+allDf <- allDf %>%
+  mutate(FunctionalGroup = case_when(
+    grepl("Hickory", Prescription) ~ "Hickory",
+    grepl("MesicHardwood", Prescription) ~ "Mesic Hardwood",
+    grepl("Oak", Prescription) ~ "Oak",
+    grepl("Pine", Prescription) ~ "Pine",
+    grepl("XericHardwood", Prescription) ~ "Xeric Hardwood",
+    grepl("Hardwood", Prescription) ~ "Hardwood",
+    grepl("Softwood", Prescription) ~ "Softwood",
+    TRUE ~ "Catch All"
+  ),
+  PrescriptionType = case_when(
+    grepl("Thinning", Prescription) ~ "Thinning",
+    grepl("SeedTree", Prescription) ~ "Seed Tree",
+    grepl("Shelterwood", Prescription) ~ "Shelterwood",
+    grepl("Patchcut", Prescription) ~ "Patchcut",
+    grepl("VDT", Prescription) ~ "Variable Density Thinning",
+    TRUE ~ "Catch All"
+  ))
+
+ggplot(allDf %>% filter(Timestep == 25), aes(x = reorder(Prescription, -n), y = n / 2, fill = FunctionalGroup)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 90)) +
+  xlab("Hectares") +
+  ylab("Prescription") +
+  facet_wrap(~Timestep)
+
+allDf %>%
+  group_by(FunctionalGroup, Timestep) %>%
+  summarise(total = sum(n)) %>%
+  filter(Timestep == 25) %>%
+  ggplot(., aes(x = reorder(FunctionalGroup, -total), y = total, fill = FunctionalGroup)) +
+  geom_bar(stat = "identity") +
+  xlab("Hectares") +
+  ylab("Prescription") +
+  theme_classic() +
+  facet_wrap(~Timestep)
+
+allDf %>%
+  group_by(PrescriptionType, Timestep) %>%
+  summarise(total = sum(n)) %>%
+  filter(Timestep == 25) %>%
+  ggplot(., aes(x = reorder(PrescriptionType, -total), y = total, fill = PrescriptionType)) +
+  geom_bar(stat = "identity") +
+  xlab("Hectares") +
+  ylab("Prescription") +
+  theme_classic() +
+  facet_wrap(~Timestep)
+
+
+ggplot(allDf %>% filter(Timestep == 75), aes(x = reorder(Prescription, -n), y = n / 2, fill = FunctionalGroup)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 90)) +
+  xlab("Hectares") +
+  ylab("Prescription") +
+  facet_wrap(~Timestep)
+
+allDf %>%
+  group_by(FunctionalGroup, Timestep) %>%
+  summarise(total = sum(n)) %>%
+  filter(Timestep == 75) %>%
+  ggplot(., aes(x = reorder(FunctionalGroup, -total), y = total, fill = FunctionalGroup)) +
+  geom_bar(stat = "identity") +
+  xlab("Hectares") +
+  ylab("Prescription") +
+  theme_classic() +
+  facet_wrap(~Timestep)
+
+allDf %>%
+  group_by(PrescriptionType, Timestep) %>%
+  summarise(total = sum(n)) %>%
+  filter(Timestep == 75) %>%
+  ggplot(., aes(x = reorder(PrescriptionType, -total), y = total, fill = PrescriptionType)) +
+  geom_bar(stat = "identity") +
+  xlab("Hectares") +
+  ylab("Prescription") +
+  theme_classic() +
+  facet_wrap(~Timestep)
+
+
+
+
+```
+
+
+
+
+

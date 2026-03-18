@@ -1,0 +1,339 @@
+---
+title: "Untitled"
+output: pdf_document
+date: "2025-02-28"
+---
+
+
+```{r}
+library(tidyverse)
+library(terra)
+library(sf)
+```
+
+```{r}
+outline.shp <- st_read("D:/Chapter 3/Shapefiles/standPolygon.shp") %>% filter(StandID == 1)
+
+standRast %>% as.data.frame() %>% nrow() -
+ManagementAreaRast %>% as.data.frame() %>% nrow()
+```
+
+
+# Management Areas
+
+```{r}
+set.seed(33)
+# Read in counties shapefile and filter to the 3 counties of interest
+countiesNC <- st_read("C:/Users/lagoodal/Desktop/nc_eco_l3/North_Carolina_State_and_County_Boundary_Polygons.shp")
+threeCounties <- countiesNC %>% filter(County %in% c("Anson", "Montgomery", "Richmond")) %>%
+  st_as_sf(.) %>%
+  st_transform(., crs = "EPSG:26917")
+
+# Select just the County column
+threeCounties <- threeCounties[2]
+
+# Create a new column for LANDIS management areas
+threeCounties <- threeCounties %>%
+  mutate(ID = ifelse(.$County == "Anson", 1,
+                     ifelse(.$County == "Richmond", 2, 3)))
+
+# Rasterize to the template raster
+templateRaster <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Three_Counties_Rasters/templateRaster.tif")
+ManagementAreaRast <- rasterize(threeCounties, templateRaster, field = "ID")
+
+plot(ManagementAreaRast)
+
+writeRaster(ManagementAreaRast,
+            filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Three_Counties_Rasters/Harvest/ManagementAreas.tif",
+            datatype = "INT1U",
+            NAflag = 0,
+            overwrite = TRUE)
+
+
+# Create Management Area 4 which will be plantation
+ICMap <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment/Rasters/TCTreeMap.tif")
+mapCodeDf <- read_csv("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment/MapCodeDf.csv")
+plantationCodes <- mapCodeDf %>%
+  filter(MapCode != 0) %>%
+  group_by(MapCode) %>%
+  mutate(total = sum(CohortBiomass),
+         percent = (CohortBiomass / total) * 100) %>%
+  group_by(MapCode, SpeciesName) %>%
+  summarise(total_percent = sum(percent)) %>%
+  group_by(MapCode) %>%
+  filter((any(SpeciesName == "PITA" & total_percent >= 80)) | 
+         (any(SpeciesName == "PIPA2" & total_percent >= 80))) %>%
+  select(MapCode) %>%
+  unique()
+x <- ICMap %>%
+  as.data.frame() %>%
+  filter(tl_id %in% plantationCodes$MapCode)
+maskRastPlantation <- ifel(ICMap %in% x$tl_id, 4, 0)
+
+plot(maskRastPlantation)
+
+# Mask out the Management Areas map
+maskedMA <- mask(ManagementAreaRast, maskRastPlantation, maskvalues = 4)
+plot(maskedMA)
+allMARast <- ifel(is.na(maskedMA), 4, maskedMA)
+plot(allMARast)
+allMARast <- mask(allMARast, ManagementAreaRast)
+plot(allMARast)
+
+writeRaster(allMARast,
+            filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment/Harvest/ManagementAreas4.tif",
+            datatype = "INT1U",
+            NAflag = 0,
+            overwrite = TRUE)
+
+
+```
+
+
+# Stand Map
+
+```{r}
+set.seed(33)
+# Read in 3 counties shapefile and the HUC 12 watershed of NC
+threeCounties.Shp <- st_read("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Three_Counties_Rasters/Shapefile/threeCounties.shp")
+watershedsHUC <- st_read("C:/Users/lagoodal/Desktop/All Raster Layers/HUC 8 Watersheds/Shape/WBDHU12.shp")
+
+# Project the shapefile to the watershed shapefile, then crop and mask
+threeCounties.Shp <- threeCounties.Shp %>%
+  st_transform(., crs = crs(watershedsHUC))
+watershedsHUC <- watershedsHUC %>%
+  st_crop(., threeCounties.Shp) %>%
+  st_intersection(., threeCounties.Shp)
+
+# Add in county borders to act as extra stand divisions which will then
+# match our future management areas
+countiesNC <- st_read("C:/Users/lagoodal/Desktop/nc_eco_l3/North_Carolina_State_and_County_Boundary_Polygons.shp")
+threeCounties <- countiesNC %>%
+  st_as_sf() %>%
+  filter(County %in% c("Anson", "Montgomery", "Richmond")) %>%
+  st_transform(., crs = crs(watershedsHUC))
+watershedsHUC <- watershedsHUC %>% st_intersection(., threeCounties)
+
+
+plot(watershedsHUC[12])
+plot(threeCounties[2])
+
+# st_write(threeCounties[2],
+#          dsn = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Shapefiles/ThreeCounties.shp")
+
+
+# Create a shapefile that has the major roads in the 3 county region, which is
+# also bounded by the 3 counties border
+roadsNC <- st_read("C:/Users/lagoodal/Desktop/Dissertation Stuff/Data/County Roads/State_Maintained_Roads.shp")
+roadsNC <- roadsNC[2]
+threeCounties.Shp <- threeCounties.Shp %>% st_transform(., crs = crs(roadsNC))
+intersection_result <- st_intersection(roadsNC, threeCounties.Shp)
+plot(intersection_result)
+
+
+# st_write(intersection_result[2],
+#          dsn = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Shapefiles/roadsTC.shp")
+
+```
+
+# Bring chopped up stands map back from QGIS
+
+```{r}
+set.seed(33)
+ManagementAreaRast <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment/Harvest/ManagementAreas4.tif")
+standsTC <- st_read("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment/Shapefiles/standsTC.shp") %>%
+  st_transform(., crs = "EPSG:26917") %>%
+  mutate(StandID = 1:nrow(.))
+plot(standsTC[7])
+templateRaster <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Three_Counties_Rasters/templateRaster.tif")
+standRast <- rasterize(standsTC, templateRaster, field = "StandID")
+mask <- is.na(standRast)
+ManagementAreaRast[mask] <- NA
+
+# Now some more stands are straddling two management areas
+# Stand 1291
+x <- ifel(standRast == 1291, 1, NA)
+stack <- c(x, ManagementAreaRast)
+df <- as.data.frame(stack, cell = TRUE) %>%
+  filter(StandID == 1) %>%
+  mutate(row = (cell - 1) %/% 1121 + 1,
+         col = (cell - 1) %% 1121 + 1)
+df %>% filter(ID == 3)
+ManagementAreaRast[526,811] <- 2
+ManagementAreaRast[527,817] <- 2
+
+# Stand 1280
+x <- ifel(standRast == 1280, 1, NA)
+stack <- c(x, ManagementAreaRast)
+df <- as.data.frame(stack, cell = TRUE) %>%
+  filter(StandID == 1) %>%
+  mutate(row = (cell - 1) %/% 1121 + 1,
+         col = (cell - 1) %% 1121 + 1)
+df %>% filter(ID == 3)
+ManagementAreaRast[528,652] <- 2
+ManagementAreaRast[528,671] <- 2
+ManagementAreaRast[529,625] <- 2
+ManagementAreaRast[529,674] <- 2
+ManagementAreaRast[530,628] <- 2
+
+# Stand 1283
+x <- ifel(standRast == 1283, 1, NA)
+stack <- c(x, ManagementAreaRast)
+df <- as.data.frame(stack, cell = TRUE) %>%
+  filter(StandID == 1) %>%
+  mutate(row = (cell - 1) %/% 1121 + 1,
+         col = (cell - 1) %% 1121 + 1)
+df %>% filter(ID == 2)
+ManagementAreaRast[528,754] <- 3
+ManagementAreaRast[531,750] <- 3
+
+# Stand 1282
+x <- ifel(standRast == 1282, 1, NA)
+stack <- c(x, ManagementAreaRast)
+df <- as.data.frame(stack, cell = TRUE) %>%
+  filter(StandID == 1) %>%
+  mutate(row = (cell - 1) %/% 1121 + 1,
+         col = (cell - 1) %% 1121 + 1)
+df %>% filter(ID == 3)
+ManagementAreaRast[528,762] <- 2
+ManagementAreaRast[529,764] <- 2
+
+# Stand 1258
+x <- ifel(standRast == 1258, 1, NA)
+stack <- c(x, ManagementAreaRast)
+df <- as.data.frame(stack, cell = TRUE) %>%
+  filter(StandID == 1) %>%
+  mutate(row = (cell - 1) %/% 1121 + 1,
+         col = (cell - 1) %% 1121 + 1)
+df %>% filter(ID == 1)
+ManagementAreaRast[562,482] <- 2
+ManagementAreaRast[564,453] <- 2
+
+# Stand 1259
+x <- ifel(standRast == 1259, 1, NA)
+stack <- c(x, ManagementAreaRast)
+df <- as.data.frame(stack, cell = TRUE) %>%
+  filter(StandID == 1) %>%
+  mutate(row = (cell - 1) %/% 1121 + 1,
+         col = (cell - 1) %% 1121 + 1)
+df %>% filter(ID == 1)
+ManagementAreaRast[564,470] <- 3
+
+# Stand 1345
+x <- ifel(standRast == 1345, 1, NA)
+stack <- c(x, ManagementAreaRast)
+df <- as.data.frame(stack, cell = TRUE) %>%
+  filter(StandID == 1) %>%
+  mutate(row = (cell - 1) %/% 1121 + 1,
+         col = (cell - 1) %% 1121 + 1)
+df %>% filter(ID == 3)
+ManagementAreaRast[530,704] <- 2
+ManagementAreaRast[534,728] <- 2
+
+# Stand 1298
+x <- ifel(standRast == 1298, 1, NA)
+stack <- c(x, ManagementAreaRast)
+df <- as.data.frame(stack, cell = TRUE) %>%
+  filter(StandID == 1) %>%
+  mutate(row = (cell - 1) %/% 1121 + 1,
+         col = (cell - 1) %% 1121 + 1)
+df %>% filter(ID == 2)
+ManagementAreaRast[521,606] <- 3
+ManagementAreaRast[536,583] <- 3
+
+# Stand 1301
+x <- ifel(standRast == 1301, 1, NA)
+stack <- c(x, ManagementAreaRast)
+df <- as.data.frame(stack, cell = TRUE) %>%
+  filter(StandID == 1) %>%
+  mutate(row = (cell - 1) %/% 1121 + 1,
+         col = (cell - 1) %% 1121 + 1)
+df %>% filter(ID == 3)
+ManagementAreaRast[557,877] <- 2
+ManagementAreaRast[557,878] <- 2
+ManagementAreaRast[557,879] <- 2
+
+# Stand 1237
+x <- ifel(standRast == 1237, 1, NA)
+stack <- c(x, ManagementAreaRast)
+df <- as.data.frame(stack, cell = TRUE) %>%
+  filter(StandID == 1) %>%
+  mutate(row = (cell - 1) %/% 1121 + 1,
+         col = (cell - 1) %% 1121 + 1)
+df %>% filter(ID == 2)
+ManagementAreaRast[564,434] <- 3
+
+# Stand 1184
+x <- ifel(standRast == 1184, 1, NA)
+stack <- c(x, ManagementAreaRast)
+df <- as.data.frame(stack, cell = TRUE) %>%
+  filter(StandID == 1) %>%
+  mutate(row = (cell - 1) %/% 1121 + 1,
+         col = (cell - 1) %% 1121 + 1)
+df %>% filter(ID == 3)
+ManagementAreaRast[576,416] <- 2
+ManagementAreaRast[583,406] <- 2
+
+# Stand 1153
+x <- ifel(standRast == 1153, 1, NA)
+stack <- c(x, ManagementAreaRast)
+df <- as.data.frame(stack, cell = TRUE) %>%
+  filter(StandID == 1) %>%
+  mutate(row = (cell - 1) %/% 1121 + 1,
+         col = (cell - 1) %% 1121 + 1)
+df %>% filter(ID == 3)
+ManagementAreaRast[591,392] <- 2
+
+
+# Change all cells in StandRast into their own stand with Management Area 4
+mask <- ManagementAreaRast == 4
+indices <- which(mask[], arr.ind = TRUE)
+new_values <- seq(from = 2330, by = 1, length.out = length(indices))
+values(standRast)[indices] <- new_values
+
+writeRaster(standRast,
+            filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment/Harvest/standRast.tif",
+            NAflag = 0,
+            datatype = "INT4S",
+            overwrite = TRUE)
+
+writeRaster(ManagementAreaRast,
+            filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment/Harvest/ManagementAreas4.tif",
+            datatype = "INT1U",
+            NAflag = 0,
+            overwrite = TRUE)
+
+plot(ManagementAreaRast)
+plot(standRast)
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

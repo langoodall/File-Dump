@@ -1,0 +1,752 @@
+---
+title: "Harvesting Rates"
+output: pdf_document
+date: "2025-06-25"
+---
+
+```{r, message = FALSE, warning = FALSE}
+library(tidyverse)
+library(terra)
+library(sf)
+```
+
+
+```{r}
+# Historical Climate Run
+anson5YearTarget <- (((42358600 / 30.48) * 0.907185) / 0.47) * 5
+richmond5YearTarget <- (((28634301 / 30.48) * 0.907185) / 0.47) * 5
+montgomery5YearTarget <- (((35187263 / 30.48) * 0.907185) / 0.47) * 5
+
+harvestedBiomassDf <- read_csv("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment/Harvest/biomass-harvest-summary-log.csv")
+
+harvestedBiomassDf <- harvestedBiomassDf[, -c(4:33,60)] %>%
+  pivot_longer(cols = c("BiomassHarvestedMg_ACRU":"BiomassHarvestedMg_TADI2"),
+                                  names_to = "Species",
+                                  values_to = "Harvested_Biomass_MG") %>%
+      mutate(Species = str_replace(Species, "^[^_]*_", ""))
+
+targetsDf <- data.frame(
+  ManagementArea = c("1", "3", "2"),
+  Target = c(anson5YearTarget, montgomery5YearTarget, richmond5YearTarget)
+)
+
+# Main plot
+harvestedBiomassDf %>%
+  group_by(Time, ManagementArea) %>%
+  summarise(Harvested_Biomass_MG = sum(Harvested_Biomass_MG), .groups = "drop") %>%
+  ggplot(aes(x = Time, y = Harvested_Biomass_MG)) +
+  geom_bar(stat = "identity") +
+  geom_hline(data = targetsDf, aes(yintercept = Target), linetype = "dashed", color = "red") +
+  facet_grid(~ ManagementArea) +
+  theme_classic()
+
+```
+
+```{r}
+# Historical Climate Run
+# anson5YearTarget <- (((42358600 / 30.48) * 0.907185) / 0.47) * 5
+# richmond5YearTarget <- (((28634301 / 30.48) * 0.907185) / 0.47) * 5
+# montgomery5YearTarget <- (((35187263 / 30.48) * 0.907185) / 0.47) * 5
+
+NC_FIA <- rFIA::readFIA("C:/Users/lagoodal/Desktop/FIA_NC_2021/All")
+
+x <- rFIA::growMort(db = NC_FIA,
+               grpBy = "COUNTYCD",
+               landType = "forest",
+               treeType = "all",
+               totals = TRUE)
+
+x %>%
+  filter(YEAR == 2022,
+         COUNTYCD %in% c(153, 7, 123))
+
+
+1994736 # Anson
+2530864 # Montgomery
+1114187 # Richmond
+
+
+harvestedBiomassDf <- read_csv("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment/Harvest/biomass-harvest-summary-log.csv")
+
+harvestedBiomassDf <- harvestedBiomassDf[, -c(4:33,60)] %>%
+  pivot_longer(cols = c("BiomassHarvestedMg_ACRU":"BiomassHarvestedMg_TADI2"),
+                                  names_to = "Species",
+                                  values_to = "Harvested_Biomass_MG") %>%
+      mutate(Species = str_replace(Species, "^[^_]*_", ""))
+
+targetsDf <- data.frame(
+  ManagementArea = c("1", "3", "2"),
+  Target = c(1994736 * 5, 2530864 * 5, 1114187 * 5)
+)
+
+# Main plot
+harvestedBiomassDf %>%
+  group_by(Time, ManagementArea) %>%
+  summarise(Harvested_Biomass_MG = sum(Harvested_Biomass_MG), .groups = "drop") %>%
+  ggplot(aes(x = Time, y = Harvested_Biomass_MG)) +
+  geom_bar(stat = "identity") +
+  geom_hline(data = targetsDf, aes(yintercept = Target), linetype = "dashed", color = "red") +
+  facet_grid(~ ManagementArea) +
+  theme_classic()
+
+
+harvestedBiomassDf <- harvestedBiomassDf %>%
+  mutate(prescriptionGroup = case_when(
+    grepl("^MM[1-5]\\b", Prescription) ~ "Thinning",
+    grepl("^MM(6|7|8|9|10|11)\\b", Prescription) ~ "Thinning_FORTYPCD",
+    grepl("^MM(12|13|14|15|16|17)\\b", Prescription) ~ "Seedtree",
+    grepl("^MM(18|19|20|21|22|23)\\b", Prescription) ~ "Shelterwood",
+    grepl("^MM(24|25|26|27|28|29)\\b", Prescription) ~ "Group_Selection",
+    grepl("^MM[36]\\b", Prescription) ~ "Clearcut",
+    TRUE ~ "VDT"
+  ))
+
+harvestedBiomassDf %>%
+  group_by(Time, Prescription, ManagementArea, prescriptionGroup) %>%
+  summarise(Harvested_Biomass_MG = sum(Harvested_Biomass_MG), .groups = "drop") %>%
+  filter(ManagementArea == 1) %>%
+  ggplot(., aes(x = Time, y = Harvested_Biomass_MG, fill = prescriptionGroup)) +
+  geom_bar(stat = "identity") +
+  theme_classic()
+
+harvestedBiomassDf <- harvestedBiomassDf %>%
+  mutate(fortypcdGroup = case_when(
+    grepl("^MM[1-5]\\b", Prescription) ~ "Thinning",
+    grepl("^MM(6|12|18|24|30)\\b", Prescription) ~ "Loblolly_Softwoods",
+    grepl("^MM(7|13|19|25|31)\\b", Prescription) ~ "Longleaf_Softwoods",
+    grepl("^MM(8|14|20|26|32)\\b", Prescription) ~ "WhiteRedHickory_OakHickory",
+    grepl("^MM(9|15|21|27|33)\\b", Prescription) ~ "YellowPoplarWhiteRedOak_OakHickory",
+    grepl("^MM(10|16|22|28|34)\\b", Prescription) ~ "LoblollyHardwood_OakPine",
+    grepl("^MM(11|17|23|29|35)\\b", Prescription) ~ "ShortleafOak_OakPine",
+    TRUE ~ "Clearcut"
+  ))
+
+harvestedBiomassDf %>%
+  group_by(Time, Prescription, ManagementArea, fortypcdGroup) %>%
+  summarise(Harvested_Biomass_MG = sum(Harvested_Biomass_MG), .groups = "drop") %>%
+  filter(ManagementArea == 1) %>%
+  ggplot(., aes(x = Time, y = Harvested_Biomass_MG, fill = fortypcdGroup)) +
+  geom_bar(stat = "identity") +
+  theme_classic()
+
+```
+
+
+```{r}
+harvestedBiomassDf <- read_csv("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment/Harvest/biomass-harvest-summary-log.csv")
+
+harvestedBiomassDf <- harvestedBiomassDf[, -c(4:33,60)] %>%
+  pivot_longer(cols = c("BiomassHarvestedMg_ACRU":"BiomassHarvestedMg_TADI2"),
+                                  names_to = "Species",
+                                  values_to = "Harvested_Biomass_MG") %>%
+      mutate(Species = str_replace(Species, "^[^_]*_", ""))
+
+targetsDf <- data.frame(
+  ManagementArea = c("1", "3", "2"),
+  Target = c(1994736 * 5, 2530864 * 5, 1114187 * 5)
+)
+
+# Main plot
+harvestedBiomassDf %>%
+  group_by(Time, ManagementArea) %>%
+  summarise(Harvested_Biomass_MG = sum(Harvested_Biomass_MG), .groups = "drop") %>%
+  ggplot(aes(x = Time, y = Harvested_Biomass_MG)) +
+  geom_bar(stat = "identity") +
+  geom_hline(data = targetsDf, aes(yintercept = Target), linetype = "dashed", color = "red") +
+  facet_grid(~ ManagementArea) +
+  theme_classic()
+
+
+harvestedBiomassDf <- harvestedBiomassDf %>%
+  mutate(prescriptionGroup = case_when(
+    grepl("^MM[1-5]\\b", Prescription) ~ "Thinning",
+    grepl("^MM(6|7|8|9|10|11)\\b", Prescription) ~ "Thinning_FORTYPCD",
+    grepl("^MM(12|13|14|15|16|17)\\b", Prescription) ~ "Seedtree",
+    grepl("^MM(18|19|20|21|22|23)\\b", Prescription) ~ "Shelterwood",
+    grepl("^MM(24|25|26|27|28|29)\\b", Prescription) ~ "Group_Selection",
+    grepl("^MM[36]\\b", Prescription) ~ "Clearcut",
+    TRUE ~ "VDT"
+  ))
+
+harvestedBiomassDf %>%
+  group_by(Time, Prescription, ManagementArea, prescriptionGroup) %>%
+  summarise(Harvested_Biomass_MG = sum(Harvested_Biomass_MG), .groups = "drop") %>%
+  filter(ManagementArea == 1) %>%
+  ggplot(., aes(x = Time, y = Harvested_Biomass_MG, fill = prescriptionGroup)) +
+  geom_bar(stat = "identity") +
+  theme_classic()
+
+harvestedBiomassDf <- harvestedBiomassDf %>%
+  mutate(fortypcdGroup = case_when(
+    grepl("^MM[1-5]\\b", Prescription) ~ "Thinning",
+    grepl("^MM(6|12|18|24|30)\\b", Prescription) ~ "Loblolly_Softwoods",
+    grepl("^MM(7|13|19|25|31)\\b", Prescription) ~ "Longleaf_Softwoods",
+    grepl("^MM(8|14|20|26|32)\\b", Prescription) ~ "WhiteRedHickory_OakHickory",
+    grepl("^MM(9|15|21|27|33)\\b", Prescription) ~ "YellowPoplarWhiteRedOak_OakHickory",
+    grepl("^MM(10|16|22|28|34)\\b", Prescription) ~ "LoblollyHardwood_OakPine",
+    grepl("^MM(11|17|23|29|35)\\b", Prescription) ~ "ShortleafOak_OakPine",
+    TRUE ~ "Clearcut"
+  ))
+
+harvestedBiomassDf %>%
+  group_by(Time, Prescription, ManagementArea, fortypcdGroup) %>%
+  summarise(Harvested_Biomass_MG = sum(Harvested_Biomass_MG), .groups = "drop") %>%
+  filter(ManagementArea == 1) %>%
+  ggplot(., aes(x = Time, y = Harvested_Biomass_MG, fill = fortypcdGroup)) +
+  geom_bar(stat = "identity") +
+  theme_classic()
+
+
+
+
+```
+
+
+
+
+```{r}
+plot(rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment/output/biomass/bio-TotalBiomass-0.img") %>% flip())
+plot(rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment/output/biomass/bio-TotalBiomass-10.img") %>% flip())
+plot(rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment/output/biomass/bio-TotalBiomass-20.img") %>% flip())
+plot(rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment/output/biomass/bio-TotalBiomass-30.img") %>% flip())
+plot(rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment/output/biomass/bio-TotalBiomass-40.img") %>% flip())
+plot(rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment/output/biomass/bio-TotalBiomass-50.img") %>% flip())
+plot(rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment/output/biomass/bio-TotalBiomass-60.img") %>% flip())
+
+
+mask60 <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment/output/biomass/bio-TotalBiomass-60.img") %>% flip()
+mask60 <- ifel(mask60 > 20000, 1, 0)
+plot(mask60)
+
+ManagementAreaRast <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment/Harvest/ManagementAreas4.tif")
+maskMA <- ifel(ManagementAreaRast == 4, 1, 0)
+plot(maskMA)
+
+plot(mask60)
+plot(maskMA)
+
+directory <- "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment/output/biomass/"
+rasterFiles <- list.files(path = directory, pattern = "60\\.img$", full.names = TRUE)
+maskedList <- lapply(rasterFiles, function(x) {
+  r <- rast(x)
+  r <- r %>% flip()
+  mask(r, mask60, maskvalue = 0)
+})
+
+for (i in seq_along(maskedList)){
+  raster <- maskedList[[i]]
+  fileName <- basename(rasterFiles[i])
+  plot(raster, main = fileName)
+}
+
+```
+
+
+```{r}
+mask20 <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment/output/biomass/bio-TotalBiomass-30.img") %>% flip()
+plot(mask20)
+
+
+mask20 <- ifel(mask20 > 20000, 1, 0)
+plot(mask20)
+
+ManagementAreaRast <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment/Harvest/ManagementAreas4.tif")
+maskMA <- ifel(ManagementAreaRast == 4, 1, 0)
+plot(maskMA)
+
+plot(mask20)
+plot(maskMA)
+
+directory <- "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment/output/biomass/"
+rasterFiles <- list.files(path = directory, pattern = "20\\.img$", full.names = TRUE)
+maskedList <- lapply(rasterFiles, function(x) {
+  r <- rast(x)
+  r <- r %>% flip()
+  mask(r, mask20, maskvalue = 0)
+})
+
+for (i in seq_along(maskedList)){
+  raster <- maskedList[[i]]
+  fileName <- basename(rasterFiles[i])
+  plot(raster, main = fileName)
+}
+
+```
+
+
+
+
+
+```{r}
+plot(rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment/output/biomass/bio-TotalBiomass-0.img") %>% flip())
+plot(rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment/output/biomass/bio-TotalBiomass-10.img") %>% flip())
+plot(rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment/output/biomass/bio-TotalBiomass-20.img") %>% flip())
+plot(rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment/output/biomass/bio-TotalBiomass-30.img") %>% flip())
+plot(rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment/output/biomass/bio-TotalBiomass-40.img") %>% flip())
+plot(rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment/output/biomass/bio-TotalBiomass-50.img") %>% flip())
+plot(rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment/output/biomass/bio-TotalBiomass-60.img") %>% flip())
+
+
+mask50 <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment/output/biomass/bio-TotalBiomass-50.img") %>% flip()
+mask50 <- ifel(mask50 > 20000, 1, 0)
+ManagementAreaRast <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment/Harvest/ManagementAreas4.tif")
+maskMA <- ifel(ManagementAreaRast == 4, 1, 0)
+directory <- "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment/output/biomass/"
+rasterFiles <- list.files(path = directory, pattern = "50\\.img$", full.names = TRUE)
+maskedList <- lapply(rasterFiles, function(x) {
+  r <- rast(x)
+  r <- r %>% flip()
+  mask(r, mask50, maskvalue = 0)
+})
+
+for (i in seq_along(maskedList)){
+  raster <- maskedList[[i]]
+  fileName <- basename(rasterFiles[i])
+  plot(raster, main = fileName)
+}
+
+mask60 <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment/output/biomass/bio-TotalBiomass-60.img") %>% flip()
+mask60 <- ifel(mask60 > 20000, 1, 0)
+ManagementAreaRast <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment/Harvest/ManagementAreas4.tif")
+maskMA <- ifel(ManagementAreaRast == 4, 1, 0)
+directory <- "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment/output/biomass/"
+rasterFiles <- list.files(path = directory, pattern = "60\\.img$", full.names = TRUE)
+maskedList <- lapply(rasterFiles, function(x) {
+  r <- rast(x)
+  r <- r %>% flip()
+  mask(r, mask60, maskvalue = 0)
+})
+
+for (i in seq_along(maskedList)){
+  raster <- maskedList[[i]]
+  fileName <- basename(rasterFiles[i])
+  plot(raster, main = fileName)
+}
+
+
+
+stacked60 <- c(maskedList[1:26])
+plot(stacked60)
+
+directory <- "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment/output/spp-biomass-by-age/"
+rasterFiles <- list.files(path = directory, pattern = "oakHickory-60\\.img$", full.names = TRUE)
+for (i in seq_along(rasterFiles)) {
+  raster <- rast(rasterFiles[i])
+  raster <- flip(raster)
+  fileName <- basename(rasterFiles[i])
+  raster <- mask(raster, mask60, maskvalue = 0)
+  plot(raster, main = fileName)
+}
+
+
+top10_counts <- data.frame(Species = character(), Count = integer())
+
+for (i in seq_along(rasterFiles)) {
+  raster <- rast(rasterFiles[i])
+  raster <- flip(raster)
+  raster <- mask(raster, mask60, maskvalue = 0)
+
+  vals <- values(raster)
+  vals_df <- as.data.frame(vals, na.rm = TRUE)
+
+  # Get species name from filename (adjust if needed)
+  species <- tools::file_path_sans_ext(basename(rasterFiles[i]))
+
+  # Remove NA and compute threshold for top 10%
+  vals_df <- vals_df %>% filter(!is.na(Layer_1))
+  threshold <- quantile(vals_df$Layer_1, 0.9, na.rm = TRUE)
+
+  # Count how many cells are in the top 10%
+  top_vals <- vals_df %>% filter(Layer_1 > threshold)
+  count_top <- nrow(top_vals)
+
+  # Store result
+  top10_counts <- rbind(top10_counts, data.frame(Species = species, Count = count_top))
+}
+
+# Plot
+ggplot(top10_counts, aes(x = Species, y = Count)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  theme_minimal() +
+  labs(title = "Top 10% Raster Value Cell Counts per Species",
+       x = "Species", y = "Count of Top 10% Cells") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+plot(mask60)
+
+directory <- "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment/output/spp-biomass-by-age/"
+rasterFiles <- list.files(path = directory, pattern = "oakHickory-60\\.img$", full.names = TRUE)
+for (i in seq_along(rasterFiles)) {
+  raster <- rast(rasterFiles[i])
+  raster <- flip(raster)
+  fileName <- basename(rasterFiles[i])
+  plot(raster, main = fileName)
+}
+
+```
+
+
+```{r}
+# TIMESTEP 30
+
+harvest30 <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment/Harvest/biomass-harvest-prescripts-30.img") %>% flip()
+
+harvestPrescriptionsMap <- ifel(harvest30 %in% c(2:16), 1,
+          ifel(harvest30 %in% c(17:22), 2,
+               ifel(harvest30 %in% c(23:28), 3,
+                    ifel(harvest30 %in% c(29:34), 4,
+                         ifel(harvest30 %in% c(35:40), 5,
+                              ifel(harvest30 %in% c(41:46), 6,
+                                   ifel(harvest30 %in% c(47:52), 7,
+                                        ifel(harvest30 %in% c(53:58), 8,
+                                             ifel(harvest30 %in% c(59:64), 9,
+                                                  ifel(harvest30 %in% c(65:70), 10,
+                                                       ifel(harvest30 %in% c(71:76), 11,
+                                                            ifel(harvest30 %in% c(77:82), 12,
+                                                                 ifel(harvest30 %in% c(83:88), 13,
+                                                                      ifel(harvest30 %in% c(89:94), 14,
+                                                                           ifel(harvest30 %in% c(95:100), 15,
+                                                                                ifel(harvest30 %in% c(101:106), 16,
+                                                                                     ifel(harvest30 == 107, 17,
+                                                                                          ifel(harvest30 == 1, 1, 0))))))))))))))))))
+
+
+
+
+plot(ifel(harvest30 %in% c(2:4), 1,
+     ifel(harvest30 %in% c(5:7), 2,
+          ifel(harvest30 %in% c(8:10), 3,
+               ifel(harvest30 %in% c(11:13), 4,
+                    ifel(harvest30 %in% c(14:16), 5, 0))))))
+
+
+values(harvestPrescriptionsMap) %>%
+  as.data.frame() %>%
+  filter(Layer_1 > 0) %>%
+  group_by(Layer_1) %>%
+  summarise(n = n()) %>%
+  arrange(desc(n)) %>%
+  mutate(Prescription = case_when(
+    Layer_1 == 1 ~ "Unutilised",
+    Layer_1 == 2 ~ "Thinning",
+    Layer_1 == 3 ~ "Thinning Softwoods",
+    Layer_1 == 4 ~ "Thinning Oak Hickory",
+    Layer_1 == 5 ~ "Thinning Oak Pine",
+    Layer_1 == 6 ~ "Seedtree Softwoods",
+    Layer_1 == 7 ~ "Seedtree Oak Hickory",
+    Layer_1 == 8 ~ "Seedtree Oak Pine",
+    Layer_1 == 9 ~ "Shelterwood Softwoods",
+    Layer_1 == 10 ~ "Shelterwood Oak Hickory",
+    Layer_1 == 11 ~ "Shelterwood Oak Pine",
+    Layer_1 == 12 ~ "Group Softwoods",
+    Layer_1 == 13 ~ "Group Oak Hickory",
+    Layer_1 == 14 ~ "Group Oak Pine",
+    Layer_1 == 15 ~ "VDT Softwoods",
+    Layer_1 == 16 ~ "VDT Oak Hickory",
+    Layer_1 == 17 ~ "VDT Oak Pine",
+    TRUE ~ "0"
+  )) %>%
+  filter(Prescription != "Unutilised") %>%
+  ggplot(., aes(x = reorder(Prescription, -n), y = n, fill = Prescription)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 90))
+
+
+# TIMESTEP 50
+
+harvest50 <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment/Harvest/biomass-harvest-prescripts-50.img") %>% flip()
+plot(harvest50)
+
+# Add 2 to all of these
+# 1:15 = Thinning               1
+# 16:21 = Thinning Softwoods    2
+# 22:27 = Thinning Oak Hickory  3
+# 28:33 = Thinning Oak Pine     4
+# 34:39 = Seedtree Softwoods    5
+# 40:45 = Seedtree Oak Hickory  6
+# 46:51 = Seedtree Oak Pine     7
+# 52:57 = Shelterwood Softwoods 8
+# 58:63 = Shelterwood Oak Hickory 9
+# 64:69 = Shelterwood Oak Pine  10
+# 70:75 = Group Softwoods       11
+# 76:81 = Group Oak Hickory     12
+# 82:87 = Group Oak Pine        13
+# 88:93 = VDT Softwoods         14
+# 94:99 = VDT Oak Hickory       15
+# 100:105 = VDT Oak Pine        16
+
+harvestPrescriptionsMap <- ifel(harvest50 %in% c(2:16), 1,
+          ifel(harvest50 %in% c(17:22), 2,
+               ifel(harvest50 %in% c(23:28), 3,
+                    ifel(harvest50 %in% c(29:34), 4,
+                         ifel(harvest50 %in% c(35:40), 5,
+                              ifel(harvest50 %in% c(41:46), 6,
+                                   ifel(harvest50 %in% c(47:52), 7,
+                                        ifel(harvest50 %in% c(53:58), 8,
+                                             ifel(harvest50 %in% c(59:64), 9,
+                                                  ifel(harvest50 %in% c(65:70), 10,
+                                                       ifel(harvest50 %in% c(71:76), 11,
+                                                            ifel(harvest50 %in% c(77:82), 12,
+                                                                 ifel(harvest50 %in% c(83:88), 13,
+                                                                      ifel(harvest50 %in% c(89:94), 14,
+                                                                           ifel(harvest50 %in% c(95:100), 15,
+                                                                                ifel(harvest50 %in% c(101:106), 16,
+                                                                                     ifel(harvest50 == 107, 17,
+                                                                                          ifel(harvest50 == 1, 1, 0))))))))))))))))))
+
+values(harvestPrescriptionsMap) %>%
+  as.data.frame() %>%
+  filter(Layer_1 > 0) %>%
+  group_by(Layer_1) %>%
+  summarise(n = n()) %>%
+  arrange(desc(n)) %>%
+  mutate(Prescription = case_when(
+    Layer_1 == 1 ~ "Unutilised",
+    Layer_1 == 2 ~ "Thinning",
+    Layer_1 == 3 ~ "Thinning Softwoods",
+    Layer_1 == 4 ~ "Thinning Oak Hickory",
+    Layer_1 == 5 ~ "Thinning Oak Pine",
+    Layer_1 == 6 ~ "Seedtree Softwoods",
+    Layer_1 == 7 ~ "Seedtree Oak Hickory",
+    Layer_1 == 8 ~ "Seedtree Oak Pine",
+    Layer_1 == 9 ~ "Shelterwood Softwoods",
+    Layer_1 == 10 ~ "Shelterwood Oak Hickory",
+    Layer_1 == 11 ~ "Shelterwood Oak Pine",
+    Layer_1 == 12 ~ "Group Softwoods",
+    Layer_1 == 13 ~ "Group Oak Hickory",
+    Layer_1 == 14 ~ "Group Oak Pine",
+    Layer_1 == 15 ~ "VDT Softwoods",
+    Layer_1 == 16 ~ "VDT Oak Hickory",
+    Layer_1 == 17 ~ "VDT Oak Pine",
+    TRUE ~ "0"
+  )) %>%
+  filter(Prescription != "Unutilised") %>%
+  ggplot(., aes(x = reorder(Prescription, -n), y = n, fill = Prescription)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 90))
+
+
+
+# TIMESTEP 55
+
+harvest55 <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment/Harvest/biomass-harvest-prescripts-55.img") %>% flip()
+
+harvestPrescriptionsMap <- ifel(harvest55 %in% c(2:16), 1,
+          ifel(harvest55 %in% c(17:22), 2,
+               ifel(harvest55 %in% c(23:28), 3,
+                    ifel(harvest55 %in% c(29:34), 4,
+                         ifel(harvest55 %in% c(35:40), 5,
+                              ifel(harvest55 %in% c(41:46), 6,
+                                   ifel(harvest55 %in% c(47:52), 7,
+                                        ifel(harvest55 %in% c(53:58), 8,
+                                             ifel(harvest55 %in% c(59:64), 9,
+                                                  ifel(harvest55 %in% c(65:70), 10,
+                                                       ifel(harvest55 %in% c(71:76), 11,
+                                                            ifel(harvest55 %in% c(77:82), 12,
+                                                                 ifel(harvest55 %in% c(83:88), 13,
+                                                                      ifel(harvest55 %in% c(89:94), 14,
+                                                                           ifel(harvest55 %in% c(95:100), 15,
+                                                                                ifel(harvest55 %in% c(101:106), 16,
+                                                                                     ifel(harvest55 == 107, 17,
+                                                                                          ifel(harvest55 == 1, 1, 0))))))))))))))))))
+
+values(harvestPrescriptionsMap) %>%
+  as.data.frame() %>%
+  filter(Layer_1 > 0) %>%
+  group_by(Layer_1) %>%
+  summarise(n = n()) %>%
+  arrange(desc(n)) %>%
+  mutate(Prescription = case_when(
+    Layer_1 == 1 ~ "Unutilised",
+    Layer_1 == 2 ~ "Thinning",
+    Layer_1 == 3 ~ "Thinning Softwoods",
+    Layer_1 == 4 ~ "Thinning Oak Hickory",
+    Layer_1 == 5 ~ "Thinning Oak Pine",
+    Layer_1 == 6 ~ "Seedtree Softwoods",
+    Layer_1 == 7 ~ "Seedtree Oak Hickory",
+    Layer_1 == 8 ~ "Seedtree Oak Pine",
+    Layer_1 == 9 ~ "Shelterwood Softwoods",
+    Layer_1 == 10 ~ "Shelterwood Oak Hickory",
+    Layer_1 == 11 ~ "Shelterwood Oak Pine",
+    Layer_1 == 12 ~ "Group Softwoods",
+    Layer_1 == 13 ~ "Group Oak Hickory",
+    Layer_1 == 14 ~ "Group Oak Pine",
+    Layer_1 == 15 ~ "VDT Softwoods",
+    Layer_1 == 16 ~ "VDT Oak Hickory",
+    Layer_1 == 17 ~ "VDT Oak Pine",
+    TRUE ~ "0"
+  )) %>%
+  filter(Prescription != "Unutilised") %>%
+  ggplot(., aes(x = reorder(Prescription, -n), y = n, fill = Prescription)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 90))
+
+
+# TIMESTEP 60
+
+harvest60 <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment/Harvest/biomass-harvest-prescripts-60.img") %>% flip()
+
+harvestPrescriptionsMap <- ifel(harvest60 %in% c(2:16), 1,
+          ifel(harvest60 %in% c(17:22), 2,
+               ifel(harvest60 %in% c(23:28), 3,
+                    ifel(harvest60 %in% c(29:34), 4,
+                         ifel(harvest60 %in% c(35:40), 5,
+                              ifel(harvest60 %in% c(41:46), 6,
+                                   ifel(harvest60 %in% c(47:52), 7,
+                                        ifel(harvest60 %in% c(53:58), 8,
+                                             ifel(harvest60 %in% c(59:64), 9,
+                                                  ifel(harvest60 %in% c(65:70), 10,
+                                                       ifel(harvest60 %in% c(71:76), 11,
+                                                            ifel(harvest60 %in% c(77:82), 12,
+                                                                 ifel(harvest60 %in% c(83:88), 13,
+                                                                      ifel(harvest60 %in% c(89:94), 14,
+                                                                           ifel(harvest60 %in% c(95:100), 15,
+                                                                                ifel(harvest60 %in% c(101:106), 16,
+                                                                                     ifel(harvest60 == 107, 17,
+                                                                                          ifel(harvest60 == 1, 1, 0))))))))))))))))))
+
+values(harvestPrescriptionsMap) %>%
+  as.data.frame() %>%
+  filter(Layer_1 > 0) %>%
+  group_by(Layer_1) %>%
+  summarise(n = n()) %>%
+  arrange(desc(n)) %>%
+  mutate(Prescription = case_when(
+    Layer_1 == 1 ~ "Unutilised",
+    Layer_1 == 2 ~ "Thinning",
+    Layer_1 == 3 ~ "Thinning Softwoods",
+    Layer_1 == 4 ~ "Thinning Oak Hickory",
+    Layer_1 == 5 ~ "Thinning Oak Pine",
+    Layer_1 == 6 ~ "Seedtree Softwoods",
+    Layer_1 == 7 ~ "Seedtree Oak Hickory",
+    Layer_1 == 8 ~ "Seedtree Oak Pine",
+    Layer_1 == 9 ~ "Shelterwood Softwoods",
+    Layer_1 == 10 ~ "Shelterwood Oak Hickory",
+    Layer_1 == 11 ~ "Shelterwood Oak Pine",
+    Layer_1 == 12 ~ "Group Softwoods",
+    Layer_1 == 13 ~ "Group Oak Hickory",
+    Layer_1 == 14 ~ "Group Oak Pine",
+    Layer_1 == 15 ~ "VDT Softwoods",
+    Layer_1 == 16 ~ "VDT Oak Hickory",
+    Layer_1 == 17 ~ "VDT Oak Pine",
+    TRUE ~ "0"
+  )) %>%
+  filter(Prescription != "Unutilised") %>%
+  ggplot(., aes(x = reorder(Prescription, -n), y = n, fill = Prescription)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 90))
+
+thinning30 <- ifel(harvest30 %in% c(2:4), 1,
+     ifel(harvest30 %in% c(5:7), 2,
+          ifel(harvest30 %in% c(8:10), 3,
+               ifel(harvest30 %in% c(11:13), 4,
+                    ifel(harvest30 %in% c(14:16), 5, 0)))))
+
+thinning30 %>%
+  as.data.frame() %>%
+  filter(Layer_1 > 0) %>%
+  group_by(Layer_1) %>%
+  summarise(n = n()) %>%
+  arrange(desc(n))
+```
+
+
+
+
+```{r}
+directory <- "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment/output/spp-biomass-by-age/"
+rasterFiles <- list.files(path = directory, pattern = "oakHickory-60\\.img$", full.names = TRUE)
+for (i in seq_along(rasterFiles)) {
+  raster <- rast(rasterFiles[i])
+  raster <- flip(raster)
+  fileName <- basename(rasterFiles[i])
+  plot(raster, main = fileName)
+}
+
+harvestedBiomassDf <- read_csv("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment/Harvest/biomass-harvest-summary-log.csv")
+
+harvestedBiomassDf <- harvestedBiomassDf[, -c(4:33,60)] %>%
+  pivot_longer(cols = c("BiomassHarvestedMg_ACRU":"BiomassHarvestedMg_TADI2"),
+                                  names_to = "Species",
+                                  values_to = "Harvested_Biomass_MG") %>%
+      mutate(Species = str_replace(Species, "^[^_]*_", ""))
+
+targetsDf <- data.frame(
+  ManagementArea = c("1", "3", "2"),
+  Target = c(1994736 * 5, 2530864 * 5, 1114187 * 5)
+)
+
+# Main plot
+harvestedBiomassDf %>%
+  group_by(Time, ManagementArea) %>%
+  summarise(Harvested_Biomass_MG = sum(Harvested_Biomass_MG), .groups = "drop") %>%
+  ggplot(aes(x = Time, y = Harvested_Biomass_MG)) +
+  geom_bar(stat = "identity") +
+  geom_hline(data = targetsDf, aes(yintercept = Target), linetype = "dashed", color = "red") +
+  facet_grid(~ ManagementArea) +
+  theme_classic()
+
+
+harvestedBiomassDf <- harvestedBiomassDf %>%
+  mutate(prescriptionGroup = case_when(
+    grepl("^MM[1-5]\\b", Prescription) ~ "Thinning",
+    grepl("^MM(6|7|8|9|10|11)\\b", Prescription) ~ "Thinning_FORTYPCD",
+    grepl("^MM(12|13|14|15|16|17)\\b", Prescription) ~ "Seedtree",
+    grepl("^MM(18|19|20|21|22|23)\\b", Prescription) ~ "Shelterwood",
+    grepl("^MM(24|25|26|27|28|29)\\b", Prescription) ~ "Group_Selection",
+    grepl("^MM[36]\\b", Prescription) ~ "Clearcut",
+    TRUE ~ "VDT"
+  ))
+
+harvestedBiomassDf %>%
+  group_by(Time, Prescription, ManagementArea, prescriptionGroup) %>%
+  summarise(Harvested_Biomass_MG = sum(Harvested_Biomass_MG), .groups = "drop") %>%
+  filter(ManagementArea == 1) %>%
+  ggplot(., aes(x = Time, y = Harvested_Biomass_MG, fill = prescriptionGroup)) +
+  geom_bar(stat = "identity") +
+  theme_classic()
+
+harvestedBiomassDf <- harvestedBiomassDf %>%
+  mutate(fortypcdGroup = case_when(
+    grepl("^MM[1-5]\\b", Prescription) ~ "Thinning",
+    grepl("^MM(6|12|18|24|30)\\b", Prescription) ~ "Loblolly_Softwoods",
+    grepl("^MM(7|13|19|25|31)\\b", Prescription) ~ "Longleaf_Softwoods",
+    grepl("^MM(8|14|20|26|32)\\b", Prescription) ~ "WhiteRedHickory_OakHickory",
+    grepl("^MM(9|15|21|27|33)\\b", Prescription) ~ "YellowPoplarWhiteRedOak_OakHickory",
+    grepl("^MM(10|16|22|28|34)\\b", Prescription) ~ "LoblollyHardwood_OakPine",
+    grepl("^MM(11|17|23|29|35)\\b", Prescription) ~ "ShortleafOak_OakPine",
+    TRUE ~ "Clearcut"
+  ))
+
+harvestedBiomassDf %>%
+  group_by(Time, Prescription, ManagementArea, fortypcdGroup) %>%
+  summarise(Harvested_Biomass_MG = sum(Harvested_Biomass_MG), .groups = "drop") %>%
+  filter(ManagementArea == 1) %>%
+  ggplot(., aes(x = Time, y = Harvested_Biomass_MG, fill = fortypcdGroup)) +
+  geom_bar(stat = "identity") +
+  theme_classic()
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

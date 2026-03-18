@@ -1,0 +1,222 @@
+---
+title: "Untitled"
+output: pdf_document
+date: "2024-11-28"
+---
+
+```{r}
+library(tidyverse)
+library(terra)
+library(sf)
+```
+
+# LAI
+
+```{r}
+# Specify the directory containing the .img files
+directory_path <- "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/NECN"
+
+# Get a list of .img files containing "LAI" in their filename
+lai_files <- list.files(directory_path, pattern = "LAI.*\\.img$", full.names = TRUE)
+
+# Initialize an empty list to store data
+lai_data <- list()
+
+# Loop through the .img files to extract LAI values
+for (file in lai_files) {
+  # Read the .img file
+  raster_data <- rast(file)
+
+  # Get the timestep from the filename (you can adjust this based on your naming convention)
+  timestep <- sub(".*-(.*)\\.img$", "\\1", basename(file))
+
+  # Extract LAI values (convert raster to vector, remove NA values)
+  lai_values <- values(raster_data)
+  lai_values <- lai_values[!is.na(lai_values)]
+
+  # Store the LAI values and timestep in a data frame
+  lai_data[[file]] <- data.frame(LAI = lai_values, Timestep = as.factor(timestep))
+}
+
+# Combine all data into one data frame
+combined_data <- bind_rows(lai_data) %>%
+  filter(LAI > 0)
+
+# Create the boxplot
+boxplot <- ggplot(combined_data, aes(x = Timestep, y = LAI)) +
+  geom_boxplot() +
+  labs(title = "Boxplot of LAI Values Over Time",
+       x = "Timestep",
+       y = "LAI Score") +
+  theme_classic()
+
+# Print the boxplot
+print(boxplot)
+
+```
+
+
+
+
+```{r}
+BNU_ESM <- data.table::fread("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Climate Data/BNU-ESM_RCP85.csv")
+CCSM4 <- data.table::fread("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Climate Data/CCSM4_RCP85.csv")
+MIROC_ESM_CHEM <- data.table::fread("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Climate Data/MIROC-ESM-CHEM_RCP85.csv")
+MRI_CGCM3 <- data.table::fread("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Climate Data/MRI-CGCM3_RCP85.csv")
+
+BNU_ESM_PPT <- BNU_ESM[c(4:34334),c(1,2,4,6)] %>% mutate(Model = "BNU-ESM")
+CCSM4_PPT <- CCSM4[c(4:34334), c(1,2,4,6)] %>% mutate(Model = "CCSM4")
+MIROC_ESM_CHEM_PPT <- MIROC_ESM_CHEM[c(4:34334), c(1,2,4,6)] %>% mutate(Model = "MIROC_ESM_CHEM")
+MRI_CGCM3_PPT <- MRI_CGCM3[c(4:34334), c(1,2,4,6)] %>% mutate(Model = "MRI_CGCM3")
+pptDf <- rbind(BNU_ESM_PPT, CCSM4_PPT, MIROC_ESM_CHEM_PPT, MRI_CGCM3_PPT) %>%
+  `colnames<-`(c("TIMESTEP", "Mean", "Variance", "STD", "Model")) %>%
+  mutate(TIMESTEP = as.Date(sub("T.*", "", TIMESTEP)))
+pptDf$Mean <- as.numeric(pptDf$Mean)
+pptDf$Variance <- as.numeric(pptDf$Variance)
+pptDf$STD <- as.numeric(pptDf$STD)
+pptDf$Model <- as.factor(pptDf$Model)
+
+ggplot(pptDf, aes(x = TIMESTEP, y = Mean, col = Model)) +
+  geom_point() +
+  theme_classic()
+
+
+# BNU_ESM[c(34339:68672),]
+```
+
+
+
+```{r}
+mapCodesDf <- data.table::fread("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment/MapCodeDf.csv")
+
+ggplot(mapCodeDf, aes(x = SpeciesName, y = CohortAge, fill = SpeciesName)) +
+  geom_boxplot() +
+  theme_classic()
+
+harvestDf <- read_csv("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment/Harvest/biomass-harvest-summary-log.csv")
+harvestDf[,c(1,2,3,34:59)] %>%
+  pivot_longer(cols = c("BiomassHarvestedMg_ACRU":"BiomassHarvestedMg_TADI2"), names_to = "Species", values_to = "Harvested_Biomass") %>%
+  group_by(Time, ManagementArea, Species) %>%
+  summarise(Total_Harvest = sum(Harvested_Biomass)) %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", ""))
+
+
+
+
+
+
+fortypcdRast <- rast("D:/TreeMap2016_FORTYPCD.tif")
+plot(fortypcdRast)
+
+threeCounties.treeMap.Shp <- st_transform(threeCounties.Shp, crs = crs(fortypcdRast))
+
+fortypcdRast <- crop(fortypcdRast, threeCounties.treeMap.Shp) %>%
+  mask(., threeCounties.treeMap.Shp)
+
+fortypcdRast %>%
+  as.data.frame() %>%
+  group_by(Label) %>%
+  summarise(n = n()) %>%
+  mutate(Label = reorder(Label, -n)) %>%
+  ggplot(aes(x = Label, y = n, fill = Label)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  theme(legend.position = "none")
+
+mapCodesDf %>%
+  group_by(SpeciesName) %>%
+  summarise(total = sum(CohortBiomass)) %>%
+  mutate(SpeciesName = reorder(SpeciesName, -total)) %>%
+  ggplot(aes(x = SpeciesName, y = total, fill = SpeciesName)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+
+
+
+```{r}
+rastAET <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment_Biomass/Rasters/TerraClimate_aet_2024.nc")
+plot(rastAET)
+
+countiesNC <- st_read("C:/Users/lagoodal/Desktop/nc_eco_l3/North_Carolina_State_and_County_Boundary_Polygons.shp")
+threeCounties <- countiesNC %>% filter(County %in% c("Anson", "Montgomery", "Richmond")) %>%
+  st_union(.) %>%
+  st_as_sf(.) %>%
+  st_transform(., crs = crs(rastAET))
+
+plot(rastAET[[1]])
+plot(threeCounties, add = TRUE)
+
+
+x <- lapply(rastAET, function(x) {crop(x, threeCounties)})
+x <- lapply(x, function(x) {mask(x, threeCounties)})
+
+stack <- c(x[[1]], x[[2]], x[[3]], x[[4]], x[[5]], x[[6]], x[[7]], x[[8]], x[[9]], x[[10]], x[[11]], x[[12]])
+
+louis <- app(stack, fun = mean, na.rm = TRUE)
+
+plot(louis)
+louis %>% as.data.frame() %>% summarise(mean = mean(mean))
+
+
+
+
+df <- read_csv("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment_Biomass/MapCodeDf.csv", col_types = cols(
+  MapCode = col_integer(),
+  SpeciesName = col_character(),
+  CohortAge = col_integer(),
+  CohortBiomass = col_double()
+))
+
+outputLines <- c('LandisData "Initial Communities"')
+mapcodes <- unique(df$MapCode)
+
+for (mapcode in mapcodes) {
+  subDf <- df %>% filter(MapCode == mapcode)
+  speciesInfo <- subDf %>% group_by(SpeciesName) %>% summarise(Ages = paste(sort(unique(CohortAge)), collapse = " "), .groups = "drop")
+  outputLines <- c(outputLines, paste0("MapCode ", mapcode))
+  for (i in 1:nrow(speciesInfo)) {
+    species <- toupper(speciesInfo$SpeciesName[i])
+    ages <- speciesInfo$Ages[[i]]
+    outputLines <- c(outputLines, paste(species, ages))
+  }
+  outputLines <- c(outputLines, "")
+}
+
+writeLines(outputLines, "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment_Biomass/InitialCommunities.txt")
+
+####################################################
+numCol <- 3
+numMM <- 35
+numDO <- 50
+valueCols <- rep("0.5", 5)
+valueStr <- paste(valueCols, collapse = "\t\t")
+outputFile <- "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment_Biomass/MM.txt"
+con <- file(outputFile, "w")
+
+# for (firstVal in 1:numCol) {
+  for (mm in 1:numMM) {
+    for (do in 1:numDO) {
+    label <- sprintf("MM%d-1_DO%d", mm, do)
+    # line <- sprintf("\t%s\t\t%s", firstVal, label, valueStr)
+    line <- paste(label, valueStr, sep = "\t")
+    writeLines(line, con)
+    }
+  }
+# }
+
+
+
+close(con)
+
+```
+
+
+
+
+
+
+

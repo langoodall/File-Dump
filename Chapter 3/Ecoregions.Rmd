@@ -1,0 +1,131 @@
+---
+title: "Untitled"
+output: pdf_document
+date: "2024-11-04"
+---
+
+```{r}
+library(tidyverse)
+library(terra)
+library(sf)
+```
+
+
+
+```{r}
+countiesNC <- st_read("C:/Users/lagoodal/Desktop/nc_eco_l3/North_Carolina_State_and_County_Boundary_Polygons.shp")
+threeCounties <- countiesNC %>% filter(County %in% c("Anson", "Montgomery", "Richmond")) %>%
+  st_union(.) %>%
+  st_as_sf(.) %>%
+  st_transform(., crs = "EPSG:26917")
+```
+
+
+
+```{r}
+set.seed(33)
+# Create a get all .asc file function and then read them in to a list
+get_asc_files <- function(directory){
+  all_files <- list.files(path = directory, recursive = TRUE, full.names = TRUE)
+  asc_files <- all_files[grep("\\.asc$", all_files, ignore.case = TRUE)]
+  return(asc_files)
+}
+folder_path <- "C:/Users/lagoodal/Desktop/Dissertation Stuff/PRISM Data"
+asc_files <- get_asc_files(folder_path)
+read_raster_files <- function(file_path){
+  raster_list <- lapply(file_path, rast)
+  return(raster_list)
+}
+prismRast <- read_raster_files(asc_files)
+templateRaster <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Three_Counties_Rasters/templateRaster.tif")
+
+# Project and mask the raster. No crop needed so that the dimensions stay the same
+prismRast <- lapply(prismRast, function(x){project(x, templateRaster, method = "near")})
+prismRast <- lapply(prismRast, function(x){mask(x, threeCounties)})
+
+# Break up into two seperate lists and then stack
+tempRast <- list(prismRast[[1]], prismRast[[2]], prismRast[[3]], prismRast[[4]], prismRast[[5]], prismRast[[6]], prismRast[[7]])
+precipRast <- list(prismRast[[8]], prismRast[[9]], prismRast[[10]], prismRast[[11]], prismRast[[12]], prismRast[[13]], prismRast[[14]])
+tempStack <- c(tempRast[[1]], tempRast[[2]], tempRast[[3]], tempRast[[4]], tempRast[[5]], tempRast[[6]], tempRast[[7]])
+precipStack <- c(precipRast[[1]], precipRast[[2]], precipRast[[3]], precipRast[[4]], precipRast[[5]], precipRast[[6]], precipRast[[7]])
+
+# Get mean of temperature and sum of precipitation
+tempMean <- app(tempStack, mean)
+precipSum <- app(precipStack, sum)
+
+# stack and fill in NAs with 0s
+rasterStack <- c(precipSum, tempMean)
+rasterStack$sum[is.na(rasterStack$sum),] <- 0
+rasterStack$mean[is.na(rasterStack$mean),] <- 0
+
+# Scale the values and then perform k-means clustering
+scaleP <- scale(rasterStack$sum)
+scaleT <- scale(rasterStack$mean)
+scaleStack <- c(scaleP, scaleT)
+scaleDf <- as.data.frame(scaleStack)
+Classification <- kmeans(na.omit(scaleDf), 3, iter.max = 10, nstart = 25)
+cluster <- as.integer(Classification$cluster)
+outputMatrix <- matrix(cluster, nrow = nrow(precipSum), ncol = ncol(precipSum), byrow = TRUE)
+
+# Create raster and then change all values by -1
+ecoregions <- rast(outputMatrix, extent = ext(templateRaster), crs = crs(templateRaster))
+ecoregions <- ifel(ecoregions == 1, NA,
+     ifel(ecoregions == 2, 1,
+          ifel(ecoregions == 3, 2, ecoregions)))
+
+
+treeMapMask <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Three_Counties_Rasters/TCTreeMap.tif")
+plot(treeMapMask)
+
+treeMapMask <- terra::classify(treeMapMask, matrix(c(0,0,0,1,99999,1), ncol = 3, byrow = TRUE))
+ecoregions <- ecoregions %>% mask(., treeMapMask, maskvalue = 0)
+values(ecoregions) <- ifelse(is.na(values(ecoregions)), 0, values(ecoregions))
+
+writeRaster(ecoregions,
+            filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Three_Counties_Rasters/ecoregions.tif",
+            datatype = "INT1U",
+            NAflag = NA,
+            overwrite = TRUE)
+```
+
+
+# Alternate Ecoregions
+
+```{r}
+treeMapTC <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Rasters/TCTreeMap.tif")
+ecoregions <- terra::classify(treeMapTC,
+                              matrix(c(0,0,0,1,99999,1), ncol = 3, byrow = TRUE))
+plot(ecoregions)
+
+# writeRaster(ecoregions,
+#             filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Three_Counties_Rasters/Ecoregions1.tif",
+#             datatype = "INT1U",
+#             NAflag = NA,
+#             overwrite = TRUE)
+```
+
+
+```{r}
+ecoregionsTest <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Rasters/Ecoregions1.tif")
+values(ecoregionsTest) <- 0
+ecoregionsTest[480:679,450:499] <- 1
+
+plot(ecoregionsTest)
+plot(ManagementAreaRast)
+
+# writeRaster(ecoregionsTest,
+#             filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Rasters/ecoregionsTest.tif",
+#             datatype = "INT1U",
+#             NAflag = NA,
+#             overwrite = TRUE)
+```
+
+
+
+
+
+
+
+
+
+

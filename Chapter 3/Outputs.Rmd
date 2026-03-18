@@ -1,0 +1,2159 @@
+---
+title: "Untitled"
+output: pdf_document
+date: "2025-10-13"
+---
+
+```{r, messages = FALSE, warning = FALSE}
+library(tidyverse)
+library(data.table)
+library(terra)
+library(sf)
+library(gt)
+library(rFIA)
+
+templateRaster <- rast("D:/Landis Outputs/Raster Template/templateRaster.tif")
+softwoods <- c("JUVI","PIEC2","PIPA2","PIST","PITA","PIVI2","TAAS","TADI2")
+oaks <- c("QUAL","QUCO2","QUFA","QULA3","QUNI","QUPH","QUPR2","QURU","QUST","QUVE")
+hardwoods <- c("ACRU","CAAL27","CAGL8","FAGR","FRAM2","FRPE","LIST2","LITU","NYBI","NYSY","OXAR","PRSE2")
+options(scipen = 999)
+Piedmont.shp <- st_read("C:/Users/lagoodal/Desktop/All Raster Layers/standsraster/Clipped Shapefile/clippedPiedmont.shp")
+```
+
+# All
+
+```{r, message = FALSE, warning = FALSE}
+mainDir <- "D:/Hurricane_LANDIS"
+rcps <- c("NORM", "HINT")
+prescriptions <- c("Resistance", "Resilience", "Transition")
+climates <- c("HSLV", "LSLV")
+runs <- paste0("run", 1:3)
+combinedData <- list()
+
+for (rcp in rcps) {
+  for (prescription in prescriptions) {
+    for (climate in climates) {
+      for (run in runs) {
+        runDir <- file.path(mainDir, rcp, climate, prescription, run)
+        filePath <- file.path(runDir, "spp-biomass-log.csv")
+        if (!file.exists(filePath)) {
+          message("Skipping (file not found: ", filePath)
+          next
+          }
+        data <- read_csv(filePath)
+        data$RCP <- rcp
+        data$Model <- climate
+        data$Prescription <- prescription
+        data$Run <- run
+        name <- paste(prescription, rcp, climate, run, sep = "_")
+        combinedData[[name]] <- data
+      }
+    }
+  }
+}
+finalTable <- do.call(rbind, combinedData) %>% select(-`...34`)
+
+# Composition through time
+sppAllDf <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  group_by(Time, RCP, Model, Prescription, Species, Run) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897, 24948), length.out = n()))) %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", ""))
+
+# Proportional Biomass
+propSppAllDf <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, RCP, Model, Prescription, Species, Run) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n())), .groups = "drop") %>%
+  mutate(FunctionalGroup = ifelse(Species %in% softwoods, "Softwoods",
+                             ifelse(Species %in% oaks, "Oaks", "Hardwoods"))) %>%
+  group_by(Time, RCP, Model, Prescription, Run) %>%  # regroup before totals
+  mutate(TotalBiomass = sum(Biomass_MG),
+         Biomass_Percent = (Biomass_MG / TotalBiomass) * 100)
+
+# Harvesting Rates
+combinedData <- list()
+for (rcp in rcps) {
+  for (prescription in prescriptions) {
+    for (climate in climates) {
+      for (run in runs) {
+        harvestDir <- file.path(mainDir, rcp, climate, prescription, run)
+        filePath <- file.path(harvestDir, "Harvest/biomass-harvest-summary-log.csv")
+        if (!file.exists(filePath)) {
+          message("Skipping (file not found: ", filePath)
+          next
+        }
+        data <- fread(filePath)
+        data<- data %>% rename("Prescription_Type" = "Prescription")
+        data$RCP <- rcp
+        data$Model <- climate
+        data$Prescription <- prescription
+        data$Run <- run
+        name <- paste(prescription, rcp, climate, run, sep = "_")
+        combinedData[[name]] <- data
+      }
+    }
+  }
+}
+
+harvestTable <- do.call(rbind, combinedData) %>% select(-`V68`)
+
+harvestAllDf <- harvestTable[,c(1,38:71)] %>%
+  pivot_longer(cols = c("BiomassHarvestedMg_ACRU":"BiomassHarvestedMg_TADI2"), names_to = "Species", values_to = "Harvested_Biomass") %>%
+  group_by(Time, Run, Prescription, RCP, Model, Species)  %>%
+  summarise(Total_Harvest = sum(Harvested_Biomass)) %>%
+  mutate(Species = str_replace(Species, "^[^_]+_", ""))
+
+# Climate
+climateData <- list()
+for (rcp in rcps) {
+  for (prescription in prescriptions) {
+    for (climate in climates) {
+      for (run in runs) {
+        climateDir <- file.path(mainDir, rcp, climate, prescription, run)
+        filePath <- file.path(climateDir, "Climate-future-input-log.csv")
+        if (!file.exists(filePath)) {
+          message("Skipping (file not found: ", filePath)
+          next
+        }
+        data <- fread(filePath) %>% select(-28)
+        data$RCP <- rcp
+        data$Model <- climate
+        data$Prescription <- prescription
+        data$Run <- run
+        name <- paste(prescription, rcp, climate, run, sep = "_")
+        climateData[[name]] <- data
+      }
+    }
+  }
+}
+climateDf <- do.call(rbind, climateData)
+climateDf <- climateDf[,c(1,2,5,6,7,28,29,30,31)] %>%
+  mutate(meanAirtemp = (min_airtemp + max_airtemp) / 2) %>%
+  group_by(Year, RCP, Model, Prescription) %>%
+  summarise(sumppt = sum(ppt),
+            sdPpt = sd(ppt),
+            airtemp = mean(meanAirtemp),
+            sdTemp = sd(meanAirtemp))
+
+
+#----BIODIVERSITY----#
+propDiversityAllDf <- propSppAllDf %>%
+  mutate(Pi = Biomass_Percent / 100,
+         lnPi = log(Pi),
+         PixlnPi = Pi * lnPi) %>%
+  group_by(Time, RCP, Model, Prescription, Run) %>%
+  summarise(H = -sum(PixlnPi, na.rm = TRUE))
+
+#----SUCCESSION LOG VARIABLES----#
+combinedData <- list()
+for (rcp in rcps) {
+  for (prescription in prescriptions) {
+    for (climate in climates) {
+      for (run in runs) {
+        runDir <- file.path(mainDir, rcp, climate, prescription, run)
+        filePath <- file.path(runDir, "NECN-succession-log.csv")
+        if (!file.exists(filePath)) {
+          message("Skipping (file not found: ", filePath)
+          next
+        }
+        data <- fread(filePath) %>% select(-V62)
+        data$RCP <- rcp
+        data$Model <- climate
+        data$Prescription <- prescription
+        data$Run <- run
+        name <- paste(prescription, rcp, climate, run, sep = "_")
+        combinedData[[name]] <- data
+      }
+    }
+  }
+}
+
+successionAllDf <- do.call(rbind, combinedData) %>% mutate(ANPP = AG_NPPC * 2)
+successionAllDf <- successionAllDf %>%
+  group_by(Time, RCP, Model, Run, Prescription) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n()))))
+
+```
+
+
+
+```{r}
+#----TOTAL CARBON----#
+combinedRasters <- list()
+for (rcp in rcps) {
+  for (prescription in prescriptions) {
+    for (climate in climates) {
+      for (run in runs) {
+        runDir <- file.path(mainDir, rcp, climate, prescription, run)
+        for (year in seq(10, 80, 10)){
+          fileName <- paste0("NECN/TotalC-", year, ".img")
+          filePath <- file.path(runDir, fileName)
+          if (!file.exists(filePath)) {
+          message("Skipping (file not found: ", filePath)
+          next
+          }
+          raster <- rast(filePath) %>% flip()
+          name <- paste(prescription, rcp, climate, run, year, sep = "_")
+          crs(raster) <- crs(templateRaster)
+          ext(raster) <- ext(templateRaster)
+          # raster <- project(raster, templateRaster)
+          combinedRasters[[name]] <- raster
+        }
+      }
+    }
+  }
+}
+
+# Need to split into groupings for processing
+groupID <- ceiling(seq_along(combinedRasters) / 8)
+groupedBy8 <- split(names(combinedRasters), groupID)
+
+# For loop to get the landscape average of AWB for each scenario and scenario run
+totalCList <- list()
+for (group in groupedBy8) {
+  for (i in group) {
+    rasters <- rast(combinedRasters[names(combinedRasters) %in% i])
+    rasters[rasters == 0] <- NA
+    df <- as.data.frame(rasters, xy = FALSE)
+    names(df) <- gsub(".*_(\\d+)$", "\\1", names(df))
+    df <- df %>%
+      pivot_longer(cols = everything(), names_to = "layer", values_to = "value") %>%
+      group_by(layer) %>%
+      summarise(TotalC = mean(value, na.rm = TRUE)) %>%
+      mutate(filename = tools::file_path_sans_ext(basename(i))) %>%
+      separate(
+        filename,
+        into = c("Prescription", "RCP", "Model", "Run", "Timestep"),
+        sep = "_",
+        fill = "right"
+      )
+    df <- df[,-1]
+    totalCList[[basename(i)]] <- df
+  }
+}
+
+
+totalCDf <- do.call(rbind, totalCList)
+totalCDf$Timestep <- as.integer(totalCDf$Timestep)
+
+#----ANNUAL WATER BUDGET----#
+combinedRasters <- list()
+for (rcp in rcps) {
+  for (prescription in prescriptions) {
+    for (climate in climates) {
+      for (run in runs) {
+        runDir <- file.path(mainDir, rcp, climate, prescription, run)
+        for (year in seq(10, 80, 10)){
+          fileName <- paste0("NECN/Annual-water-budget-", year, ".img")
+          filePath <- file.path(runDir, fileName)
+          if (!file.exists(filePath)) {
+          message("Skipping (file not found: ", filePath)
+          next
+          }
+          raster <- rast(filePath) %>% flip()
+          name <- paste(prescription, rcp, climate, run, year, sep = "_")
+          crs(raster) <- crs(templateRaster)
+          ext(raster) <- ext(templateRaster)
+          # raster <- project(raster, templateRaster)
+          combinedRasters[[name]] <- raster
+        }
+      }
+    }
+  }
+}
+
+
+# Need to split into groupings for processing
+groupID <- ceiling(seq_along(combinedRasters) / 8)
+groupedBy8 <- split(names(combinedRasters), groupID)
+
+# For loop to get the landscape average of AWB for each scenario and scenario run
+awbList <- list()
+for (group in groupedBy8) {
+  for (i in group) {
+    rasters <- rast(combinedRasters[names(combinedRasters) %in% i])
+    rasters[rasters == 0] <- NA
+    df <- as.data.frame(rasters, xy = FALSE)
+    names(df) <- gsub(".*_(\\d+)$", "\\1", names(df))
+    df <- df %>%
+      pivot_longer(cols = everything(), names_to = "layer", values_to = "value") %>%
+      group_by(layer) %>%
+      summarise(AWB = mean(value, na.rm = TRUE)) %>%
+      mutate(filename = tools::file_path_sans_ext(basename(i))) %>%
+      separate(
+        filename,
+        into = c("Prescription", "RCP", "Model", "Run", "Timestep"),
+        sep = "_",
+        fill = "right"
+      )
+    df <- df[,-1]
+    awbList[[basename(i)]] <- df
+  }
+}
+
+
+AWBDf <- do.call(rbind, awbList)
+AWBDf$Timestep <- as.integer(AWBDf$Timestep)
+
+AWBDf %>%
+  group_by(Prescription, RCP, Model, Timestep) %>%
+  summarise(AWB = mean(AWB)) %>%
+  ggplot(., aes(x = Timestep, y = AWB, colour = Prescription)) +
+  geom_line(size = 1) +
+  theme_classic() +
+  facet_grid(Model ~ RCP) +
+  scale_x_continuous(name = "Year", breaks = seq(0,80,20), labels = seq(2020,2100,20))
+
+# TODO find out if the very close results are genuine or not. Techncally the results differ,
+# but the difference is minute
+
+# Cultural Trees
+culturalAllDf <- read_csv("D:/Hurricane_LANDIS/Culture_Trees.csv") %>%
+  mutate(RCP = case_when(
+    RCP == "Climate-Change" ~ "HINT",
+    TRUE ~ "NORM"
+  ))
+
+# Fruit Trees
+fruitAllDf <- read_csv("D:/Hurricane_LANDIS/Fruit_Trees.csv") %>%
+  mutate(RCP = case_when(
+    RCP == "Climate-Change" ~ "HINT",
+    TRUE ~ "NORM"
+  ))
+
+# Structural Diversity
+structureAllDf <- read_csv("D:/Hurricane_LANDIS/Structural_Diversity.csv") %>%
+  mutate(RCP = case_when(
+    RCP == "Climate-Change" ~ "HINT",
+    TRUE ~ "NORM"
+  ))
+
+gc()
+
+```
+
+# Plots
+## Ecosystem Services
+
+
+```{r}
+# AGB
+successionAllDf %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance", "Resilience", "Transition"))) %>%
+  group_by(Time, RCP, Model, Prescription) %>%
+  summarise(AGB = mean(AGB * 0.01), .groups = "drop") %>%
+  filter(Time > 0) %>%
+  ggplot(., aes(x = Time, y = AGB, col = Prescription)) +
+  geom_line(size = 1) +
+  scale_x_continuous(name = "Year", breaks = seq(0,80,20), labels = seq(2020,2100,20)) +
+  scale_y_continuous(name = "Aboveground Biomass (Mg/ha)") +
+  scale_color_manual(values = c("#66c2a5", "#fc8d62", "#542788")) +
+  theme_classic() +
+  facet_grid(RCP ~ Model)
+
+successionAllDf %>%
+  group_by(Time, RCP, Model, Prescription) %>%
+  summarise(AGB = mean(AGB * 0.01)) %>%
+  filter(Time > 0) %>%
+  pivot_wider(names_from = Time, values_from = AGB, names_prefix = "T") %>%
+  select(RCP, Model, Prescription, T10, T80) %>%
+  mutate(T10 = round(T10, 2),
+         T80 = round(T80, 2),
+         Diff = round(T80 - T10, 2)) %>%
+  arrange(Diff)
+
+successionAllDf %>%
+  filter(Time > 0) %>%
+  group_by(Time, Model, RCP, Prescription) %>%
+  summarise(AGB = mean(AGB * 0.01), .groups = "drop") %>%
+  group_by(RCP, Model, Prescription,) %>%
+  summarise(mean = mean(AGB),
+            sd = sd(AGB)) %>%
+  arrange(desc(sd))
+
+statsAGB <- successionAllDf %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance", "Resilience", "Transition")),
+         Model = factor(Model, levels = c("LSLV", "HSLV")),
+         RCP = factor(RCP, levels = c("NORM", "HINT"))) %>%
+  filter(Time > 0) %>%
+  group_by(Time, Prescription, Model, RCP) %>%
+  summarise(AGB_MgHa = mean(AGB * 0.01), .groups = "drop") %>%
+  lm(AGB_MgHa ~ Time * Prescription * Model * RCP, data = .) %>%
+  broom::tidy(.) %>%
+  filter(p.value < 0.05) %>%
+  mutate(Response = "AGB") %>%
+  select(Response, term, estimate, std.error, statistic, p.value)
+
+ggsave(width = 10, height = 6, dpi = 600,
+      filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Images/Timeseries_AGB.png")
+
+# ANPP
+successionAllDf %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance", "Resilience", "Transition"))) %>%
+  filter(Time > 0) %>%
+  group_by(Time, RCP, Model, Prescription) %>%
+  summarise(ANPP = mean(ANPP * 0.01)) %>%
+  ggplot(., aes(x = Time, y = ANPP, col = Prescription)) +
+  geom_line(size = 1) +
+  scale_x_continuous(name = "Year", breaks = seq(0,80,20), labels = seq(2020,2100,20)) +
+  scale_y_continuous(name = "ANPP (Mg/ha)") +
+  scale_color_manual(values = c("#66c2a5", "#fc8d62", "#542788")) +
+  theme_classic() +
+  facet_grid(RCP ~ Model)
+
+successionAllDf %>%
+  group_by(Time, RCP, Model, Prescription) %>%
+  summarise(ANPP = mean(ANPP * 0.01)) %>%
+  filter(Time > 0) %>%
+  pivot_wider(names_from = Time, values_from = ANPP, names_prefix = "T") %>%
+  select(RCP, Model, Prescription, T10, T80) %>%
+  mutate(T10 = round(T10, 2),
+         T80 = round(T80, 2),
+         Diff = round(T80 - T10, 2)) %>%
+  arrange(Diff)
+  
+successionAllDf %>%
+  filter(Time > 0) %>%
+  group_by(Time, Model, RCP, Prescription) %>%
+  summarise(ANPP = mean(AGB * 0.01), .groups = "drop") %>%
+  group_by(RCP, Model, Prescription,) %>%
+  summarise(mean = mean(ANPP),
+            sd = sd(ANPP)) %>%
+  arrange(desc(sd))
+
+statsANPP <- successionAllDf %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance", "Resilience", "Transition")),
+         Model = factor(Model, levels = c("LSLV", "HSLV")),
+         RCP = factor(RCP, levels = c("NORM", "HINT"))) %>%
+  filter(Time > 0) %>%
+  group_by(Time, Prescription, Model, RCP) %>%
+  summarise(ANPP_MgHa = mean(ANPP * 0.01), .groups = "drop") %>%
+  lm(ANPP_MgHa ~ Time * Prescription * Model * RCP, data = .) %>%
+  broom::tidy(.) %>%
+  filter(p.value < 0.05) %>%
+  mutate(Response = "ANPP") %>%
+  select(Response, term, estimate, std.error, statistic, p.value)
+
+ggsave(width = 10, height = 6, dpi = 600,
+      filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Images/Timeseries_ANPP.png")
+
+# AWB
+AWBDf %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance", "Resilience", "Transition"))) %>%
+  group_by(Prescription, RCP, Model, Timestep) %>%
+  summarise(AWB = mean(AWB), .groups = "drop") %>%
+  ggplot(., aes(x = Timestep, y = AWB, colour = Prescription)) +
+  geom_line(size = 1) +
+  theme_classic() +
+  facet_grid(RCP ~ Model) +
+  scale_x_continuous(name = "Year", breaks = seq(0,80,20), labels = seq(2020,2100,20)) +
+  scale_y_continuous(name = "AWB (cm)", breaks = seq(0,100,20), labels = seq(0,100,20)) +
+  scale_color_manual(values = c("#66c2a5", "#fc8d62", "#542788"))
+
+AWBDf %>%
+  group_by(Timestep, RCP, Model, Prescription) %>%
+  summarise(AWB = mean(AWB)) %>%
+  filter(Timestep > 0) %>%
+  pivot_wider(names_from = Timestep, values_from = AWB, names_prefix = "T") %>%
+  select(RCP, Model, Prescription, T10, T80) %>%
+  mutate(T10 = round(T10, 2),
+         T80 = round(T80, 2),
+         Diff = round(T80 - T10, 2)) %>%
+  arrange(Diff)
+  
+AWBDf %>%
+  filter(Timestep > 0) %>%
+  group_by(Timestep, Model, RCP, Prescription) %>%
+  summarise(AWB = mean(AWB), .groups = "drop") %>%
+  group_by(RCP, Model, Prescription,) %>%
+  summarise(mean = mean(AWB),
+            sd = sd(AWB)) %>%
+  arrange(desc(sd))
+
+statsAWB <- AWBDf %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance", "Resilience", "Transition")),
+         Model = factor(Model, levels = c("LSLV", "HSLV")),
+         RCP = factor(RCP, levels = c("NORM", "HINT"))) %>%
+  filter(Timestep > 0) %>%
+  group_by(Timestep, Prescription, Model, RCP) %>%
+  summarise(AWB_cm = mean(AWB), .groups = "drop") %>%
+  lm(AWB_cm ~ Timestep * Prescription * Model * RCP, data = .) %>%
+  broom::tidy(.) %>%
+  filter(p.value < 0.05) %>%
+  mutate(Response = "AWB") %>%
+  select(Response, term, estimate, std.error, statistic, p.value)
+
+ggsave(width = 10, height = 6, dpi = 300,
+      filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Images/Timeseries_AWB.png")
+
+# Culture Trees
+culturalAllDf %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance", "Resilience", "Transition"))) %>%
+  group_by(SpeciesName, RCP, Prescription, Model, Timestep) %>%
+  summarise(Score = mean(Score * 0.01), .groups = "drop") %>%
+  group_by(RCP, Prescription, Model, Timestep) %>%
+  summarise(Total = sum(Score)) %>%
+  ggplot(., aes(x = Timestep, y = Total, colour = Prescription)) +
+  geom_line(size = 1) +
+  theme_classic() +
+  facet_grid(RCP ~ Model) +
+  scale_x_continuous(name = "Year", breaks = seq(0,80,20), labels = seq(2020,2100,20)) +
+  scale_y_continuous(name = "Culturally Important Trees (Mg/ha)") +
+  scale_color_manual(values = c("#66c2a5", "#fc8d62", "#542788"))
+
+culturalAllDf %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance", "Resilience", "Transition"))) %>%
+  group_by(SpeciesName, RCP, Prescription, Model, Timestep) %>%
+  summarise(Score = mean(Score * 0.01), .groups = "drop") %>%
+  group_by(RCP, Prescription, Model, Timestep) %>%
+  summarise(Total = sum(Score), .groups = "drop") %>%
+  filter(Timestep > 0) %>%
+  pivot_wider(names_from = Timestep, values_from = Total, names_prefix = "T") %>%
+  select(RCP, Model, Prescription, T10, T80) %>%
+  mutate(T10 = round(T10, 2),
+         T80 = round(T80, 2),
+         Diff = round(T80 - T10, 2)) %>%
+  arrange(Diff)
+
+culturalAllDf %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance", "Resilience", "Transition"))) %>%
+  group_by(SpeciesName, RCP, Prescription, Model, Timestep) %>%
+  summarise(Score = mean(Score * 0.01), .groups = "drop") %>%
+  group_by(RCP, Prescription, Model, Timestep) %>%
+  summarise(Total = sum(Score), .groups = "drop") %>%
+  filter(Timestep > 0) %>%
+  group_by(RCP, Model, Prescription,) %>%
+  summarise(mean = mean(Total),
+            sd = sd(Total)) %>%
+  arrange(desc(sd))
+
+statsCultural <- culturalAllDf %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance", "Resilience", "Transition")),
+         Model = factor(Model, levels = c("LSLV", "HSLV")),
+         RCP = factor(RCP, levels = c("NORM", "HINT"))) %>%
+  group_by(SpeciesName, RCP, Prescription, Model, Timestep) %>%
+  summarise(Score = mean(Score * 0.01), .groups = "drop") %>%
+  group_by(RCP, Prescription, Model, Timestep) %>%
+  summarise(Cultural_MgHA = sum(Score)) %>%
+  lm(Cultural_MgHA ~ Timestep * Prescription * Model * RCP, data = .) %>%
+  broom::tidy(.) %>%
+  filter(p.value < 0.05) %>%
+  mutate(Response = "Culture") %>%
+  select(Response, term, estimate, std.error, statistic, p.value)
+
+ggsave(width = 10, height = 6, dpi = 600,
+      filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Images/Timeseries_Culture.png")
+
+# Fruit Trees
+fruitAllDf %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance", "Resilience", "Transition"))) %>%
+  group_by(RCP, Prescription, Model, Timestep) %>%
+  summarise(Score = mean(Score * 0.01), .groups = "drop") %>%
+  group_by(RCP, Prescription, Model, Timestep) %>%
+  summarise(Total = sum(Score)) %>%
+  ggplot(., aes(x = Timestep, y = Total, colour = Prescription)) +
+  geom_line(size = 1) +
+  theme_classic() +
+  facet_grid(RCP ~ Model) +
+  scale_x_continuous(name = "Year", breaks = seq(0,80,20), labels = seq(2020,2100,20)) +
+  scale_y_continuous(name = "Fruit Bearing Trees (Mg/ha)") +
+  scale_color_manual(values = c("#66c2a5", "#fc8d62", "#542788"))
+
+fruitAllDf %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance", "Resilience", "Transition"))) %>%
+  group_by(SpeciesName, RCP, Prescription, Model, Timestep) %>%
+  summarise(Score = mean(Score * 0.01), .groups = "drop") %>%
+  group_by(RCP, Prescription, Model, Timestep) %>%
+  summarise(Total = mean(Score)) %>%
+  filter(Timestep > 0) %>%
+  pivot_wider(names_from = Timestep, values_from = Total, names_prefix = "T") %>%
+  select(RCP, Model, Prescription, T10, T80) %>%
+  mutate(T10 = round(T10, 2),
+         T80 = round(T80, 2),
+         Diff = round(T80 - T10, 2)) %>%
+  arrange(Diff)
+  
+fruitAllDf %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance", "Resilience", "Transition"))) %>%
+  group_by(SpeciesName, RCP, Prescription, Model, Timestep) %>%
+  summarise(Score = mean(Score * 0.01), .groups = "drop") %>%
+  group_by(RCP, Prescription, Model, Timestep) %>%
+  summarise(Total = mean(Score)) %>%
+  group_by(RCP, Model, Prescription,) %>%
+  summarise(mean = mean(Total),
+            sd = sd(Total)) %>%
+  arrange(desc(sd))
+
+statsFruit <- fruitAllDf %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance", "Resilience", "Transition")),
+         Model = factor(Model, levels = c("LSLV", "HSLV")),
+         RCP = factor(RCP, levels = c("NORM", "HINT"))) %>%
+  group_by(SpeciesName, RCP, Prescription, Model, Timestep) %>%
+  summarise(Score = mean(Score * 0.01), .groups = "drop") %>%
+  group_by(RCP, Prescription, Model, Timestep) %>%
+  summarise(Fruit_MgHA = sum(Score)) %>%
+  lm(Fruit_MgHA ~ Timestep * Prescription * Model * RCP, data = .) %>%
+  broom::tidy(.) %>%
+  filter(p.value < 0.05) %>%
+  mutate(Response = "Fruit-Nut") %>%
+  select(Response, term, estimate, std.error, statistic, p.value)
+
+ggsave(width = 10, height = 6, dpi = 600,
+      filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Images/Timeseries_Fruit.png")
+
+# H
+propDiversityAllDf %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance", "Resilience", "Transition"))) %>%
+  group_by(Time, RCP, Model, Prescription) %>%
+  summarise(H = mean(H), .groups = "drop") %>%
+  filter(Time > 0) %>%
+  ggplot(., aes(x = Time, y = H, col = Prescription)) +
+  geom_line(size = 1) +
+  theme_classic() +
+  facet_grid(RCP ~ Model) +
+  scale_x_continuous(name = "Year", breaks = seq(0,80,20), labels = seq(2020,2100,20)) +
+  scale_color_manual(values = c("#66c2a5", "#fc8d62", "#542788"))
+
+propDiversityAllDf %>%
+  group_by(Time, RCP, Model, Prescription) %>%
+  summarise(H = mean(H)) %>%
+  filter(Time > 0) %>%
+  pivot_wider(names_from = Time, values_from = H, names_prefix = "T") %>%
+  select(RCP, Model, Prescription, T10, T80) %>%
+  mutate(T10 = round(T10, 2),
+         T80 = round(T80, 2),
+         Diff = round(T80 - T10, 2)) %>%
+  arrange(Diff)
+  
+propDiversityAllDf %>%
+  filter(Time > 0) %>%
+  group_by(Time, Model, RCP, Prescription) %>%
+  summarise(H = mean(H), .groups = "drop") %>%
+  group_by(RCP, Model, Prescription,) %>%
+  summarise(mean = mean(H),
+            sd = sd(H)) %>%
+  arrange(desc(sd))
+
+statsH <- propDiversityAllDf %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance", "Resilience", "Transition")),
+         Model = factor(Model, levels = c("LSLV", "HSLV")),
+         RCP = factor(RCP, levels = c("NORM", "HINT"))) %>%
+  filter(Time > 0) %>%
+  group_by(Time, Prescription, Model, RCP) %>%
+  summarise(H = mean(H), .groups = "drop") %>%
+  lm(H ~ Time * Prescription * Model * RCP, data = .) %>%
+  broom::tidy(.) %>%
+  filter(p.value < 0.05) %>%
+  mutate(Response = "H") %>%
+  select(Response, term, estimate, std.error, statistic, p.value)
+
+ggsave(width = 10, height = 6, dpi = 600,
+      filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Images/Timeseries_H.png")
+
+# NEEC
+successionAllDf %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance", "Resilience", "Transition"))) %>%
+  group_by(Time, RCP, Model, Prescription) %>%
+  summarise(NEEC = mean(NEEC * 0.01)) %>%
+  filter(Time > 0) %>%
+  ggplot(., aes(x = Time, y = NEEC, col = Prescription)) +
+  geom_line(size = 1) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  scale_x_continuous(name = "Year", breaks = seq(0,80,20), labels = seq(2020,2100,20)) +
+  scale_y_continuous(name = "NEEC (Mg/ha)") +
+  theme_classic() +
+  facet_grid(RCP ~ Model) +
+  scale_color_manual(values = c("#66c2a5", "#fc8d62", "#542788"))
+
+successionAllDf %>%
+  group_by(Time, RCP, Model, Prescription) %>%
+  summarise(NEEC = mean(NEEC * 0.01)) %>%
+  filter(Time > 0) %>%
+  pivot_wider(names_from = Time, values_from = NEEC, names_prefix = "T") %>%
+  select(RCP, Model, Prescription, T10, T80) %>%
+  mutate(T10 = round(T10, 2),
+         T80 = round(T80, 2),
+         Diff = round(T80 - T10, 2)) %>%
+  arrange(Diff)
+  
+successionAllDf %>%
+  filter(Time > 0) %>%
+  group_by(Time, Model, RCP, Prescription) %>%
+  summarise(NEEC = mean(NEEC * 0.01), .groups = "drop") %>%
+  group_by(RCP, Model, Prescription,) %>%
+  summarise(mean = mean(NEEC),
+            sd = sd(NEEC)) %>%
+  arrange(desc(sd))
+
+statsNEEC <- successionAllDf %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance", "Resilience", "Transition")),
+         Model = factor(Model, levels = c("LSLV", "HSLV")),
+         RCP = factor(RCP, levels = c("NORM", "HINT"))) %>%
+  filter(Time > 0) %>%
+  group_by(Time, Prescription, Model, RCP) %>%
+  summarise(NEEC_MgHa = mean(NEEC * 0.01), .groups = "drop") %>%
+  lm(NEEC_MgHa ~ Time * Prescription * Model * RCP, data = .) %>%
+  broom::tidy(.) %>%
+  filter(p.value < 0.05) %>%
+  mutate(Response = "NEEC") %>%
+  select(Response, term, estimate, std.error, statistic, p.value)
+
+ggsave(width = 10, height = 6, dpi = 600,
+      filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Images/Timeseries_NEEC.png")
+
+# SOMTC
+successionAllDf %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance", "Resilience", "Transition"))) %>%
+  group_by(Time, RCP, Model, Prescription) %>%
+  summarise(SOMTC = mean(SOMTC * 0.01)) %>%
+  filter(Time > 0) %>%
+  ggplot(., aes(x = Time, y = SOMTC, col = Prescription)) +
+  geom_line(size = 1) +
+  scale_x_continuous(name = "Year", breaks = seq(0,80,20), labels = seq(2020,2100,20)) +
+  scale_y_continuous(name = "SOMTC (Mg/ha)") +
+  theme_classic() +
+  facet_grid(RCP ~ Model) +
+  scale_color_manual(values = c("#66c2a5", "#fc8d62", "#542788"))
+
+successionAllDf %>%
+  group_by(Time, RCP, Model, Prescription) %>%
+  summarise(SOMTC = mean(SOMTC * 0.01)) %>%
+  filter(Time > 0) %>%
+  pivot_wider(names_from = Time, values_from = SOMTC, names_prefix = "T") %>%
+  select(RCP, Model, Prescription, T10, T80) %>%
+  mutate(T10 = round(T10, 2),
+         T80 = round(T80, 2),
+         Diff = round(T80 - T10, 2)) %>%
+  arrange(Diff)
+  
+successionAllDf %>%
+  filter(Time > 0) %>%
+  group_by(Time, Model, RCP, Prescription) %>%
+  summarise(SOMTC = mean(SOMTC * 0.01), .groups = "drop") %>%
+  group_by(RCP, Model, Prescription,) %>%
+  summarise(mean = mean(SOMTC),
+            sd = sd(SOMTC)) %>%
+  arrange(desc(sd))
+
+statsSOMTC <- successionAllDf %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance", "Resilience", "Transition")),
+         Model = factor(Model, levels = c("LSLV", "HSLV")),
+         RCP = factor(RCP, levels = c("NORM", "HINT"))) %>%
+  filter(Time > 0) %>%
+  group_by(Time, Prescription, Model, RCP) %>%
+  summarise(SOMTC_MgHa = mean(SOMTC * 0.01), .groups = "drop") %>%
+  lm(SOMTC_MgHa ~ Time * Prescription * Model * RCP, data = .) %>%
+  broom::tidy(.) %>%
+  filter(p.value < 0.05) %>%
+  mutate(Response = "SOMTC") %>%
+  select(Response, term, estimate, std.error, statistic, p.value)
+
+ggsave(width = 10, height = 6, dpi = 600,
+      filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Images/Timeseries_SOMTC.png")
+
+# Structural Diversity
+structureAllDf %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance", "Resilience", "Transition"))) %>%
+  group_by(RCP, Prescription, Model, Timestep) %>%
+  summarise(H = mean(H)) %>%
+  filter(Timestep > 0) %>%
+  ggplot(., aes(x = Timestep, y = H, colour = Prescription)) +
+  geom_line(size = 1) +
+  theme_classic() +
+  facet_grid(RCP ~ Model) +
+  scale_x_continuous(name = "AWB", breaks = seq(0,80,20), labels = seq(2020,2100,20)) +
+  scale_y_continuous(name = "H") +
+  scale_color_manual(values = c("#66c2a5", "#fc8d62", "#542788"))
+
+structureAllDf %>%
+  group_by(Timestep, RCP, Model, Prescription) %>%
+  summarise(H = mean(H)) %>%
+  filter(Timestep > 0) %>%
+  pivot_wider(names_from = Timestep, values_from = H, names_prefix = "T") %>%
+  select(RCP, Model, Prescription, T10, T80) %>%
+  mutate(T10 = round(T10, 2),
+         T80 = round(T80, 2),
+         Diff = round(T80 - T10, 2)) %>%
+  arrange(Diff)
+  
+structureAllDf %>%
+  filter(Timestep > 0) %>%
+  group_by(Timestep, Model, RCP, Prescription) %>%
+  summarise(H = mean(H), .groups = "drop") %>%
+  group_by(RCP, Model, Prescription,) %>%
+  summarise(mean = mean(H),
+            sd = sd(H)) %>%
+  arrange(desc(sd))
+
+statsStructure <- structureAllDf %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance", "Resilience", "Transition")),
+         Model = factor(Model, levels = c("LSLV", "HSLV")),
+         RCP = factor(RCP, levels = c("NORM", "HINT"))) %>%
+  filter(Timestep > 0) %>%
+  group_by(Timestep, Prescription, Model, RCP) %>%
+  summarise(H = mean(H), .groups = "drop") %>%
+  lm(H ~ Timestep * Prescription * Model * RCP, data = .) %>%
+  broom::tidy(.) %>%
+  filter(p.value < 0.05) %>%
+  mutate(Response = "Strucure_H") %>%
+  select(Response, term, estimate, std.error, statistic, p.value)
+
+ggsave(width = 10, height = 6, dpi = 600,
+      filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Images/Timeseries_Strucutre_H.png")
+
+# Total C
+totalCDf %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance", "Resilience", "Transition"))) %>%
+  group_by(Prescription, RCP, Model, Timestep) %>%
+  summarise(TotalC = mean(TotalC * 0.01)) %>%
+  filter(Timestep > 0) %>%
+  ggplot(., aes(x = Timestep, y = TotalC, colour = Prescription)) +
+  geom_line(size = 1) +
+  theme_classic() +
+  facet_grid(RCP ~ Model) +
+  scale_x_continuous(name = "Year", breaks = seq(0,80,20), labels = seq(2020,2100,20)) +
+  scale_y_continuous(name = "Total Carbon (Mg/ha)") +
+  scale_color_manual(values = c("#66c2a5", "#fc8d62", "#542788"))
+
+totalCDf %>%
+  group_by(Timestep, RCP, Model, Prescription) %>%
+  summarise(TotalC = mean(TotalC * 0.01)) %>%
+  filter(Timestep > 0) %>%
+  pivot_wider(names_from = Timestep, values_from = TotalC, names_prefix = "T") %>%
+  select(RCP, Model, Prescription, T10, T80) %>%
+  mutate(T10 = round(T10, 2),
+         T80 = round(T80, 2),
+         Diff = round(T80 - T10, 2)) %>%
+  arrange(Diff)
+  
+totalCDf %>%
+  filter(Timestep > 0) %>%
+  group_by(Timestep, Model, RCP, Prescription) %>%
+  summarise(TotalC = mean(TotalC * 0.01), .groups = "drop") %>%
+  group_by(RCP, Model, Prescription,) %>%
+  summarise(mean = mean(TotalC),
+            sd = sd(TotalC)) %>%
+  arrange(desc(sd))
+
+statsTotalC <- totalCDf %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance", "Resilience", "Transition")),
+         Model = factor(Model, levels = c("LSLV", "HSLV")),
+         RCP = factor(RCP, levels = c("NORM", "HINT"))) %>%
+  filter(Timestep > 0) %>%
+  group_by(Timestep, Prescription, Model, RCP) %>%
+  summarise(TotalC_MgHa = mean(TotalC * 0.01), .groups = "drop") %>%
+  lm(TotalC_MgHa ~ Timestep * Prescription * Model * RCP, data = .) %>%
+  broom::tidy(.) %>%
+  filter(p.value < 0.05) %>%
+  mutate(Response = "TotalC") %>%
+  select(Response, term, estimate, std.error, statistic, p.value)
+
+ggsave(width = 10, height = 6, dpi = 600,
+      filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Images/Timeseries_TotalC.png")
+
+# Total Harvest
+harvestAllDf %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance","Resilience","Transition"))) %>%
+  group_by(Time, Prescription, RCP, Model, Run) %>%
+  summarise(Total_Harvest_Mg = sum(Total_Harvest), .groups = "drop") %>%
+  group_by(Time, Prescription, RCP, Model) %>%
+  summarise(Total_Harvest_Mg = mean(Total_Harvest_Mg), .groups = "drop") %>%
+  # convert Mg → Tg (1 Tg = 1 000 000 Mg)
+  mutate(Total_Harvest_Tg = Total_Harvest_Mg / 1e6) %>%
+  ggplot(aes(x = Time, y = Total_Harvest_Tg, colour = Prescription)) +
+  geom_line(size = 1) +
+  scale_x_continuous(name = "Year", breaks = seq(0,80,20), labels = seq(2020,2100,20)) +
+  scale_y_continuous(name = "Biomass Harvested (Tg per 10 years)", breaks = seq(0,10,2.5), labels = seq(0,10,2.5)) +
+  theme_classic() +
+  facet_grid(RCP ~ Model) +
+  scale_color_manual(values = c("#66c2a5","#fc8d62","#542788"))
+
+harvestAllDf %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance","Resilience","Transition"))) %>%
+  group_by(Time, Prescription, RCP, Model, Run) %>%
+  summarise(Total_Harvest_Mg = sum(Total_Harvest), .groups = "drop") %>%
+  group_by(Time, Prescription, RCP, Model) %>%
+  summarise(Total_Harvest_Mg = mean(Total_Harvest_Mg), .groups = "drop") %>%
+  filter(Time > 0) %>%
+  pivot_wider(names_from = Time, values_from = Total_Harvest_Mg, names_prefix = "T") %>%
+  select(RCP, Model, Prescription, T10, T80) %>%
+  mutate(T10 = round(T10 / 1e6, 2),
+         T80 = round(T80 / 1e6, 2),
+         Diff = round(T80 - T10, 2)) %>%
+  arrange(Diff)
+
+harvestAllDf %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance","Resilience","Transition"))) %>%
+  group_by(Time, Prescription, RCP, Model, Run) %>%
+  summarise(Total_Harvest_Mg = sum(Total_Harvest), .groups = "drop") %>%
+  group_by(Time, Prescription, RCP, Model) %>%
+  summarise(Total_Harvest_Mg = mean(Total_Harvest_Mg), .groups = "drop") %>%
+  group_by(RCP, Model, Prescription) %>%
+  summarise(mean_Tg = mean(Total_Harvest_Mg / 1e6, na.rm = TRUE), sd_Tg   = sd(Total_Harvest_Mg / 1e6, na.rm = TRUE), .groups = "drop") %>%
+  arrange(desc(sd_Tg))
+
+statsHarvest <- harvestAllDf %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance", "Resilience", "Transition")),
+         Model = factor(Model, levels = c("LSLV", "HSLV")),
+         RCP = factor(RCP, levels = c("NORM", "HINT"))) %>%
+  filter(Time > 0) %>%
+  group_by(Time, Prescription, Model, RCP) %>%
+  summarise(Total_Harvest_MgHa = mean(Total_Harvest * 0.01), .groups = "drop") %>%
+  lm(Total_Harvest_MgHa ~ Time * Prescription * Model * RCP, data = .) %>%
+  broom::tidy(.) %>%
+  filter(p.value < 0.05) %>%
+  mutate(Response = "TotalHarvest") %>%
+  select(Response, term, estimate, std.error, statistic, p.value)
+
+ggsave(width = 10, height = 6, dpi = 600,
+      filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Images/Timeseries_TotalHarvest.png")
+
+
+# outDir <- "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/Images/Final"
+# cols <- rainbow(10)  # or use colorspace::qualitative_hcl(10) for nicer tones
+# 
+# for (i in 1:10) {
+#   file_path <- file.path(outDir, paste0("PiedmontP_Plot_", i, ".png"))
+#   png(filename = file_path, width = 1200, height = 800, res = 150, bg = "transparent")
+#   plot(Piedmont.shp[1], col = cols[i], main = "")
+#   dev.off()
+# }
+
+
+bind_rows(statsAGB, statsANPP, statsAWB, statsCultural, statsFruit, statsH, statsHarvest, statsNEEC, statsSOMTC, statsStructure, statsTotalC) %>%
+  arrange(Response, p.value) %>%
+  mutate(estimate = round(estimate, 3), std.error = round(std.error, 3), statistic = round(statistic, 2), p.value = scales::pvalue(p.value)) %>%
+  gt() %>%
+  tab_header(title = "Significant Model Terms Across Variables") %>%
+  cols_label(
+    Response = "Response Variable",
+    term = "Model Term",
+    estimate = "Estimate",
+    std.error = "Std. Error",
+    statistic = "t-value",
+    p.value = "p-value"
+  )
+
+```
+
+# Calculate harvesting rates
+
+```{r}
+counties <- c("Caswell", "Person", "Durham", "Alamance", "Orange")
+acres <- c(193293, 141838, 90225, 139175, 129356)
+perc_tim <- c(71, 56, 49, 51, 51)  # not used for this calculation
+stumpage_value <- c(2648658, 2983370, 174205, 2574213, 1213064)
+delivered_value <- c(8866736, 9934773, 846754, 7107018, 3511070)
+
+df <- data.frame(county = counties,
+                 acres = acres,
+                 perc_tim = perc_tim,
+                 stumpage_value = stumpage_value,
+                 delivered_value = delivered_value)
+
+stumpage_per_Mg <- 30 
+df$biomass_Mg <- df$stumpage_value / stumpage_per_Mg
+df$biomass_Tg <- (df$biomass_Mg / 1e6)
+
+total_biomass_Mg <- sum(df$biomass_Mg, na.rm = TRUE)
+total_biomass_Tg <- total_biomass_Mg / 1e6
+avg_biomass_Mg <- mean(df$biomass_Mg, na.rm = TRUE)
+avg_biomass_Tg <- avg_biomass_Mg / 1e6
+
+tenYrTotal <- total_biomass_Tg * 10
+
+df$biomass_per_acre_Mg <- df$biomass_Mg / df$acres
+cat("\nTotal harvested biomass: ", total_biomass_Mg, "Mg (", total_biomass_Tg, "Tg)\n")
+cat("Average per county: ", avg_biomass_Mg, "Mg (", avg_biomass_Tg, "Tg)\n")
+
+
+harvestAllDf %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance","Resilience","Transition"))) %>%
+  group_by(Time, Prescription, RCP, Model, Run) %>%
+  summarise(Total_Harvest_Mg = sum(Total_Harvest), .groups = "drop") %>%
+  group_by(Time, Prescription, RCP, Model) %>%
+  summarise(Total_Harvest_Mg = mean(Total_Harvest_Mg), .groups = "drop") %>%
+  mutate(Total_Harvest_Tg = Total_Harvest_Mg / 1e6) %>%
+  ggplot(aes(x = Time, y = Total_Harvest_Tg, colour = Prescription)) +
+  geom_line(size = 1) +
+  geom_hline(yintercept = tenYrTotal, linetype = "dashed", col = "firebrick", size = 1.2) +
+  scale_x_continuous(name = "Year", breaks = seq(0,80,20), labels = seq(2020,2100,20)) +
+  scale_y_continuous(name = "Biomass Harvested (Tg per 10 years)", breaks = seq(0,10,2.5), labels = seq(0,10,2.5)) +
+  theme_classic() +
+  facet_grid(RCP ~ Model) +
+  scale_color_manual(values = c("#66c2a5","#fc8d62","#542788"))
+
+ggsave(width = 10, height = 6, dpi = 600,
+      filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Images/Total_Harvest_HLINE.png")
+
+harvestAllDf %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance","Resilience","Transition"))) %>%
+  group_by(Time, Prescription, RCP, Model, Run) %>%
+  summarise(Total_Harvest_Mg = sum(Total_Harvest), .groups = "drop") %>%
+  group_by(Time, Prescription, RCP, Model) %>%
+  summarise(Total_Harvest_Mg = mean(Total_Harvest_Mg), .groups = "drop") %>%
+  mutate(Total_Harvest_Tg = Total_Harvest_Mg / 1e6) %>%
+  mutate(ActualHarvest = tenYrTotal,
+         Ratio = Total_Harvest_Tg / ActualHarvest,
+         Label = ifelse(Ratio >= 1, "ABOVE", "BELOW")) %>%
+  ggplot(., aes(x = Time, y = Ratio, fill = Prescription)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  theme_classic() +
+  facet_grid(RCP ~ Model) +
+  scale_fill_manual(values = c("#66c2a5","#fc8d62","#542788"))
+
+
+
+harvestAllDf %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance","Resilience","Transition"))) %>%
+  group_by(Time, Prescription, RCP, Model, Run) %>%
+  summarise(Total_Harvest_Mg = sum(Total_Harvest), .groups = "drop") %>%
+  group_by(Time, Prescription, RCP, Model) %>%
+  summarise(Total_Harvest_Mg = mean(Total_Harvest_Mg), .groups = "drop") %>%
+  mutate(Total_Harvest_Tg = Total_Harvest_Mg / 1e6,
+         ActualHarvest = tenYrTotal,
+         Ratio = Total_Harvest_Tg / ActualHarvest,
+         Diverge_Ratio = Ratio - 1,      # deviation from 1
+         Label = ifelse(Ratio >= 1, "ABOVE", "BELOW")) %>%
+  ggplot(aes(x = Time, y = Diverge_Ratio, fill = Prescription)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  theme_classic() +
+  facet_grid(RCP ~ Model) +
+  scale_fill_manual(values = c("#66c2a5","#fc8d62","#542788")) +
+  scale_y_continuous(labels = function(x) round(x + 1, 2), name = "Ratio")
+```
+
+
+
+
+```{r}
+culturalDf <- culturalAllDf %>%
+  group_by(SpeciesName, RCP, Prescription, Model, Timestep, Run) %>%
+  summarise(Score = mean(Score), .groups = "drop") %>%
+  group_by(RCP, Prescription, Model, Timestep, Run) %>%
+  summarise(Total = mean(Score))
+
+fruitDf <- fruitAllDf %>%
+  group_by(SpeciesName, RCP, Prescription, Model, Timestep, Run) %>%
+  summarise(Score = mean(Score), .groups = "drop") %>%
+  group_by(RCP, Prescription, Model, Timestep, Run) %>%
+  summarise(Total = mean(Score))
+
+structureDf <- structureAllDf %>%
+  group_by(RCP, Prescription, Model, Timestep, Run) %>%
+  summarise(H = mean(H))
+
+harvestDf <- harvestAllDf %>%
+  group_by(Time, Prescription, RCP, Model, Run) %>%
+  summarise(Total_Harvest = sum(Total_Harvest))
+
+# successionAllDf %>% filter(Run == "run2")
+# culturalDf %>% filter(Run == "run2")
+# fruitDf %>% filter(Run == "run2")
+# structureDf %>% filter(Run == "run2")
+# harvestDf %>% filter(Run == "run2")
+# AWBDf %>% filter(Run == "run2")
+# totalCDf %>% filter(Run == "run2")
+# propDiversityAllDf %>% filter(Run == "run2")
+
+
+tradeoffDf <- successionAllDf %>%
+  select(Time, RCP, Model, Prescription, Run, AGB, ANPP, NEEC, SOMTC) %>%
+  inner_join(culturalDf, by = c("Time" = "Timestep", "RCP", "Model", "Prescription", "Run")) %>%
+  rename("Cultural" = "Total") %>%
+  inner_join(fruitDf, by = c("Time" = "Timestep", "RCP", "Model", "Prescription", "Run")) %>%
+  rename("Fruit" = "Total") %>%
+  inner_join(structureDf, by = c("Time" = "Timestep", "RCP", "Model", "Prescription", "Run")) %>%
+  rename("Structure_H" = "H") %>%
+  inner_join(propDiversityAllDf, by = c("Time", "RCP", "Model", "Prescription", "Run")) %>%
+  inner_join(harvestDf, by = c("Time", "Prescription", "RCP", "Model", "Run")) %>%
+  inner_join(AWBDf, by = c("Time" = "Timestep", "Prescription", "RCP", "Model", "Run")) %>%
+  inner_join(totalCDf, by = c("Time" = "Timestep", "RCP", "Prescription", "Model", "Run")) %>%
+  mutate(Benefit_AGB = (AGB - min(.$AGB)) / (max(.$AGB) - min(.$AGB)),
+         Benefit_ANPP = (ANPP - min(.$ANPP)) / (max(.$ANPP) - min(.$ANPP)),
+         Benefit_AWB = (AWB - min(.$AWB)) / (max(.$AWB) - min(.$AWB)),
+         Benefit_CultureTrees = (Cultural - min(.$Cultural)) / (max(.$Cultural) - min(.$Cultural)),
+         Benefit_FruitTrees = (Fruit - min(.$Fruit)) / (max(.$Fruit) - min(.$Fruit)),
+         Benefit_H = (H - min(.$H)) / (max(.$H) - min(.$H)),
+         Benefit_NEEC = 1 - (NEEC - min(.$NEEC)) / (max(.$NEEC) - min(.$NEEC)),
+         Benefit_SOMTC = (SOMTC - min(.$SOMTC)) / (max(.$SOMTC) - min(.$SOMTC)),
+         Benefit_StructureH = (Structure_H - min(.$Structure_H)) / (max(.$Structure_H) - min(.$Structure_H)),
+         Benefit_TotalC = (TotalC - min(.$TotalC)) / (max(.$TotalC) - min(.$TotalC)),
+         Benefit_TotalHarvest = (Total_Harvest - min(.$Total_Harvest)) / (max(.$Total_Harvest) - min(.$Total_Harvest)),
+         
+         Tradeoff_AWB_NEEC = abs(Benefit_AWB - Benefit_NEEC) * (1 / sqrt(2)),
+         Tradeoff_NEEC_AWB = Tradeoff_AWB_NEEC,
+         Tradeoff_AWB_SOMTC = abs(Benefit_AWB - Benefit_SOMTC) * (1 / sqrt(2)),
+         Tradeoff_SOMTC_AWB = Tradeoff_AWB_SOMTC,
+         Tradeoff_AWB_ANPP = abs(Benefit_AWB - Benefit_ANPP) * (1 / sqrt(2)),
+         Tradeoff_ANPP_AWB = Tradeoff_AWB_ANPP,
+         Tradeoff_AWB_Structure = abs(Benefit_AWB - Benefit_StructureH) * (1 / sqrt(2)),
+         Tradeoff_Structure_AWB = Tradeoff_AWB_Structure,
+         Tradeoff_AWB_H = abs(Benefit_AWB - Benefit_H) * (1 / sqrt(2)),
+         Tradeoff_H_AWB = Tradeoff_AWB_H,
+         Tradeoff_AWB_AGB = abs(Benefit_AWB - Benefit_AGB) * (1 / sqrt(2)),
+         Tradeoff_AGB_AWB = Tradeoff_AWB_AGB,
+         Tradeoff_AWB_FruitTrees = abs(Benefit_AWB - Benefit_FruitTrees) * (1 / sqrt(2)),
+         Tradeoff_FruitTrees_AWB = Tradeoff_AWB_FruitTrees,
+         Tradeoff_AWB_CultureTrees = abs(Benefit_AWB - Benefit_CultureTrees) * (1 / sqrt(2)),
+         Tradeoff_CultureTrees_AWB = Tradeoff_AWB_CultureTrees,
+         Tradeoff_AWB_TotalC = abs(Benefit_AWB - Benefit_TotalC) * (1 / sqrt(2)),
+         Tradeoff_TotalC_AWB = Tradeoff_AWB_TotalC,
+         Tradeoff_AWB_TotalHarvest = abs(Benefit_AWB - Benefit_TotalHarvest) * (1 / sqrt(2)),
+         Tradeoff_TotalHarvest_AWB = Tradeoff_AWB_TotalHarvest,
+         
+         Tradeoff_NEEC_SOMTC = abs(Benefit_NEEC - Benefit_SOMTC) * (1 / sqrt(2)),
+         Tradeoff_SOMTC_NEEC = Tradeoff_NEEC_SOMTC,
+         Tradeoff_NEEC_ANPP = abs(Benefit_NEEC - Benefit_ANPP) * (1 / sqrt(2)),
+         Tradeoff_ANPP_NEEC = Tradeoff_NEEC_ANPP,
+         Tradeoff_NEEC_Structure = abs(Benefit_NEEC - Benefit_StructureH) * (1 / sqrt(2)),
+         Tradeoff_Structure_NEEC = Tradeoff_NEEC_Structure,
+         Tradeoff_NEEC_H = abs(Benefit_NEEC - Benefit_H) * (1 / sqrt(2)),
+         Tradeoff_H_NEEC = Tradeoff_NEEC_H,
+         Tradeoff_NEEC_AGB = abs(Benefit_NEEC - Benefit_AGB) * (1 / sqrt(2)),
+         Tradeoff_AGB_NEEC = Tradeoff_NEEC_AGB,
+         Tradeoff_NEEC_FruitTrees = abs(Benefit_NEEC - Benefit_FruitTrees) * (1 / sqrt(2)),
+         Tradeoff_FruitTrees_NEEC = Tradeoff_NEEC_FruitTrees,
+         Tradeoff_NEEC_CultureTrees = abs(Benefit_NEEC - Benefit_CultureTrees) * (1 / sqrt(2)),
+         Tradeoff_CultureTrees_NEEC = Tradeoff_NEEC_CultureTrees,
+         Tradeoff_NEEC_TotalC = abs(Benefit_NEEC - Benefit_TotalC) * (1 / sqrt(2)),
+         Tradeoff_TotalC_NEEC = Tradeoff_NEEC_TotalC,
+         Tradeoff_NEEC_TotalHarvest = abs(Benefit_NEEC - Benefit_TotalHarvest) * (1 / sqrt(2)),
+         Tradeoff_TotalHarvest_NEEC = Tradeoff_NEEC_TotalHarvest,
+         
+         Tradeoff_SOMTC_ANPP = abs(Benefit_SOMTC - Benefit_ANPP) * (1 / sqrt(2)),
+         Tradeoff_ANPP_SOMTC = Tradeoff_SOMTC_ANPP,
+         Tradeoff_SOMTC_Structure = abs(Benefit_SOMTC - Benefit_StructureH) * (1 / sqrt(2)),
+         Tradeoff_Structure_SOMTC = Tradeoff_SOMTC_Structure,
+         Tradeoff_SOMTC_H = abs(Benefit_SOMTC - Benefit_H) * (1 / sqrt(2)),
+         Tradeoff_H_SOMTC = Tradeoff_SOMTC_H,
+         Tradeoff_SOMTC_AGB = abs(Benefit_SOMTC - Benefit_AGB) * (1 / sqrt(2)),
+         Tradeoff_AGB_SOMTC = Tradeoff_SOMTC_AGB,
+         Tradeoff_SOMTC_FruitTrees = abs(Benefit_SOMTC - Benefit_FruitTrees) * (1 / sqrt(2)),
+         Tradeoff_FruitTrees_SOMTC = Tradeoff_SOMTC_FruitTrees,
+         Tradeoff_SOMTC_CultureTrees = abs(Benefit_SOMTC - Benefit_CultureTrees) * (1 / sqrt(2)),
+         Tradeoff_CultureTrees_SOMTC = Tradeoff_SOMTC_CultureTrees,
+         Tradeoff_SOMTC_TotalC = abs(Benefit_SOMTC - Benefit_TotalC) * (1 / sqrt(2)),
+         Tradeoff_TotalC_SOMTC = Tradeoff_SOMTC_TotalC,
+         Tradeoff_SOMTC_TotalHarvest = abs(Benefit_SOMTC - Benefit_TotalHarvest) * (1 / sqrt(2)),
+         Tradeoff_TotalHarvest_SOMTC = Tradeoff_SOMTC_TotalHarvest,
+         
+         Tradeoff_ANPP_Structure = abs(Benefit_ANPP - Benefit_StructureH) * (1 / sqrt(2)),
+         Tradeoff_Structure_ANPP = Tradeoff_ANPP_Structure,
+         Tradeoff_ANPP_H = abs(Benefit_ANPP - Benefit_H) * (1 / sqrt(2)),
+         Tradeoff_H_ANPP = Tradeoff_ANPP_H,
+         Tradeoff_ANPP_AGB = abs(Benefit_ANPP - Benefit_AGB) * (1 / sqrt(2)),
+         Tradeoff_AGB_ANPP = Tradeoff_ANPP_AGB,
+         Tradeoff_ANPP_FruitTrees = abs(Benefit_ANPP - Benefit_FruitTrees) * (1 / sqrt(2)),
+         Tradeoff_FruitTrees_ANPP = Tradeoff_ANPP_FruitTrees,
+         Tradeoff_ANPP_CultureTrees = abs(Benefit_ANPP - Benefit_CultureTrees) * (1 / sqrt(2)),
+         Tradeoff_CultureTrees_ANPP = Tradeoff_ANPP_CultureTrees,
+         Tradeoff_ANPP_TotalC = abs(Benefit_ANPP - Benefit_TotalC) * (1 / sqrt(2)),
+         Tradeoff_TotalC_ANPP = Tradeoff_ANPP_TotalC,
+         Tradeoff_ANPP_TotalHarvest = abs(Benefit_ANPP - Benefit_TotalHarvest) * (1 / sqrt(2)),
+         Tradeoff_TotalHarvest_ANPP = Tradeoff_ANPP_TotalHarvest,
+         
+         Tradeoff_Structure_H = abs(Benefit_StructureH - Benefit_H) * (1 / sqrt(2)),
+         Tradeoff_H_Structure = Tradeoff_Structure_H,
+         Tradeoff_Structure_AGB = abs(Benefit_StructureH - Benefit_AGB) * (1 / sqrt(2)),
+         Tradeoff_AGB_Structure = Tradeoff_Structure_AGB,
+         Tradeoff_Structure_FruitTrees = abs(Benefit_StructureH - Benefit_FruitTrees) * (1 / sqrt(2)),
+         Tradeoff_FruitTrees_Structure = Tradeoff_Structure_FruitTrees,
+         Tradeoff_Structure_CultureTrees = abs(Benefit_StructureH - Benefit_CultureTrees) * (1 / sqrt(2)),
+         Tradeoff_CultureTrees_Structure = Tradeoff_Structure_CultureTrees,
+         Tradeoff_Structure_TotalC = abs(Benefit_StructureH - Benefit_TotalC) * (1 / sqrt(2)),
+         Tradeoff_TotalC_Structure = Tradeoff_Structure_TotalC,
+         Tradeoff_Structure_TotalHarvest = abs(Benefit_StructureH - Benefit_TotalHarvest) * (1 / sqrt(2)),
+         Tradeoff_TotalHarvest_Structure = Tradeoff_Structure_TotalHarvest,
+         
+         Tradeoff_H_AGB = abs(Benefit_H - Benefit_AGB) * (1 / sqrt(2)),
+         Tradeoff_AGB_H = Tradeoff_H_AGB,
+         Tradeoff_H_FruitTrees = abs(Benefit_H - Benefit_FruitTrees) * (1 / sqrt(2)),
+         Tradeoff_FruitTrees_H = Tradeoff_H_FruitTrees,
+         Tradeoff_H_CultureTrees = abs(Benefit_H - Benefit_CultureTrees) * (1 / sqrt(2)),
+         Tradeoff_CultureTrees_H = Tradeoff_H_CultureTrees,
+         Tradeoff_H_TotalC = abs(Benefit_H - Benefit_TotalC) * (1 / sqrt(2)),
+         Tradeoff_TotalC_H = Tradeoff_H_TotalC,
+         Tradeoff_H_TotalHarvest = abs(Benefit_H - Benefit_TotalHarvest) * (1 / sqrt(2)),
+         Tradeoff_TotalHarvest_H = Tradeoff_H_TotalHarvest,
+         
+         Tradeoff_AGB_FruitTrees = abs(Benefit_AGB - Benefit_FruitTrees) * (1 / sqrt(2)),
+         Tradeoff_FruitTrees_AGB = Tradeoff_AGB_FruitTrees,
+         Tradeoff_AGB_CultureTrees = abs(Benefit_AGB - Benefit_CultureTrees) * (1 / sqrt(2)),
+         Tradeoff_CultureTrees_AGB = Tradeoff_AGB_CultureTrees,
+         Tradeoff_AGB_TotalC = abs(Benefit_AGB - Benefit_TotalC) * (1 / sqrt(2)),
+         Tradeoff_TotalC_AGB = Tradeoff_AGB_TotalC,
+         Tradeoff_AGB_TotalHarvest = abs(Benefit_AGB - Benefit_TotalHarvest) * (1 / sqrt(2)),
+         Tradeoff_TotalHarvest_AGB = Tradeoff_AGB_TotalHarvest,
+         
+         Tradeoff_FruitTrees_CultureTrees = abs(Benefit_FruitTrees - Benefit_CultureTrees) * (1 / sqrt(2)),
+         Tradeoff_CultureTrees_FruitTrees = Tradeoff_FruitTrees_CultureTrees,
+         Tradeoff_FruitTrees_TotalC = abs(Benefit_FruitTrees - Benefit_TotalC) * (1 / sqrt(2)),
+         Tradeoff_TotalC_FruitTrees = Tradeoff_FruitTrees_TotalC,
+         Tradeoff_FruitTrees_TotalHarvest = abs(Benefit_FruitTrees - Benefit_TotalHarvest) * (1 / sqrt(2)),
+         Tradeoff_TotalHarvest_FruitTrees = Tradeoff_FruitTrees_TotalHarvest,
+         
+         Tradeoff_CultureTrees_TotalC = abs(Benefit_CultureTrees - Benefit_TotalC) * (1 / sqrt(2)),
+         Tradeoff_TotalC_CultureTrees = Tradeoff_CultureTrees_TotalC,
+         Tradeoff_CultureTrees_TotalHarvest = abs(Benefit_CultureTrees - Benefit_TotalHarvest) * (1 / sqrt(2)),
+         Tradeoff_TotalHarvest_CultureTrees = Tradeoff_CultureTrees_TotalHarvest,
+         
+         Tradeoff_TotalC_TotalHarvest = abs(Benefit_TotalC - Benefit_TotalHarvest) * (1 / sqrt(2)),
+         Tradeoff_TotalHarvest_TotalC = Tradeoff_TotalC_TotalHarvest) %>%
+  select(Time, Run, RCP, Model, Prescription,
+Tradeoff_NEEC_AWB,
+Tradeoff_AWB_NEEC,
+Tradeoff_AWB_SOMTC,
+Tradeoff_SOMTC_AWB,
+Tradeoff_AWB_ANPP,
+Tradeoff_ANPP_AWB,
+Tradeoff_AWB_Structure,
+Tradeoff_Structure_AWB,
+Tradeoff_AWB_H,
+Tradeoff_H_AWB,
+Tradeoff_AWB_AGB,
+Tradeoff_AGB_AWB,
+Tradeoff_AWB_FruitTrees,
+Tradeoff_FruitTrees_AWB,
+Tradeoff_AWB_CultureTrees,
+Tradeoff_CultureTrees_AWB,
+Tradeoff_AWB_TotalC, 
+Tradeoff_TotalC_AWB,
+Tradeoff_AWB_TotalHarvest,
+Tradeoff_TotalHarvest_AWB,
+Tradeoff_NEEC_SOMTC,
+Tradeoff_SOMTC_NEEC,
+Tradeoff_NEEC_ANPP,
+Tradeoff_ANPP_NEEC,
+Tradeoff_NEEC_Structure,
+Tradeoff_Structure_NEEC,
+Tradeoff_NEEC_H,
+Tradeoff_H_NEEC,
+Tradeoff_NEEC_AGB,
+Tradeoff_AGB_NEEC,
+Tradeoff_NEEC_FruitTrees,
+Tradeoff_FruitTrees_NEEC,
+Tradeoff_NEEC_CultureTrees,
+Tradeoff_CultureTrees_NEEC,
+Tradeoff_NEEC_TotalC, 
+Tradeoff_TotalC_NEEC,
+Tradeoff_NEEC_TotalHarvest,
+Tradeoff_TotalHarvest_NEEC,
+Tradeoff_SOMTC_ANPP,
+Tradeoff_ANPP_SOMTC,
+Tradeoff_SOMTC_Structure,
+Tradeoff_Structure_SOMTC,
+Tradeoff_SOMTC_H,
+Tradeoff_H_SOMTC,
+Tradeoff_SOMTC_AGB,
+Tradeoff_AGB_SOMTC,
+Tradeoff_SOMTC_FruitTrees,
+Tradeoff_FruitTrees_SOMTC,
+Tradeoff_SOMTC_CultureTrees,
+Tradeoff_CultureTrees_SOMTC,
+Tradeoff_SOMTC_TotalC,
+Tradeoff_TotalC_SOMTC,
+Tradeoff_SOMTC_TotalHarvest,
+Tradeoff_TotalHarvest_SOMTC,
+Tradeoff_ANPP_Structure,
+Tradeoff_Structure_ANPP,
+Tradeoff_ANPP_H,
+Tradeoff_H_ANPP,
+Tradeoff_ANPP_AGB,
+Tradeoff_AGB_ANPP,
+Tradeoff_ANPP_FruitTrees,
+Tradeoff_FruitTrees_ANPP,
+Tradeoff_ANPP_CultureTrees,
+Tradeoff_CultureTrees_ANPP,
+Tradeoff_ANPP_TotalC,
+Tradeoff_TotalC_ANPP,
+Tradeoff_ANPP_TotalHarvest,
+Tradeoff_TotalHarvest_ANPP,
+Tradeoff_Structure_H,
+Tradeoff_H_Structure,
+Tradeoff_Structure_AGB,
+Tradeoff_AGB_Structure,
+Tradeoff_Structure_FruitTrees,
+Tradeoff_FruitTrees_Structure,
+Tradeoff_Structure_CultureTrees,
+Tradeoff_CultureTrees_Structure,
+Tradeoff_Structure_TotalC,
+Tradeoff_TotalC_Structure,
+Tradeoff_Structure_TotalHarvest,
+Tradeoff_TotalHarvest_Structure,
+Tradeoff_H_AGB,
+Tradeoff_AGB_H,
+Tradeoff_H_FruitTrees, 
+Tradeoff_FruitTrees_H,
+Tradeoff_H_CultureTrees, 
+Tradeoff_CultureTrees_H,
+Tradeoff_H_TotalC,
+Tradeoff_TotalC_H,
+Tradeoff_H_TotalHarvest, 
+Tradeoff_TotalHarvest_H,
+Tradeoff_AGB_FruitTrees,
+Tradeoff_FruitTrees_AGB,
+Tradeoff_AGB_CultureTrees,
+Tradeoff_CultureTrees_AGB,
+Tradeoff_AGB_TotalC, 
+Tradeoff_TotalC_AGB,
+Tradeoff_AGB_TotalHarvest,
+Tradeoff_TotalHarvest_AGB,
+Tradeoff_FruitTrees_CultureTrees,
+Tradeoff_CultureTrees_FruitTrees,
+Tradeoff_FruitTrees_TotalC,
+Tradeoff_TotalC_FruitTrees,
+Tradeoff_FruitTrees_TotalHarvest,
+Tradeoff_TotalHarvest_FruitTrees,
+Tradeoff_CultureTrees_TotalC,
+Tradeoff_TotalC_CultureTrees,
+Tradeoff_CultureTrees_TotalHarvest,
+Tradeoff_TotalHarvest_CultureTrees,
+Tradeoff_TotalC_TotalHarvest,
+Tradeoff_TotalHarvest_TotalC)
+```
+
+
+
+
+```{r}
+tradeoffDfLong <- tradeoffDf %>%
+  pivot_longer(cols = starts_with("Tradeoff"), names_to = "Tradeoff_Type", values_to = "Value") %>%
+  separate(Tradeoff_Type, into = c("Prefix", "Var1", "Var2"), sep = "_") %>%
+  group_by(Time, RCP, Model, Prescription, Var1, Var2) %>%
+  summarise(Value = mean(Value), .groups = "drop")
+```
+
+
+
+```{r}
+df <- tradeoffDf %>%
+  pivot_longer(cols = starts_with("Tradeoff"), names_to = "Tradeoff_Type", values_to = "Value") %>%
+  separate(Tradeoff_Type, into = c("prefix", "Var1", "Var2"), sep = "_") %>%
+  group_by(Time, Run, RCP, Model, Prescription, Var1, Var2) %>%
+  summarise(Value = mean(Value)) %>%
+  mutate(x = factor(Var1, levels = c("AGB","ANPP","AWB","CultureTrees","FruitTrees","H","NEEC","SOMTC","Structure","TotalC","TotalHarvest")),
+         y = factor(Var2, levels = c("AGB","ANPP","AWB","CultureTrees","FruitTrees","H","NEEC","SOMTC","Structure","TotalC","TotalHarvest")),
+         Prescription = factor(Prescription, levels = c("Resistance", "Resilience", "Transition")),
+         Model = factor(Model, levels = c("HSLV", "LSLV"))) %>%
+  group_by(Run, RCP, Model, Prescription) %>%
+  summarise(total = sum(Value) / 2, .groups = "drop") %>%
+  mutate(Scenario = paste(RCP, Model, Prescription, sep = "_"))
+
+
+# Run the model to check significance and get post-hoc letters
+model <- aov(total ~ Scenario, data = df)
+tukey <- agricolae::HSD.test(model, "Scenario")
+tukey_letters <- tukey$groups %>%
+  rownames_to_column("Scenario") %>%
+  select(Scenario, groups)
+
+# Mean cumulative tradeoff score
+df %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance","Resilience","Transition")), Scenario = paste(RCP, Model, Prescription, sep = "_")) %>%
+  group_by(Scenario, Prescription, Model, RCP, Run) %>%
+  summarise(Total = sum(total), .groups = "drop") %>%
+  group_by(Scenario, Prescription, Model, RCP) %>%
+  summarise(
+    n = n(),
+    Total_Tradeoff = mean(Total, na.rm = TRUE),
+    SD_runs = sd(Total, na.rm = TRUE),
+    SE_sum = SD_runs / sqrt(n),
+    .groups = "drop") %>%
+  left_join(tukey_letters, by = "Scenario") %>%
+  ggplot(., aes(x = Prescription, y = Total_Tradeoff, fill = Prescription)) +
+  geom_bar(stat = "identity") +
+  geom_errorbar(aes(ymin = Total_Tradeoff - SE_sum, ymax = Total_Tradeoff + SE_sum), width = 0.2, linewidth = 0.6) +
+  geom_text(aes(y = Total_Tradeoff + SE_sum - 0.2 * max(Total_Tradeoff), label = groups), fontface = "bold", color = "black") +
+  geom_text(aes(y = Total_Tradeoff + SE_sum + 0.22 * max(Total_Tradeoff), label = round(Total_Tradeoff, 1)), color = "black") +
+  facet_grid(RCP ~ Model) +
+  theme_classic() +
+  scale_fill_manual(values = c("#66c2a5", "#fc8d62", "#542788")) +
+  scale_y_continuous(name = "Cumulative Tradeoff Score", expand = expansion(mult = c(0, 0.1)))
+
+ggsave(width = 10, height = 6, dpi = 600,
+      filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Images/Cumulative_Tradeoff_All.png")
+
+df %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance","Resilience","Transition")), Scenario = paste(RCP, Model, Prescription, sep = "_")) %>%
+  group_by(Prescription, Model, RCP, Run) %>%
+  summarise(Total = sum(total), .groups = "drop") %>%
+  group_by(Model) %>%
+  summarise(
+    n = n(),
+    Total_Tradeoff = mean(Total, na.rm = TRUE),
+    SD_runs = sd(Total, na.rm = TRUE),
+    SE_sum = SD_runs / sqrt(n),
+    .groups = "drop") %>%
+  ggplot(., aes(x = Model, y = Total_Tradeoff, fill = Model)) +
+  geom_bar(stat = "identity") +
+  geom_errorbar(aes(ymin = Total_Tradeoff - SE_sum, ymax = Total_Tradeoff + SE_sum), width = 0.2, linewidth = 0.6) +
+  theme_classic() +
+  scale_y_continuous(name = "Cumulative Tradeoff Score", expand = expansion(mult = c(0, 0.1)))
+
+df %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance","Resilience","Transition")), Scenario = paste(RCP, Model, Prescription, sep = "_")) %>%
+  group_by(Prescription, Model, RCP, Run) %>%
+  summarise(Total = sum(total), .groups = "drop") %>%
+  group_by(RCP) %>%
+  summarise(
+    n = n(),
+    Total_Tradeoff = mean(Total, na.rm = TRUE),
+    SD_runs = sd(Total, na.rm = TRUE),
+    SE_sum = SD_runs / sqrt(n),
+    .groups = "drop") %>%
+  ggplot(., aes(x = RCP, y = Total_Tradeoff, fill = RCP)) +
+  geom_bar(stat = "identity") +
+  geom_errorbar(aes(ymin = Total_Tradeoff - SE_sum, ymax = Total_Tradeoff + SE_sum), width = 0.2, linewidth = 0.6) +
+  theme_classic() +
+  scale_y_continuous(name = "Cumulative Tradeoff Score", expand = expansion(mult = c(0, 0.1)))
+
+tradeoffDf %>%
+  pivot_longer(cols = starts_with("Tradeoff"), names_to = "Tradeoff_Type", values_to = "Value") %>%
+  separate(Tradeoff_Type, into = c("prefix", "Var1", "Var2"), sep = "_") %>%
+  group_by(Time, Run, RCP, Model, Prescription, Var1, Var2) %>%
+  summarise(Value = mean(Value)) %>%
+  mutate(x = factor(Var1, levels = c("AGB","ANPP","AWB","CultureTrees","FruitTrees","H","NEEC","SOMTC","Structure","TotalC","TotalHarvest")),
+         y = factor(Var2, levels = c("AGB","ANPP","AWB","CultureTrees","FruitTrees","H","NEEC","SOMTC","Structure","TotalC","TotalHarvest")),
+         Prescription = factor(Prescription, levels = c("Resistance", "Resilience", "Transition")),
+         Model = factor(Model, levels = c("HSLV", "LSLV"))) %>%
+  group_by(Prescription, RCP, Model) %>%
+  arrange(Prescription, RCP, Model, Time) %>%
+  mutate(Cumulative_Tradeoff = cumsum(Value), Scenario = paste(Prescription, Model, RCP, sep = "_")) %>%
+  ggplot(., aes(x = Time, y = Cumulative_Tradeoff, col = Scenario)) +
+  geom_line(size = 1) +
+  theme_classic()
+
+# Cumulative tradeoff score timeseries by Scenario
+tradeoffDf %>%
+  pivot_longer(cols = starts_with("Tradeoff"), names_to = "Tradeoff_Type", values_to = "Value") %>%
+  separate(Tradeoff_Type, into = c("prefix", "Var1", "Var2"), sep = "_") %>%
+  group_by(Time, Run, RCP, Model, Prescription, Var1, Var2) %>%
+  summarise(Value = mean(Value), .groups = "drop") %>%
+  group_by(Time, Run, RCP, Model, Prescription) %>%
+  summarise(Total_Tradeoff = sum(Value) / 2, .groups = "drop") %>%
+  arrange(RCP, Model, Prescription, Run, Time) %>%
+  group_by(Run, RCP, Model, Prescription) %>%
+  mutate(Cumulative_Tradeoff = cumsum(Total_Tradeoff),
+         Scenario = paste(Prescription, Model, RCP, sep = "_")) %>%
+  ungroup() %>%
+  group_by(Time, Scenario) %>%
+  summarise(Mean_Cumulative = mean(Cumulative_Tradeoff, na.rm = TRUE), SD = sd(Cumulative_Tradeoff, na.rm = TRUE), SE = SD / sqrt(n()), .groups = "drop") %>%
+  # mutate(Scenario = paste(RCP, Model, Prescription, sep = "_")) %>%
+  ggplot(., aes(x = Time, y = Mean_Cumulative, color = Scenario)) +
+  geom_line(linewidth = 1) +
+  # geom_ribbon(aes(ymin = Mean_Cumulative - SE, ymax = Mean_Cumulative + SE, fill = Prescription), alpha = 0.2, color = NA) +
+  # facet_grid(RCP ~ Model) +
+  theme_classic()
+
+# Plot of Cumulative Tradeoff Rank as a Timeseries
+ranked_df <- tradeoffDf %>%
+  pivot_longer(cols = starts_with("Tradeoff"), names_to = "Tradeoff_Type", values_to = "Value") %>%
+  separate(Tradeoff_Type, into = c("prefix", "Var1", "Var2"), sep = "_") %>%
+  group_by(Time, Run, RCP, Model, Prescription, Var1, Var2) %>%
+  summarise(Value = mean(Value), .groups = "drop") %>%
+  group_by(Time, Run, RCP, Model, Prescription) %>%
+  summarise(Total_Tradeoff = sum(Value) / 2, .groups = "drop") %>%
+  arrange(RCP, Model, Prescription, Run, Time) %>%
+  group_by(Run, RCP, Model, Prescription) %>%
+  mutate(Cumulative_Tradeoff = cumsum(Total_Tradeoff),
+         Scenario = paste(Prescription, Model, RCP, sep = "_")) %>%
+  ungroup() %>%
+  group_by(Time, Scenario) %>%
+  summarise(Mean_Cumulative = mean(Cumulative_Tradeoff, na.rm = TRUE), SD = sd(Cumulative_Tradeoff, na.rm = TRUE), SE = SD / sqrt(n()), .groups = "drop") %>%
+  group_by(Time) %>%
+  mutate(Rank = min_rank(desc(Mean_Cumulative))) %>%
+  ungroup()
+final_order <- ranked_df %>%
+  filter(Time == max(Time)) %>%
+  arrange(Rank) %>%
+  select(Scenario, Rank)
+ranked_df <- ranked_df %>%
+  mutate(Scenario = factor(Scenario, levels = final_order$Scenario))
+
+ggplot(ranked_df, aes(x = Time, y = Rank, color = Scenario, group = Scenario)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2) +
+  scale_y_reverse(breaks = final_order$Rank, labels = final_order$Scenario ) +
+  theme_classic() +
+  labs(y = "Scenario (ranked by cumulative tradeoff)", color = "Scenario") +
+  scale_x_continuous(name = "Year", breaks = seq(0,80,20), labels = seq(2020,2100,20)) +
+  theme(legend.position = "none", panel.grid.minor = element_blank(), panel.grid.major.y = element_line(linetype = "dotted", color = "gray80"))
+
+# Timeseries plotting the change in cumulative ES tradeoffs
+start_ids <- ranked_df %>%
+  filter(Time == min(Time)) %>%
+  arrange(Rank) %>%
+  mutate(Scenario_ID = row_number()) %>%
+  select(Scenario, Scenario_ID)
+
+# 2️⃣ Join IDs back to ranked data
+ranked_df <- ranked_df %>% left_join(start_ids, by = "Scenario")
+
+# 🧩 Add legend lookup table
+legend_labels <- ranked_df %>%
+  filter(Time == max(Time)) %>%
+  distinct(Scenario, Scenario_ID) %>%
+  arrange(Scenario_ID) %>%
+  mutate(Legend_Label = paste0(Scenario_ID, " = ", Scenario)) %>%
+  select(Scenario, Legend_Label)
+
+# 3️⃣ Define start and end label positions
+start_labels <- ranked_df %>% group_by(Scenario) %>% slice_min(Time, with_ties = FALSE)
+
+end_labels <- ranked_df %>% group_by(Scenario) %>% slice_max(Time, with_ties = FALSE)
+
+ggplot(ranked_df %>% left_join(legend_labels, by = "Scenario"), aes(x = Time, y = Rank, color = Legend_Label, group = Scenario)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2) +
+  geom_text(data = end_labels, aes(label = Scenario_ID), hjust = -1, vjust = 0.4, color = "black", size = 4) +
+  scale_y_reverse(breaks = final_order$Rank, labels = final_order$Rank) +
+  scale_color_discrete(name = "Scenario (by number)", labels = legend_labels$Legend_Label) +
+  scale_x_continuous(name = "Year", breaks = seq(0, 80, 20), labels = seq(2020, 2100, 20), expand = expansion(mult = c(0.05, 0.1))) +
+  theme_classic() +
+  labs(y = "Cumulative Tradeoff Rankings") +
+  theme(legend.position = "bottom", panel.grid.minor = element_blank(),
+        panel.grid.major.y = element_line(linetype = "dotted", color = "gray80"), legend.text = element_text(size = 9))
+
+
+ggsave(width = 10, height = 6, dpi = 300,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Images/Cumulative_Tradeoff_Ranked_Timeseries.png")
+
+# Cumulative Biomass Mortality Timeseries by Scenario
+hurricaneDf %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance","Resilience","Transition"))) %>%
+  group_by(Prescription, Model, RCP, Time) %>%
+  summarise(Total_Mortality = sum(BiomassMortality), .groups = "drop") %>%
+  group_by(Prescription, RCP, Model) %>%
+  arrange(Prescription, RCP, Model, Time) %>%
+  mutate(CumulativeMortality = cumsum(Total_Mortality), Scenario = paste(Prescription, Model, RCP, sep = "_")) %>%
+  ggplot(., aes(x = Time, y = CumulativeMortality, col = Scenario)) +
+  geom_line(size = 1) +
+  theme_classic() +
+  scale_x_continuous(name = "Year", breaks = seq(0,80,20), labels = seq(2020,2100,20)) +
+  scale_y_continuous(name = "Cumulative Mortality (Pg)", breaks = seq(0,3e3,1e3), labels = seq(0,3,1)) +
+  facet_grid(~ RCP)
+
+# # Merge letters with summary data
+# plot_data <- df %>%
+#   left_join(tukey_letters, by = "Model_RCP") %>%
+#   mutate(ModelBase = Model)  # for coloring
+# plot_data <- plot_data %>%
+#   group_by(Model, RCP, Prescription, Model_RCP, groups) %>%
+#   summarise(total = mean(total))
+# 
+# ggplot(plot_data, aes(x = Model, y = total, fill = Model)) +
+#   geom_bar(stat = "identity") +
+#   geom_text(aes(label = groups), vjust = 1.5, color = "black", fontface = "bold") +
+#   geom_text(aes(label = round(total, 1)), vjust = -1, color = "black") +
+#   facet_grid(RCP ~ Prescription) +
+#   scale_fill_manual(values = modelColours,
+#                     labels = c("BNU-ESM"="HSHV", "MIROC-ESM-CHEM"="HSLV", "MRI-CGCM3"="LSHV", "CCSM4"="LSLV", "Historical"="Historical")) +
+#   theme_classic() +
+#   labs(fill = "Future Scenario", x = "Model", y = "Cumulative Tradeoff Score") +
+#   geom_text(aes(label = round(total, 1)), vjust = -1, color = "black") +
+#   ylim(0,100)
+
+# HEATMAP AVERAGED ACROSS PRESCRIPTION TYPE
+tradeoffDfLong %>%
+  group_by(Model, RCP, Prescription, Var1, Var2) %>%
+  summarise(Value = sum(Value), .groups = "drop") %>%
+  group_by(Model, RCP, Var1, Var2) %>%
+  summarise(total = mean(Value), .groups = "drop") %>%
+  ggplot(., aes(x = Var1, y = Var2, fill = total)) +
+  geom_tile() +
+  geom_text(aes(label = round(total, 2)), color = "white", size = 4, na.rm = TRUE) +
+  scale_fill_gradient(low = "#ade8f4", high = "#03045e", name = "Tradeoff Value") +
+  facet_grid(RCP ~ Model) +
+  theme_classic() +
+  scale_y_discrete(limits = rev(levels(tradeoffDfLong$Var2)))
+
+
+ggsave(width = 25, height = 10, dpi = 600,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Images/Heatmap_Model_RCP.png")
+
+# HEATMAP AVERAGED ACROSS RCP
+tradeoffDfLong %>%
+  group_by(Model, RCP, Prescription, Var1, Var2) %>%
+  summarise(Value = sum(Value), .groups = "drop") %>%
+  group_by(Model, Prescription, Var1, Var2) %>%
+  summarise(total = mean(Value), .groups = "drop")  %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance", "Resilience", "Transition")),
+         Model = factor(Model, levels = c("HSLV", "LSLV"))) %>%
+  ggplot(., aes(x = Var1, y = Var2, fill = total)) +
+  geom_tile() +
+  geom_text(aes(label = round(total, 2)), color = "white", size = 4, na.rm = TRUE) +
+  scale_fill_gradient(low = "#ade8f4", high = "#03045e", name = "Tradeoff Value") +
+  facet_grid(Model ~ Prescription) +
+  theme_classic() +
+  scale_y_discrete(limits = rev(levels(tradeoffDfLong$Var2)))
+
+ggsave(width = 25, height = 10, dpi = 600,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Images/Heatmap_Prescription_Model.png")
+
+# HEATMAP AVERAGED ACROSS GCM
+tradeoffDfLong %>%
+  group_by(Model, RCP, Prescription, Var1, Var2) %>%
+  summarise(Value = sum(Value), .groups = "drop") %>%
+  group_by(RCP, Prescription, Var1, Var2) %>%
+  summarise(total = mean(Value), .groups = "drop") %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance", "Resilience", "Transition"))) %>%
+  ggplot(., aes(x = Var1, y = Var2, fill = total)) +
+  geom_tile() +
+  geom_text(aes(label = round(total, 2)), color = "white", size = 4, na.rm = TRUE) +
+  scale_fill_gradient(low = "#ade8f4", high = "#03045e", name = "Tradeoff Value") +
+  facet_grid(RCP ~ Prescription) +
+  theme_classic() +
+  scale_y_discrete(limits = rev(levels(tradeoffDfLong$Var2)))
+
+ggsave(width = 25, height = 10, dpi = 600,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Images/Heatmap_RCP_Prescription.png")
+
+# HEATMAP BY PRESCRIPTION
+tradeoffDfLong %>%
+  group_by(Model, RCP, Prescription, Var1, Var2) %>%
+  summarise(Value = sum(Value), .groups = "drop") %>%
+  group_by(Prescription, Var1, Var2) %>%
+  summarise(total = mean(Value), .groups = "drop") %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance", "Resilience", "Transition"))) %>%
+  ggplot(., aes(x = Var1, y = Var2, fill = total)) +
+  geom_tile() +
+  geom_text(aes(label = round(total, 2)), color = "white", size = 4, na.rm = TRUE) +
+  scale_fill_gradient(low = "#ade8f4", high = "#03045e", name = "Tradeoff Value") +
+  facet_grid(~ Prescription) +
+  theme_classic() +
+  scale_y_discrete(limits = rev(levels(tradeoffDfLong$Var2)))
+
+ggsave(width = 25, height = 10, dpi = 600,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Images/Heatmap_Prescription.png")
+
+# HEATMAP BY MODEL
+tradeoffDfLong %>%
+  group_by(Model, RCP, Prescription, Var1, Var2) %>%
+  summarise(Value = sum(Value), .groups = "drop") %>%
+  group_by(Model, Var1, Var2) %>%
+  summarise(total = mean(Value), .groups = "drop") %>%
+  mutate(Model = factor(Model, levels = c("LSLV", "HSLV"))) %>%
+  ggplot(., aes(x = Var1, y = Var2, fill = total)) +
+  geom_tile() +
+  geom_text(aes(label = round(total, 2)), color = "white", size = 4, na.rm = TRUE) +
+  scale_fill_gradient(low = "#ade8f4", high = "#03045e", name = "Tradeoff Value") +
+  facet_grid(~ Model) +
+  theme_classic() +
+  scale_y_discrete(limits = rev(levels(tradeoffDfLong$Var2)))
+
+ggsave(width = 25, height = 10, dpi = 600,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Images/Heatmap_Model.png")
+
+# HEATMAP BY RCP
+tradeoffDfLong %>%
+  group_by(Model, RCP, Prescription, Var1, Var2) %>%
+  summarise(Value = sum(Value), .groups = "drop") %>%
+  group_by(RCP, Var1, Var2) %>%
+  summarise(total = mean(Value), .groups = "drop") %>%
+  mutate(RCP = factor(RCP, levels = c("NORM", "HINT"))) %>%
+  ggplot(., aes(x = Var1, y = Var2, fill = total)) +
+  geom_tile() +
+  geom_text(aes(label = round(total, 2)), color = "white", size = 4, na.rm = TRUE) +
+  scale_fill_gradient(low = "#ade8f4", high = "#03045e", name = "Tradeoff Value") +
+  facet_grid(~ RCP) +
+  theme_classic() +
+  scale_y_discrete(limits = rev(levels(tradeoffDfLong$Var2)))
+
+ggsave(width = 25, height = 10, dpi = 600,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Images/Heatmap_RCP.png")
+
+# Cumulative totals by ES averaged across Prescription
+tradeoffDfLong %>%
+  group_by(RCP, Model, Prescription, Var1) %>%
+  summarise(total = sum(Value), .groups = "drop") %>%
+  group_by(RCP, Model, Var1) %>%
+  summarise(total = mean(total), .groups = "drop") %>%
+  ggplot(., aes(x = Var1, y = total, fill = Var1)) +
+  geom_bar(stat = "identity", col = "black") +
+  theme_classic() +
+  facet_grid(RCP ~ Model)
+
+ggsave(width = 25, height = 10, dpi = 600,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Images/Cumulative_Tradeoff_Model_RCP.png")
+
+tradeoffDfLong %>%
+  group_by(RCP, Model, Prescription, Var1) %>%
+  summarise(total = sum(Value), .groups = "drop") %>%
+  group_by(RCP, Model, Var1) %>%
+  summarise(total = mean(total), .groups = "drop") %>%
+  arrange(total)
+
+# Cumulative totals by ES averaged across RCP
+tradeoffDfLong %>%
+  group_by(RCP, Model, Prescription, Var1) %>%
+  summarise(total = sum(Value), .groups = "drop") %>%
+  group_by(Prescription, Model, Var1) %>%
+  summarise(total = mean(total), .groups = "drop") %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance", "Resilience", "Transition"))) %>%
+  ggplot(., aes(x = Var1, y = total, fill = Var1)) +
+  geom_bar(stat = "identity", col = "black") +
+  theme_classic() +
+  facet_grid(Model ~ Prescription)
+
+ggsave(width = 25, height = 10, dpi = 600,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Images/Cumulative_Tradeoff_Model_Prescription.png")
+
+tradeoffDfLong %>%
+  group_by(RCP, Model, Prescription, Var1) %>%
+  summarise(total = sum(Value), .groups = "drop") %>%
+  group_by(Prescription, Model, Var1) %>%
+  summarise(total = mean(total), .groups = "drop") %>%
+  arrange(total)
+
+# Cumulative totals by ES averaged across Model
+tradeoffDfLong %>%
+  group_by(RCP, Model, Prescription, Var1) %>%
+  summarise(total = sum(Value), .groups = "drop") %>%
+  group_by(Prescription, RCP, Var1) %>%
+  summarise(total = mean(total), .groups = "drop") %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance", "Resilience", "Transition"))) %>%
+  ggplot(., aes(x = Var1, y = total, fill = Var1)) +
+  geom_bar(stat = "identity", col = "black") +
+  theme_classic() +
+  facet_grid(RCP ~ Prescription)
+
+ggsave(width = 25, height = 10, dpi = 600,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Images/Cumulative_Tradeoff_Prescription_RCP.png")
+
+tradeoffDfLong %>%
+  group_by(RCP, Model, Prescription, Var1) %>%
+  summarise(total = sum(Value), .groups = "drop") %>%
+  group_by(Prescription, RCP, Var1) %>%
+  summarise(total = mean(total), .groups = "drop") %>%
+  arrange(total)
+
+# CUMULATIVE TRADEOFFS BY PRESCRIPTION
+tradeoffDfLong %>%
+  group_by(RCP, Model, Prescription, Var1) %>%
+  summarise(total = sum(Value), .groups = "drop") %>%
+  group_by(Prescription, Var1) %>%
+  summarise(total = mean(total), .groups = "drop") %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance", "Resilience", "Transition"))) %>%
+  ggplot(., aes(x = Var1, y = total, fill = Var1)) +
+  geom_bar(stat = "identity", col = "black") +
+  theme_classic() +
+  ylab("Tradeoff Score") +
+  facet_grid(~ Prescription) +
+  theme(
+    axis.text.x = element_blank(),
+    axis.text.y = element_text(size = 15),
+    axis.title.y = element_text(size = 20),
+    axis.title.x = element_blank(),
+    strip.text = element_text(size = 20),
+    legend.position = "none"
+  )
+
+ggsave(width = 18, height = 8, dpi = 600,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Images/Cumulative_Tradeoff_Prescription.png")
+
+tradeoffDfLong %>%
+  group_by(RCP, Model, Prescription, Var1) %>%
+  summarise(total = sum(Value), .groups = "drop") %>%
+  group_by(Prescription, Var1) %>%
+  summarise(total = mean(total), .groups = "drop") %>%
+  arrange(desc(total))
+
+tradeoffDfLong %>%
+  group_by(RCP, Model, Prescription, Var1) %>%
+  summarise(total = sum(Value), .groups = "drop") %>%
+  group_by(Prescription, Var1) %>%
+  summarise(total = mean(total), .groups = "drop") %>%
+  group_by(Prescription) %>%
+  summarise(Tootal = mean(total), sd = sd(total))
+
+tradeoffDfLong %>%
+  group_by(RCP, Model, Prescription, Var1) %>%
+  summarise(total = sum(Value), .groups = "drop") %>%
+  group_by(Prescription, Var1) %>%
+  summarise(total = sum(total), .groups = "drop") %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance", "Resilience", "Transition"))) %>%
+  ggplot(., aes(x = Var1, y = total, fill = Var1)) +
+  geom_bar(stat = "identity", col = "black") +
+  theme_classic() +
+  facet_grid(~ Prescription)
+
+# CUMULATIVE TRADEOFFS BY MODEL
+tradeoffDfLong %>%
+  group_by(RCP, Model, Prescription, Var1) %>%
+  summarise(total = sum(Value), .groups = "drop") %>%
+  group_by(Model, Var1) %>%
+  summarise(total = mean(total), .groups = "drop") %>%
+  mutate(Model = factor(Model, levels = c("LSLV", "HSLV"))) %>%
+  ggplot(., aes(x = Var1, y = total, fill = Var1)) +
+  geom_bar(stat = "identity", col = "black") +
+  theme_classic() +
+  facet_grid(~ Model)
+
+tradeoffDfLong %>%
+  group_by(RCP, Model, Prescription, Var1) %>%
+  summarise(total = sum(Value), .groups = "drop") %>%
+  group_by(Model, Var1) %>%
+  summarise(total = mean(total), .groups = "drop") %>%
+  group_by(Model) %>%
+  summarise(Total = mean(total), sd = sd(total))
+
+ggsave(width = 10, height = 6, dpi = 600,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Images/Cumulative_Tradeoff_Model.png")
+
+tradeoffDfLong %>%
+  group_by(RCP, Model, Prescription, Var1) %>%
+  summarise(total = sum(Value), .groups = "drop") %>%
+  group_by(Model, Var1) %>%
+  summarise(total = mean(total), .groups = "drop") %>%
+  arrange(desc(total))
+
+# CUMULATIVE TRADEOFFS BY RCP
+tradeoffDfLong %>%
+  group_by(RCP, Model, Prescription, Var1) %>%
+  summarise(total = sum(Value), .groups = "drop") %>%
+  group_by(RCP, Var1) %>%
+  summarise(total = mean(total), .groups = "drop") %>%
+  mutate(RCP = factor(RCP, levels = c("NORM", "HINT"))) %>%
+  ggplot(., aes(x = Var1, y = total, fill = Var1)) +
+  geom_bar(stat = "identity", col = "black") +
+  theme_classic() +
+  facet_grid(~ RCP)
+
+ggsave(width = 10, height = 6, dpi = 600,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Images/Cumulative_Tradeoff_RCP.png")
+
+tradeoffDfLong %>%
+  group_by(RCP, Model, Prescription, Var1) %>%
+  summarise(total = sum(Value), .groups = "drop") %>%
+  group_by(RCP, Var1) %>%
+  summarise(total = mean(total), .groups = "drop") %>%
+  arrange(desc(total))
+
+# VARIABILTY PLOT
+plot_data <- bind_rows(
+  tradeoffDfLong %>%
+    filter(Var1 != "TotalHarvest") %>%
+    group_by(RCP, Model, Prescription, Var1) %>%
+    summarise(total = sum(Value), .groups = "drop") %>%
+    group_by(RCP, Var1) %>%
+    summarise(total = mean(total), .groups = "drop") %>%
+    group_by(RCP) %>%
+    summarise(Total = mean(total), sd = sd(total)) %>%
+    mutate(Type = "WITHOUT"),
+
+  tradeoffDfLong %>%
+    filter(Var1 != "TotalHarvest") %>%
+    group_by(RCP, Model, Prescription, Var1) %>%
+    summarise(total = sum(Value), .groups = "drop") %>%
+    group_by(Prescription, Var1) %>%
+    summarise(total = mean(total), .groups = "drop") %>%
+    group_by(Prescription) %>%
+    summarise(Total = mean(total), sd = sd(total)) %>%
+    mutate(Type = "WITHOUT"),
+
+  tradeoffDfLong %>%
+    group_by(RCP, Model, Prescription, Var1) %>%
+    summarise(total = sum(Value), .groups = "drop") %>%
+    group_by(Model, Var1) %>%
+    summarise(total = mean(total), .groups = "drop") %>%
+    group_by(Model) %>%
+    summarise(Total = mean(total), sd = sd(total)) %>%
+    mutate(Type = "WITHOUT"),
+
+  tradeoffDfLong %>%
+    filter(Var1 != "TotalHarvest") %>%
+    group_by(RCP, Model, Prescription, Var1) %>%
+    summarise(total = sum(Value), .groups = "drop") %>%
+    group_by(RCP, Var1) %>%
+    summarise(total = mean(total), .groups = "drop") %>%
+    group_by(RCP) %>%
+    summarise(Total = mean(total), sd = sd(total)) %>%
+    mutate(Type = "WITH"),
+
+  tradeoffDfLong %>%
+    group_by(RCP, Model, Prescription, Var1) %>%
+    summarise(total = sum(Value), .groups = "drop") %>%
+    group_by(Prescription, Var1) %>%
+    summarise(total = mean(total), .groups = "drop") %>%
+    group_by(Prescription) %>%
+    summarise(Total = mean(total), sd = sd(total)) %>%
+    mutate(Type = "WITH"),
+
+  tradeoffDfLong %>%
+    group_by(RCP, Model, Prescription, Var1) %>%
+    summarise(total = sum(Value), .groups = "drop") %>%
+    group_by(Model, Var1) %>%
+    summarise(total = mean(total), .groups = "drop") %>%
+    group_by(Model) %>%
+    summarise(Total = mean(total), sd = sd(total)) %>%
+    mutate(Type = "WITH")
+) %>%
+  mutate(RCP = coalesce(RCP, Prescription, Model)) %>%
+  select(-Prescription, -Model) %>%
+  rename(Scenario = RCP)
+
+color_map <- c(
+  "HINT" = "#08589e",
+  "LSLV" = "#2b8cbe",
+  "Resistance" = "#4eb3d3",
+  "Transition" = "#7bccc4",
+  "HSLV" = "#a8ddb5",
+  "NORM" = "#ccebc5",
+  "Resilience" = "#f0f9e8"
+)
+
+
+plot_data <- plot_data %>%
+  mutate(Scenario_facet = tidytext::reorder_within(Scenario, -sd, Type))
+
+
+ggplot(plot_data, aes(x = Scenario_facet, y = Total, fill = Scenario)) +
+  geom_col() +
+  geom_errorbar(
+    aes(ymin = Total - sd, ymax = Total + sd),
+    width = 0.2, linewidth = 0.6
+  ) +
+  scale_fill_manual(values = color_map, breaks = sort(names(color_map))) +
+  facet_wrap(~Type, scales = "free_x", ncol = 1) +
+  tidytext::scale_x_reordered() +
+  theme_classic(base_size = 13) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "right"
+  ) +
+  labs(
+    x = "Scenario",
+    y = "Mean Tradeoff Score",
+    fill = "Scenario"
+  )
+
+ggsave(width = 10, height = 6, dpi = 600,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Images/Variability_Plot.png")
+
+# lm_df <- tradeoffDf %>%
+#   mutate(Model = sub("_[^_]+$", "", Model)) %>%
+#   pivot_longer(cols = starts_with("Tradeoff"), names_to = "Tradeoff_Type", values_to = "Value") %>%
+#   separate(Tradeoff_Type, into = c("prefix", "Var1", "Var2"), sep = "_") %>%
+#   group_by(Time, Run, RCP, Model, Prescription, Var1, Var2) %>%
+#   summarise(Value = mean(Value)) %>%
+#   mutate(x = factor(Var1, levels = c("AGB","ANPP","AWB","CultureTrees","FruitTrees","H","NEEC","SOMTC","Structure","TotalC","TotalHarvest")),
+#          y = factor(Var2, levels = c("AGB","ANPP","AWB","CultureTrees","FruitTrees","H","NEEC","SOMTC","Structure","TotalC","TotalHarvest")),
+#          Model = factor(Model, levels = c("LSLV", "HSLV"))) %>%
+#   group_by(RCP, Model, Prescription) %>%
+#   summarise(total = sum(Value) / 2, .groups = "drop") %>%
+#   mutate(Scenario = paste(RCP, Model, Prescription, sep = "_"))
+# 
+# # Run the model to check significance and get post-hoc letters
+# model <- aov(total ~ Scenario, data = lm_df)
+# tukey <- agricolae::HSD.test(model, "Scenario")
+# tukey_letters <- tukey$groups %>%
+#   rownames_to_column("Model_RCP") %>%
+#   select(Model_RCP, groups)
+
+harvestAllDf %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance", "Resilience", "Transition"))) %>%
+  group_by(RCP, Model, Prescription, Run) %>%
+  summarise(Total_Harvest_Mg = sum(Total_Harvest, na.rm = TRUE), .groups = "drop") %>%
+  group_by(RCP, Model, Prescription) %>%
+  summarise(Mean_Harvest_Mg = mean(Total_Harvest_Mg, na.rm = TRUE), .groups = "drop") %>%
+  mutate(Mean_Harvest_Tg = Mean_Harvest_Mg / 1e6) %>%
+  ggplot(aes(x = Model, y = Mean_Harvest_Tg, fill = Prescription)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  scale_y_continuous(name = "Total Harvest (Tg)") +
+  theme_classic() +
+  facet_grid(~ RCP) +
+  scale_fill_manual(values = c("#66c2a5", "#fc8d62", "#542788"))
+
+
+ggsave(width = 10, height = 6, dpi = 600,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Images/Cumulative_Harvest.png")
+
+harvestAllDf %>%
+  group_by(RCP, Model, Prescription, Run) %>%
+  summarise(Total_Harvest_Mg = sum(Total_Harvest, na.rm = TRUE), .groups = "drop") %>%
+  group_by(RCP, Model, Prescription) %>%
+  summarise(Mean_Harvest_Mg = mean(Total_Harvest_Mg, na.rm = TRUE), .groups = "drop") %>%
+  mutate(Mean_Harvest_Tg = Mean_Harvest_Mg / 1e6) %>%
+  arrange(desc(Mean_Harvest_Tg))
+
+
+
+
+```
+
+
+
+
+
+```{r}
+# CUMULATIVE TRADEOFFS BY PRESCRIPTION
+tradeoffDfLong %>%
+  group_by(RCP, Model, Prescription, Var1) %>%
+  summarise(total = sum(Value), .groups = "drop") %>%
+  group_by(Prescription, Var1) %>%
+  summarise(total = mean(total), .groups = "drop") %>%
+  arrange(desc(total))
+
+# CUMULATIVE TRADEOFFS BY MODEL
+tradeoffDfLong %>%
+  group_by(RCP, Model, Prescription, Var1) %>%
+  summarise(total = sum(Value), .groups = "drop") %>%
+  group_by(Model, Var1) %>%
+  summarise(total = mean(total), .groups = "drop") %>%
+  arrange(desc(total))
+
+# CUMULATIVE TRADEOFFS BY RCP
+tradeoffDfLong %>%
+  group_by(RCP, Model, Prescription, Var1) %>%
+  summarise(total = sum(Value), .groups = "drop") %>%
+  group_by(RCP, Var1) %>%
+  summarise(total = mean(total), .groups = "drop") %>%
+  mutate(RCP = factor(RCP, levels = c("NORM", "HINT")))
+
+```
+
+# Maps
+
+```{r}
+directory <- "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/LISA"
+files <- list.files(directory, pattern = "_top25\\.csv$", full.names = TRUE)
+dfList <- list()
+for (file in files) {
+  df <- data.table::fread(file)
+  name <- basename(file)
+  name <- sub("^([^_]*_[^_]*_[^_]*).*$", "\\1", name)
+  df$Scenario <- name
+  dfList[[name]] <- df
+}
+
+mapsDf <- bind_rows(dfList)
+
+
+ggplot(mapsDf) +
+  geom_sf(data = Piedmont.shp, fill = "grey95", color = "black", linewidth = 0.3) +
+  geom_raster(aes(x = x, y = y, fill = orig_value)) +
+  scale_fill_viridis_c(name = "Tradeoff Score") +
+  facet_wrap(~ Scenario, ncol = 4) +
+  theme_classic() +
+  theme(strip.text = element_text(size = 12, face = "bold"))
+
+ggsave(width = 15, height = 10, dpi = 600,
+      filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Images/Final_Cumulative_Maps.png")
+
+
+
+
+shapefile <- st_read("C:/Users/lagoodal/Desktop/Ecoregion Level 3 Full/Full/nc_eco_l3.shp") %>% st_transform(., crs = crs(templateRaster))
+plot(shapefile[1], col = NA, border = c("black", "black", "black", "black"))
+
+
+
+
+
+
+
+n <- nrow(shapefile)
+
+# generate distinct colors
+border_cols <- rainbow(n)
+
+plot(shapefile[1], border = border_cols, lwd = 2)
+
+```
+cumulativeStormDf <- data.table::fread("D:/Hurricane_LANDIS/hurricaneCumulative.csv")
+
+cumulativeStormDf %>%
+  mutate(Scenario = paste(Prescription, RCP, Model, sep = "_")) %>%
+  ggplot(.) +
+  geom_raster(aes(x = x, y = y, fill = total_hurricanes)) +
+  geom_sf(data = Piedmont.shp, fill = NA, color = "black", linewidth = 0.4) +
+  scale_fill_viridis_c() +
+  coord_sf() +
+  theme_classic() +
+  facet_wrap(~ Scenario)
+
+# windSpeedDf <- data.table::fread("D:/Hurricane_LANDIS/windspeedsDf.csv") %>%
+#   separate(Scenario, into = c("Prescription", "Model", "RCP"), sep = "_") %>%
+#   mutate(Scenario = paste(Prescription, RCP, Model, sep = "_"))
+
+
+ggplot(windSpeedDf) +
+  geom_raster(aes(x = x, y = y, fill = windspeed)) +
+  geom_sf(data = Piedmont.shp, fill = NA, color = "black", linewidth = 0.4) +
+  scale_fill_viridis_c() +
+  coord_sf() +
+  theme_classic() +
+  facet_wrap(~ Scenario)
+
+cumulativeStormDf %>%
+  mutate(Scenario = paste(Prescription, RCP, Model, sep = "_")) %>%
+  inner_join(windSpeedDf, by = c("x", "y", "Scenario")) %>%
+  filter(windspeed >= 209) %>%
+  ggplot(.) +
+  geom_raster(aes(x = x, y = y, fill = windspeed)) +
+  geom_sf(data = Piedmont.shp, fill = NA, color = "black", linewidth = 0.4) +
+  scale_fill_viridis_c() +
+  coord_sf() +
+  theme_classic() +
+  facet_wrap(~ Scenario)
+  
+
+#   
+# hurricane_events <- hurricaneDf %>%
+#   # keep only events that actually affected the study area, if desired
+#   filter(ImpactsStudyArea) %>%                      
+#   group_by(RCP, Model, Prescription, Run, Time, HurricaneNumber) %>%
+#   summarise(MaxWS = max(LandfallMaxWindSpeed, na.rm = TRUE), .groups = "drop") %>%
+#   mutate(
+#     Hurricane_Category = case_when(
+#       MaxWS >= 119 & MaxWS <= 153 ~ "1",
+#       MaxWS >= 154 & MaxWS <= 177 ~ "2",
+#       MaxWS >= 178 & MaxWS <= 208 ~ "3",
+#       MaxWS >= 209 & MaxWS <= 251 ~ "4",
+#       MaxWS > 251                   ~ "5",
+#       TRUE                          ~ "TS"
+#     )
+#   )
+# 
+#   
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

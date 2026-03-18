@@ -1,0 +1,498 @@
+---
+title: "Untitled"
+output: pdf_document
+date: "2024-10-29"
+---
+
+```{r}
+library(tidyverse)
+library(terra)
+library(sf)
+library(topmodel)
+library(soiltexture)
+```
+
+
+
+```{r}
+countiesNC <- st_read("C:/Users/lagoodal/Desktop/nc_eco_l3/North_Carolina_State_and_County_Boundary_Polygons.shp")
+threeCounties <- countiesNC %>% filter(County %in% c("Anson", "Montgomery", "Richmond")) %>%
+  st_union(.) %>%
+  st_as_sf(.) %>%
+  st_transform(., crs = "EPSG:26917")
+
+plot(threeCounties)
+
+# st_write(threeCounties,
+#          dsn = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Three_Counties_Rasters/Shapefile/threeCounties.shp")
+```
+
+# Soil (C:N, Sand etc. from SoilGrid portal)
+
+```{r}
+# Soil C:N
+# Read in soil carbon raster and transform the 3 counties shapefile to match
+soilRast <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Soil Grid Data/soilGrid.tif")
+testShpfile <- threeCounties %>% st_transform(., crs = crs(soilRast))
+
+# Crop, mask and project soil raster
+soilRast <- soilRast %>% terra::crop(., testShpfile) %>% mask(., testShpfile)
+soilRast[is.na(soilRast)] <- 0
+soilRast <- terra::project(soilRast, "EPSG:26917", method = "near")
+
+# Create a template raster
+templateRaster <- rast(extent = soilRast, resolution = 70.71068, crs = "EPSG:26917")
+
+# Resample the raster to get it to the resolution that we want
+soilRast <- resample(soilRast, templateRaster, method = "near")
+
+# Convert values from t/ha to g/m2
+values(soilRast) <- values(soilRast) * 100
+
+# Starting C:N ratios 
+SOM1surfC <- soilRast
+SOM1soilC <- soilRast
+SOM2C <- soilRast
+SOM3C <- soilRast
+SOM1surfN <- SOM1surfC
+SOM1soilN <- SOM1soilC
+SOM2N <- SOM2C
+SOM3N <- SOM3C
+
+# Change the values
+values(SOM1surfC) <- values(soilRast) * 0.01
+values(SOM1surfN) <- values(SOM1surfC) * 0.1
+values(SOM1soilC) <- values(soilRast) * 0.02
+values(SOM1soilN) <- values(SOM1soilC) * 0.1
+values(SOM2C) <- values(soilRast) * 0.59
+values(SOM2N) <- values(SOM2C) * 0.04
+values(SOM3C) <- values(soilRast) * 0.38
+values(SOM3N) <- values(SOM2C) * 0.118
+
+values(SOM1surfC) <- ifelse(is.na(values(SOM1soilC)), 1, values(SOM1surfC))
+values(SOM1surfC) <- ifelse(values(SOM1soilC) == 0, 1, values(SOM1surfC))
+values(SOM1surfN) <- ifelse(is.na(values(SOM1soilC)), 1, values(SOM1surfN))
+values(SOM1surfN) <- ifelse(values(SOM1soilN) == 0, 1, values(SOM1surfN))
+values(SOM1soilC) <- ifelse(is.na(values(SOM1soilC)), 1.1, values(SOM1soilC))
+values(SOM1soilC) <- ifelse(values(SOM1soilC) == 0, 1.1, values(SOM1soilC))
+values(SOM1soilN) <- ifelse(is.na(values(SOM1soilN)), 1.1, values(SOM1soilN))
+values(SOM1soilN) <- ifelse(values(SOM1soilN) == 0, 1.1, values(SOM1soilN))
+values(SOM2C) <- ifelse(is.na(values(SOM2C)), 1.1, values(SOM2C))
+values(SOM2C) <- ifelse(values(SOM2C) == 0, 1.1, values(SOM2C))
+values(SOM2N) <- ifelse(is.na(values(SOM2N)), 0.1, values(SOM2N))
+values(SOM2N) <- ifelse(values(SOM2N) == 0, 0.1, values(SOM2N))
+values(SOM3C) <- ifelse(is.na(values(SOM3C)), 1.1, values(SOM3C))
+values(SOM3C) <- ifelse(values(SOM3C) == 0, 1.1, values(SOM3C))
+values(SOM3N) <- ifelse(is.na(values(SOM3N)), 0.1, values(SOM3N))
+values(SOM3N) <- ifelse(values(SOM3N) == 0, 0.1, values(SOM3N))
+
+writeRaster(SOM1surfC,
+            "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Rasters/SOM1surfC.tif",
+            datatype = "FLT4S",
+            NAflag = 0.1,
+            overwrite = TRUE)
+writeRaster(SOM1surfN,
+            "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Rasters/SOM1surfN.tif",
+            datatype = "FLT4S",
+            NAflag = 0.1,
+            overwrite = TRUE)
+writeRaster(SOM1soilC,
+            "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Rasters/SOM1soilC.tif",
+            datatype = "FLT4S",
+            NAflag = 1.1,
+            overwrite = TRUE)
+writeRaster(SOM1soilN,
+            "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Rasters/SOM1soilN.tif",
+            datatype = "FLT4S",
+            NAflag = 0.1,
+            overwrite = TRUE)
+writeRaster(SOM2C,
+            "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Rasters/SOM2C.tif",
+            datatype = "FLT4S",
+            NAflag = 1.1,
+            overwrite = TRUE)
+writeRaster(SOM2N,
+            "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Rasters/SOM2N.tif",
+            datatype = "FLT4S",
+            NAflag = 0.1,
+            overwrite = TRUE)
+writeRaster(SOM3C,
+            "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Rasters/SOM3C.tif",
+            datatype = "FLT4S",
+            NAflag = 1.1,
+            overwrite = TRUE)
+writeRaster(SOM3N,
+            "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Rasters/SOM3N.tif",
+            datatype = "FLT4S",
+            NAflag = 0.1,
+            overwrite = TRUE)
+
+# Clay, Sand and Silt
+folder_path <- "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Soil Grid Data/"
+raster_files <- list.files(folder_path, pattern = "Clay", full.names = TRUE)
+clay <- c(lapply(raster_files, rast))
+clay <- clay[[1]] + clay[[2]] + clay[[3]]
+raster_files <- list.files(folder_path, pattern = "Sand", full.names = TRUE)
+sand <- c(lapply(raster_files, rast))
+sand <- sand[[1]] + sand[[2]] + sand[[3]]
+raster_files <- list.files(folder_path, pattern = "Silt", full.names = TRUE)
+silt <- c(lapply(raster_files, rast))
+silt <- silt[[1]] + silt[[2]] + silt[[3]]
+
+# Create list of soil rasters, then crop, mask and project
+soilContent <- list(clay, sand, silt)
+soilContent <- lapply(soilContent, function(x) crop(x, testShpfile))
+soilContent <- lapply(soilContent, function(x) mask(x, testShpfile))
+soilContent <- lapply(soilContent, function(x) terra::project(x, soilRast, method = "near"))
+
+# Stack the rasters and get percent values per cell
+soilContent <- c(soilContent[[1]], soilContent[[2]], soilContent[[3]])
+totalSoilContent <- sum(soilContent)
+soilContent <- (soilContent / totalSoilContent)
+
+values(soilContent[[1]]) <- ifelse(is.na(values(soilContent[[1]])), 0, values(soilContent[[1]]))
+values(soilContent[[2]]) <- ifelse(is.na(values(soilContent[[2]])), 0, values(soilContent[[2]]))
+values(soilContent[[3]]) <- ifelse(is.na(values(soilContent[[3]])), 0, values(soilContent[[3]]))
+
+plot(soilContent)
+
+writeRaster(soilContent[[1]],
+            "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Three_Counties_Rasters/ClayPercent.tif",
+            datatype = "FLT4S",
+            NAflag = 0,
+            overwrite = TRUE)
+writeRaster(soilContent[[2]],
+            "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Three_Counties_Rasters/SandPercent.tif",
+            datatype = "FLT4S",
+            NAflag = 0,
+            overwrite = TRUE)
+writeRaster(soilContent[[3]],
+            "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Three_Counties_Rasters/SiltPercent.tif",
+            datatype = "FLT4S",
+            NAflag = 0,
+            overwrite = TRUE)
+```
+
+
+
+```{r}
+mapUnits <- read_sf("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Soil Grid Data/gSSURGO_NC.gdb", layer = "MUPOLYGON")
+mapUnits <- mapUnits %>% st_make_valid(.)
+mapUnits <- mapUnits %>% st_transform(., "EPSG:26917")
+mapUnits <- mapUnits %>% st_intersection(., threeCounties.Shp)
+mapUnits$ID <- 1:nrow(mapUnits)
+
+# Component
+component <- st_read(dsn = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Soil Grid Data/gSSURGO_NC.gdb",
+                     layer = "component",
+                     quiet = TRUE) %>%
+  filter(mukey %in% mapUnits$MUKEY) %>%
+  select(comppct_r, cokey, mukey, drainagecl, slope_r)
+
+# Horizon
+horizon <- st_read(dsn = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Soil Grid Data/gSSURGO_NC.gdb",
+                   layer = "chorizon",
+                   quiet = TRUE) %>%
+  filter(cokey %in% component$cokey)
+
+# Value1
+valu1 <- st_read(dsn = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Soil Grid Data/gSSURGO_NC.gdb",
+                 layer = "Valu1",
+                 quiet = TRUE) %>%
+  filter(mukey %in% mapUnits$MUKEY)
+
+# Restrictions
+restrictions <- st_read(dsn = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Soil Grid Data/gSSURGO_NC.gdb",
+                        layer = "corestrictions",
+                        quiet = TRUE) %>%
+  filter(cokey %in% component$cokey) %>%
+  group_by(cokey) %>%
+  summarise(soilDepth = min(resdept_r), .groups = "keep")
+component <- left_join(component, restrictions, by = "cokey")
+
+# Make NA soil depth to 200cm, maybe change to the median/average?
+component[is.na(component$soilDepth), "soilDepth"] <- median(component$soilDepth, na.rm = TRUE)
+
+# Drainage table
+drainageDf <- data.frame(drainagecl = c("Excessively drained", "Somewhat excessively drained", "Well drained", "Moderately well drained", "Somewhat well drained", "Poorly wdrained", "Very poorly drained"),
+           drain_coef = c(1,0.83,0.66,0.5,0.33,0.167,0))
+
+component$soilDrain <- drainageDf$drain_coef[match(component$drainagecl, drainageDf$drainagecl)]
+
+# For the remaining SSURGO data we need to extract data from each horizon and then aggregate
+# up to the component layer and then up again to the map unit
+
+# Take the weighted average of variables by the horizon thickness for each component
+# and then join with components
+component <- horizon %>%
+  mutate(hzthk_r = ifelse(!is.na(hzthk_r), hzthk_r, hzdepb_r - hzdept_r)) %>%
+  select(cokey, hzthk_r, wthirdbar_r, wfifteenbar_r, sandtotal_r, claytotal_r, ksat_r) %>%
+  group_by(cokey) %>%
+  summarise(across(where(is.numeric),
+                   ~ weighted.mean(., w = hzthk_r, na.rm = TRUE))) %>%
+  mutate(across(wthirdbar_r:claytotal_r, ~replace_na(.x, replace = 1.0))) %>%
+  mutate(across(c(wthirdbar_r:claytotal_r), .fns = ~ `*`(.x, 0.01))) %>%
+  right_join(component, by = "cokey") %>%
+  mutate(across(where(is.double), ~replace_na(.x, 0.001))) %>%
+  mutate(across(where(is.integer), ~as.double(replace_na(.x, 1)))) %>%
+  mutate(wthirdbar_r = ifelse(wthirdbar_r <= wfifteenbar_r, wfifteenbar_r + 0.02, wthirdbar_r))
+
+# Add the data to the mapunit layer
+mapunits_data <- component %>%
+  group_by(mukey) %>%
+  summarise(across(c(wthirdbar_r, wfifteenbar_r, sandtotal_r, claytotal_r, ksat_r, soilDepth, soilDrain, slope_r),
+                   ~ weighted.mean(., w = comppct_r, na.rm = TRUE))) %>%
+  right_join(mapUnits, by = c("mukey" = "MUKEY")) %>%
+  rename(MUKEY = mukey) %>%
+  st_sf()
+
+#----BASEFLOW----#
+# Read in a DEM and calculate slope
+threeCountiesDEM <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Soil Grid Data/DEM.tif")
+testShpfile <- testShpfile %>% st_transform(., crs = crs(threeCountiesDEM))
+threeCountiesDEM <- crop(threeCountiesDEM, testShpfile)
+threeCountiesDEM <- mask(threeCountiesDEM, testShpfile)
+threeCountiesDEM <- threeCountiesDEM %>% project(., soilRast, method = "near")
+
+# https://github.com/cran/dynatopmodel/blob/master/R/upslope_area.r
+# Function copied from the above webpage 
+upslope.area <- function(dem, log=TRUE, atb=FALSE, deg=0.1, fill.sinks=TRUE)
+{
+  # check
+  if(xres(dem)!=yres(dem))
+  {
+    # stop("Raster has differing x and y cell resolutions. Check that it is in a projected coordinate system (e.g. UTM) and use raster::projectRaster to reproject to one if not. Otherwise consider using raster::resample")
+  }
+  # any sinks still present may give strange results
+  #  sink(file="e:/junk/sink.txt")
+  #  on.exit(sink(NULL))
+  if(fill.sinks)
+  {
+    # use capture.output to supress the function console output
+    capture.output(dem <- invisible(raster::setValues(dem, topmodel::sinkfill(raster::as.matrix(dem), res=xres(dem), degree=deg))))
+  }
+  topidx <- topmodel::topidx(raster::as.matrix(dem), res=xres(dem))
+
+  a <- raster::setValues(dem, topidx$area)
+  if(log)
+  {
+    a <- log(a)
+  }
+  if(atb)
+  {
+    atb <- raster::setValues(dem, topidx$atb)
+    # add the topographic index ln(a/tanB)
+    a <- addLayer(a, atb)
+    names(a)<-c("a", "atb")
+  }
+  return(a)
+}
+
+# Calculate upslope area and then topogrpahuc wetness index (twi)
+slope <- terrain(threeCountiesDEM, v = "slope", unit = "radians")
+upslopeRast <- upslope.area(threeCountiesDEM)
+twi <- log(upslopeRast / tan(slope))
+baseflow <- ifelse(values(twi) > 15, 0, (1 - values(twi) / 15) * (0.5 - 0))
+
+# Higher TWI = higher water content = less baseflow
+baseflowRast <- twi
+values(baseflowRast) <- baseflow
+values(baseflowRast)[values(baseflowRast) < 0.01] <- 0.01
+values(baseflowRast)[values(baseflowRast) > 1] <- 1
+values(baseflowRast) <- ifelse(is.na(values(baseflowRast)), 0, values(baseflowRast))
+
+writeRaster(baseflowRast,
+            "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Three_Counties_Rasters/Baseflow.tif",
+            datatype = "FLT4S",
+            NAflag = 0,
+            overwrite = TRUE)
+
+#----STORMFLOW----#
+# For stormflow (runoff), use Table 3.4 and eq. 3.2 in https://www.vub.be/WetSpa/downloads/WetSpa_manual.pdf
+soil_s0_table <- data.frame(
+  soil_type = c("Sand", "Loamy sand", "Sandy loam", "Loam", "Silt loam", "Silt", "Sandy clay loam", "Clay loam", "Silty clay loam", "Sandy clay", "Silty clay", "Clay"),
+  code = 1:12,
+  s0 = c(0.68, 0.65, 0.62, 0.59, 0.56, 0.53, 0.5, 0.47, 0.44, 0.41, 0.38, 0.35)
+)
+
+soil_slope_table <- data.frame(
+  soil_type = c("Sand", "Loamy sand", "Sandy loam", "Loam", "Silt loam", "Silt", "Sandy clay loam", "Clay loam", "Silty clay loam", "Sandy clay", "Silty clay", "Clay"),
+  soil_type_short = c("Sa", "LoSa", "SaLo", "Lo", "SiLo", "Si", "SaClLo", "ClLo", "SiClLo", "SaCl", "SiCl", "Cl"),
+  code = 1:12,
+  slope1 = c(0.03, 0.07, 0.10, 0.13, 0.17, 0.20, 0.23, 0.27, 0.30, 0.33, 0.37, 0.40),
+  slope2 = c(0.07, 0.11, 0.14, 0.17, 0.21, 0.24, 0.27, 0.31, 0.34, 0.37, 0.41, 0.44),
+  slope3 = c(0.13, 0.17, 0.20, 0.23, 0.27, 0.30, 0.33, 0.37, 0.40, 0.43, 0.47, 0.50),
+  slope4 = c(0.25, 0.29, 0.32, 0.35, 0.39, 0.42, 0.45, 0.49, 0.52, 0.55, 0.59, 0.62)
+)
+
+mapunits_data$OID <- 1:nrow(mapunits_data)
+
+soil_mat <- data.frame(OID = mapunits_data$OID,
+                       SAND = mapunits_data$sandtotal_r * 100,
+                       CLAY = mapunits_data$claytotal_r * 100,
+                       SILT = 100 - mapunits_data$sandtotal_r * 100 - mapunits_data$claytotal_r * 100) %>%
+  na.omit()
+
+# classify soils by texture
+texture <- data.frame(soiltexture::TT.points.in.classes(tri.data = soil_mat, class.sys = "USDA.TT"))
+names(texture)  <- soil_slope_table[match(names(texture), soil_slope_table$soil_type_short), "code"]
+
+for(i in 1:nrow(texture)){
+  soil_mat$class[i] <- as.numeric(names(texture)[which(texture[i, ] %in% c(1,2,3))])
+}
+
+# join data
+mapunits_data <- left_join(mapunits_data, soil_mat[c("OID", "class")], by = c("OID"))
+mapunits_data$class <- as.numeric(mapunits_data$class)
+
+# rasterize the soil class data
+class_rast <- terra::rasterize(mapunits_data, soilRast, field = "class")
+
+s0_rast <- terra::classify(class_rast, rcl = soil_s0_table[, c(2,3)])
+
+# Calculate slope
+slope_percent <- terra::app(slope, function(x) tan(x * (2*pi/360)) * 100)
+
+#bin into groups 1:4
+slope_bin <- terra::classify(slope_percent, c(-1, 0.5, 5, 10, 1000)) + 1
+
+s_rast <- slope_percent
+c0_rast <- slope_percent
+# this is annoying and surely the wrong way to do this, but we need to get a single value for s depending on
+# the slope and soil type. Probably can be done with terra::app and the right function, but I couldn't figure it out
+for(i in 1:4){
+  values(s_rast)[which(values(slope_bin) == i)] <- soil_slope_table[values(class_rast)[which(values(slope_bin) == i)], i+3]
+  values(c0_rast)[which(values(slope_bin) == i)] <- soil_slope_table[values(class_rast)[which(values(slope_bin) == i)], 4]
+}
+
+stormflowRast <- c0_rast + (1-c0_rast) * (s_rast / (s_rast + s0_rast))
+values(stormflowRast) <- ifelse(is.na(values(stormflowRast)), 0, values(stormflowRast))
+plot(stormflowRast)
+
+writeRaster(stormflowRast,
+            "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Three_Counties_Rasters/Stormflow.tif",
+            datatype = "FLT4S",
+            NAflag = 0,
+            overwrite = TRUE)
+
+#----FIELD CAPACITY----#
+fieldCapacityRast <- rasterize(mapunits_data, soilRast, field = "wthirdbar_r", fun = "mean")
+values(fieldCapacityRast) <- ifelse(is.na(values(fieldCapacityRast)), 0, values(fieldCapacityRast))
+plot(fieldCapacityRast)
+
+writeRaster(fieldCapacityRast,
+            "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Three_Counties_Rasters/FieldCapacity.tif",
+            datatype = "FLT4S",
+            NAflag = 0,
+            overwrite = TRUE)
+
+#----WILTPOINT----#
+wiltpointRast <- rasterize(mapunits_data, soilRast, field = "wfifteenbar_r", fun = "mean")
+values(wiltpointRast) <- ifelse(is.na(values(wiltpointRast)), 0, values(wiltpointRast))
+plot(wiltpointRast)
+
+writeRaster(wiltpointRast,
+            "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Three_Counties_Rasters/Wiltpoint.tif",
+            datatype = "FLT4S",
+            NAflag = 0,
+            overwrite = TRUE)
+
+#----SOIL DRAINAGE----#
+soilDrainRast <- rasterize(mapunits_data, soilRast, field = "soilDrain", fun = "mean")
+values(soilDrainRast) <- ifelse(is.na(values(soilDrainRast)), 0, values(soilDrainRast))
+plot(soilDrainRast)
+
+writeRaster(soilDrainRast,
+            "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Three_Counties_Rasters/SoilDrain.tif",
+            datatype = "FLT4S",
+            NAflag = 0,
+            overwrite = TRUE)
+
+#----SOIL DEPTH----#
+soilDepthRast <- rasterize(mapunits_data, soilRast, field = "soilDepth", fun = "mean")
+values(soilDepthRast) <- ifelse(is.na(values(soilDepthRast)), 0, values(soilDepthRast))
+plot(soilDepthRast)
+
+writeRaster(soilDepthRast,
+            "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Three_Counties_Rasters/SoilDepth.tif",
+            datatype = "FLT4S",
+            NAflag = 0,
+            overwrite = TRUE)
+
+```
+
+# CWD & Roots
+
+```{r}
+#----CWD----#
+cwdRast <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Three_Counties_Rasters/cwdRast.tif")
+cwdRast <- cwdRast %>% crop(., soilRast)
+
+plot(cwdRast)
+
+writeRaster(cwdRast,
+            "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Rasters/CWD.tif",
+            datatype = "FLT4S",
+            NAflag = 0,
+            overwrite = TRUE)
+
+#----ROOTS----#
+rootsRast <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Three_Counties_Rasters/rootRast.tif")
+rootsRast <- rootsRast %>% crop(., soilRast)
+
+writeRaster(rootsRast,
+            "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/Three_Counties_Rasters/rootRast.tif",
+            datatype = "FLT4S",
+            NAflag = 0,
+            overwrite = TRUE)
+```
+
+# Corrections needed for the rasters to run
+
+```{r}
+# Soil Depth
+values(soilDepthRast) <- ifelse(values(soilDepthRast) == 0, 1, values(soilDepthRast))
+writeRaster(soilDepthRast,
+            "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Rasters/SoilDepth.tif",
+            datatype = "FLT4S",
+            NAflag = 1,
+            overwrite = TRUE)
+plot(soilDepthRast)
+
+# Field Capacity
+values(fieldCapacityRast) <- ifelse(values(fieldCapacityRast) == 0, 0.1, values(fieldCapacityRast))
+writeRaster(fieldCapacityRast,
+            "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Rasters/FieldCapacity.tif",
+            datatype = "FLT4S",
+            NAflag = 0.1,
+            overwrite = TRUE)
+plot(fieldCapacityRast)
+```
+
+
+
+```{r}
+treeMapTC <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Rasters/TCTreeMap.tif")
+
+writeRaster(treeMapTC,
+            "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Rasters/treeMapTC.tif",
+            datatype = "INT4S",
+            NAflag = 0,
+            overwrite = TRUE)
+
+datatype(treeMapTC)
+
+x <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/treeMap Resistance/Clipped Piedmont/finalTreeMap.tif")
+datatype(x)
+```
+
+
+
+
+
+
+
+
+
+
+

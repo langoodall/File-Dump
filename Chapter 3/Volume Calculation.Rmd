@@ -1,0 +1,77 @@
+---
+title: "Untitled"
+output: pdf_document
+date: "2025-02-28"
+---
+
+```{r, message = FALSE, warning = FALSE}
+library(tidyverse)
+library(terra)
+library(sf)
+options(scipen = 999)
+```
+
+
+
+```{r}
+# Make a dataframe with the specific gravities
+# 0.49 is the average specific gravity in the SE
+
+sgDf <- data.frame(
+  Species = c("ACRU","CAAL27","CAGL8","CAOV2","FRPE","JUVI","LIST2","LITU","NYBI","NYSY","PIEC2","PIPA2","PITA","PIVI2","QUAL","QUCO2","QUFA","QULA2","QULA3","QUMA3","QUNI","QUPR2","QURU","QUST","QUVE","TADI2"),
+  specificGravity = c(0.49,0.62,0.62,0.62,0.53,0.44,0.46,0.40,0.49,0.49,0.47,0.54,0.47,0.49,0.60,0.60,0.52,0.49,0.56,0.49,0.56,0.57,0.56,0.60,0.56,0.34))
+
+harvestDf <- read_csv("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/Harvest/biomass-harvest-summary-log.csv")
+harvestDf[,c(1,2,34:59)] %>%
+  pivot_longer(cols = c("BiomassHarvestedMg_ACRU":"BiomassHarvestedMg_TADI2"), names_to = "Species", values_to = "Harvested_Biomass_Mg") %>%
+  group_by(Time, Species, ManagementArea) %>%
+  summarise(Total_Harvest = sum(Harvested_Biomass_Mg)) %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  inner_join(sgDf, by = "Species") %>%
+  mutate(Volume_m3 = Total_Harvest / specificGravity) %>%
+  ggplot(., aes(x = Time, y = Volume_m3, col = Species)) +
+  geom_line(size = 1) +
+  theme_classic() +
+  facet_wrap(~ ManagementArea) +
+  scale_y_continuous(breaks = c(0,5e5,1e6,1.5e6), labels = c(0,0.5,1,1.5), name = "Harvested in millions of m3")
+
+
+# ((Anson County Delivered Value / average price of pine sawtimber in Q4 2022) * conversion to Mg) / P. taeda specific gravity
+((42358600 / 30.48) * 0.907185) / 0.47
+2,682,407
+# Montgomery County
+((35187263 / 30.48) * 0.907185) / 0.47
+2,228,274
+# Richmond County
+((28634301 / 30.48) * 0.907185) / 0.47
+1,813,300
+```
+
+
+
+
+
+
+
+
+
+
+# Define the tree volume (in cubic centimeters, cm³)
+volume <- 500  # example value, replace with actual volume
+
+# Define the specific gravity (SG)
+SG <- 0.65  # example value, replace with actual SG
+
+# Convert SG to basic density (g/cm³), assuming the density of water is 1 g/cm³
+basic_density_from_SG <- SG * 1  # 1 g/cm³ for water
+
+# Calculate biomass in grams
+biomass_g <- volume * basic_density_from_SG
+
+# Convert biomass from grams to megagrams (1 Mg = 1,000,000 g)
+biomass_Mg <- biomass_g / 1e6
+
+# Print the biomass in Mg
+cat("Biomass (in megagrams):", biomass_Mg, "\n")
+
+
