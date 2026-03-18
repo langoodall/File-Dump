@@ -1,0 +1,99 @@
+---
+title: "Untitled"
+output: pdf_document
+date: "2024-10-01"
+---
+
+```{r}
+library(tidyverse)
+library(terra)
+library(sf)
+```
+
+# Clipped Landscape
+
+```{r}
+# Read in the clipped Landscape
+clippedPiedmont.shp <- st_read("C:/Users/lagoodal/Desktop/All Raster Layers/standsraster/Clipped Shapefile/clippedHUC.shp")
+plot(clippedPiedmont.shp)
+
+# Read in full landscape rasters
+Baseflow <- rast("C:/Users/lagoodal/Desktop/All Raster Layers/Full Piedmont/Baseflow.tif")
+clayPercentage <- rast("C:/Users/lagoodal/Desktop/All Raster Layers/Full Piedmont/ClayPercentage.tif")
+deadroots <- rast("C:/Users/lagoodal/Desktop/All Raster Layers/Full Piedmont/DeadRoots.tif")
+deadwood <- rast("C:/Users/lagoodal/Desktop/All Raster Layers/Full Piedmont/Deadwood.tif")
+drainage <- rast("C:/Users/lagoodal/Desktop/All Raster Layers/Full Piedmont/Drainage.tif")
+fieldCapacity <- rast("C:/Users/lagoodal/Desktop/All Raster Layers/Full Piedmont/FieldCapacity.tif")
+floodFrequency <- rast("C:/Users/lagoodal/Desktop/All Raster Layers/Full Piedmont/FloodFrequency.tif")
+sandPercentage <- rast("C:/Users/lagoodal/Desktop/All Raster Layers/Full Piedmont/SandPercentage.tif")
+soilDepth <- rast("C:/Users/lagoodal/Desktop/All Raster Layers/Full Piedmont/SoilDepth.tif")
+stormFlow <- rast("C:/Users/lagoodal/Desktop/All Raster Layers/Full Piedmont/Stormflow.tif")
+wiltpoint <- rast("C:/Users/lagoodal/Desktop/All Raster Layers/Full Piedmont/Wiltpoint.tif")
+
+# Read in clippedTreeMap to be used as the template raster
+templateRaster <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/treeMap/Clipped Piedmont/finalTreeMap.tif")
+
+# Create a list of the rasters that we need
+necnList <- list(Baseflow, clayPercentage, deadroots, deadwood, drainage, fieldCapacity, floodFrequency, sandPercentage, soilDepth, stormFlow, wiltpoint)
+
+# Project, crop and mask the rasters
+necnList <- lapply(necnList, function(x) terra::project(x, templateRaster, method = "near"))
+necnList <- lapply(necnList, function(x) terra::crop(x, clippedPiedmont.shp))
+necnList <- lapply(necnList, function(x) terra::mask(x, clippedPiedmont.shp))
+
+out_directory <- "C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/treeMap/Storage/"
+
+
+# for (i in seq_along(necnList)){
+#   file_name <- paste(out_directory,names(necnList[[i]]),".tif")
+#   writeRaster(necnList[[i]],
+#               filename = file_name,
+#               overwrite = TRUE,
+#               NAflag = 0,
+#               datatype = "FLT4S")
+# }
+
+
+# Drainage_0.1 <- necnList[[5]]
+# values(Drainage_0.1) <- values(Drainage_0.1) * 0.1
+# 
+# writeRaster(Drainage_0.1,
+#             filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/treeMap/Clipped Piedmont/Drainage_0.1.tif",
+#             datatype = "FLT4S",
+#             NAflag = 0,
+#             overwrite = TRUE)
+# 
+# # Soil Depth
+# writeRaster(necnList[[9]],
+#             filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/treeMap/Clipped Piedmont/SoilDepth.tif",
+#             datatype = "FLT4S",
+#             NAflag = 1,
+#             overwrite = TRUE)
+# 
+# # Field Capacity
+# writeRaster(necnList[[6]],
+#             filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/treeMap/Clipped Piedmont/FieldCapacity.tif",
+#             datatype = "FLT4S",
+#             NAflag = 0.1,
+#             overwrite = TRUE)
+
+```
+
+
+plot(necnList[[5]])
+
+ecoregions <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/treeMap/Clipped Piedmont/ecoregions.tif")
+x <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/treeMap/Clipped Piedmont/Drainage.tif")
+
+necnList[[5]]
+ecoregions
+x
+```
+
+
+
+
+
+
+
+

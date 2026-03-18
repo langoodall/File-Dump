@@ -1,0 +1,4856 @@
+---
+title: "Untitled"
+output: pdf_document
+date: "2024-12-18"
+---
+
+```{r, message = FALSE, warning = FALSE}
+library(tidyverse)
+library(terra)
+library(sf)
+library(corrplot)
+# library(vegan)
+library(data.table)
+options(scipen = 999)
+templateRaster <- rast("D:/Landis Outputs/Raster Template/templateRaster.tif")
+softwoods <- c("JUVI","PIEC2","PIPA2","PIST","PITA","PIVI2","TAAS","TADI2")
+oaks <- c("QUAL","QUCO2","QUFA","QULA3","QUNI","QUPH","QUPR2","QURU","QUST","QUVE")
+hardwoods <- c("ACRU","CAAL27","CAGL8","FAGR","FRAM2","FRPE","LIST2","LITU","NYBI","NYSY","OXAR","PRSE2")
+```
+
+
+# RESISTANCE
+## RCP45
+### HSHV (BNU-ESM)
+
+```{r, message = FALSE, warning = FALSE}
+#----Spp Biomass----#
+mainDir <- "D:/Landis Outputs/Resistance/RCP45/HSHV"
+runs <- paste0("run", 1:5)
+combinedData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "spp-biomass-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+finalTable <- do.call(rbind, combinedData) %>%
+  select(-`...34`)
+
+# Composition through time
+sppBiomass_BNU_ESM_RCP45_Resistance <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  group_by(Time, Species) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n()))) %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", ""),
+         RCP = "RCP45",
+         Model = "BNU-ESM_RCP45",
+         Prescription = "Resistance")
+
+# Proportional composition
+propBiomass_BNU_ESM_RCP45_Resistance <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, Species) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n()))) %>%
+  mutate(RCP = "RCP45",
+         Model = "BNU-ESM_RCP45",
+         Prescription = "Resistance",
+         FunctionalGroup = ifelse(Species %in% softwoods, "Softwoods",
+                                  ifelse(Species %in% oaks, "Oaks", "Hardwoods")),
+         TotalBiomass = sum(Biomass_MG),
+         Biomass_Percent = (Biomass_MG / TotalBiomass) * 100)
+
+propBiomass_BNU_ESM_RCP45_Resistance_AllRuns <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, Run) %>% # Group by time and run
+  mutate(Percent_Biomass = Biomass_MG / sum(Biomass_MG, na.rm = TRUE) * 100,
+         RCP = "RCP45",
+         Model = "BNU-ESM_RCP45",
+         Prescription = "Resistance")
+
+#----Harvesting Rates----#
+## Normal
+combinedData <- list()
+for (run in runs){
+  harvestDir <- file.path(mainDir, run, "Harvest")
+  filePath <- file.path(harvestDir, "biomass-harvest-summary-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+harvest_BNU_ESM_RCP45_Resistance <- do.call(rbind, combinedData) %>%
+  mutate(Prescription_Type = Prescription, RCP = "RCP45", Model = "BNU-ESM_RCP45") %>%
+  mutate(Prescription = "Resistance")
+
+#----Climate----#
+# For loop to read in future climate data. Then organised into appropriate metrics
+climateData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "Climate-future-input-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  climateData[[run]] <- data
+}
+climateData <- do.call(rbind, climateData) %>%
+  select(-`...28`)
+BNU_ESM_RCP45 <- climateData[,c(1,2,5,6,7,28)] %>%
+  mutate(mean_airtemp = (min_airtemp + max_airtemp) / 2) %>%
+  group_by(Year) %>%
+  summarise(meanppt = mean(ppt),
+            sumppt = sum(ppt),
+            airtemp = mean(mean_airtemp)) %>%
+  mutate(Model = "BNU-ESM_RCP45")
+
+#----BIODIVERSITY----#
+diversity_BNU_ESM_RCP45_Resistance <- propBiomass_BNU_ESM_RCP45_Resistance[,c(1:3,9)] %>%
+  mutate(Pi = Biomass_Percent / 100,
+         lnPi = log(Pi),
+         PixlnPi = Pi * lnPi) %>%
+  group_by(Time) %>%
+  summarise(H = -sum(PixlnPi, na.rm = TRUE)) %>%
+  mutate(Model = "BNU-ESM_RCP45",
+         RCP = "RCP45",
+         Prescription = "Resistance")
+
+#----SUCCESSION LOG VARIABLES----#
+combinedData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "NECN-succession-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+successionLog_BNU_ESM_RCP45_Resistance <- rbind(combinedData[[1]], combinedData[[2]], combinedData[[3]], combinedData[[4]], combinedData[[5]]) %>%
+  select(-`...62`) %>%
+  group_by(Time) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n())))) %>%
+  mutate(Model = "BNU-ESM_RCP45",
+         RCP = "RCP45",
+         Prescription = "Resistance")
+
+successionLog_BNU_ESM_RCP45_Resistance_All <- rbind(combinedData[[1]], combinedData[[2]], combinedData[[3]], combinedData[[4]], combinedData[[5]]) %>%
+  select(-`...62`) %>%
+  group_by(Time, Run) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n())))) %>%
+  mutate(Model = "BNU-ESM_RCP45",
+         RCP = "RCP45",
+         Prescription = "Resistance")
+
+#----ANNUAL WATER BUDGET----#
+combinedRasters <- list()
+for (run in 1:5) {
+  runDir <- file.path(mainDir, paste0("run", run))
+  for (year in seq(10, 80, by = 10)) {
+    filename <- paste0("Annual-water-budget-", year, ".img")
+    filePath <- file.path(runDir, filename)
+    rasterData <- rast(filePath)
+    crs(rasterData) <- "epsg:26917"
+    rasterData <- flip(rasterData)
+    newFileName <- sub("\\.img$", paste0("_run", run, ".tif"), filename)
+    combinedRasters[[newFileName]] <- rasterData
+  }
+}
+
+results <- list()
+for (i in 1:8) {
+  indices <- seq(i, 33 + i, by = 8)
+  df <- c(combinedRasters[[indices[1]]], combinedRasters[[indices[2]]], combinedRasters[[indices[3]]], 
+          combinedRasters[[indices[4]]], combinedRasters[[indices[5]]]) %>%
+    as.data.frame() %>%
+    `colnames<-`(c("run1", "run2", "run3", "run4", "run5")) %>%
+    pivot_longer(cols = "run1":"run5", values_to = "AWB", names_to = "Run") %>%
+    filter(AWB > 0) %>%
+    group_by(Run) %>%
+    summarise(AWB = mean(AWB)) %>%
+    mutate(Time = i * 10, Model = "BNU-ESM_RCP45", RCP = "RCP45", Prescription = "Resistance")
+  results[[i]] <- df
+}
+AWB_BNU_ESM_RCP45_ResistanceDf <- bind_rows(results)
+
+
+#----STRUCTURAL DIVERSITY----#
+# ATTENTION
+# This section require lots of RAM and has to cycle through a lot of rows in the dataframe.
+# Because of that all Structural Diversity sections will need to be exported to the HPC
+# # for this piece of the analysis
+# combinedData <- list()
+# index <- 1
+# 
+# for (run in runs) {
+#   runDir <- file.path(mainDir, run)
+#   for (year in seq(0, 80, by = 10)) {
+#     filename <- paste0("community-input-file-", year, ".csv")
+#     filePath <- file.path(runDir, filename)
+#     data <- fread(filePath)
+#     data <- data %>% mutate(across(where(is.double), as.integer))
+#     data$Run <- run
+#     data$Time <- year
+#     combinedData[[index]] <- data
+#     index <- index + 1
+#   }
+# }
+# 
+# combinedData <- do.call(rbind, lapply(seq_along(combinedData), function(i) {
+#   df <- combinedData[[i]]
+#   return(df)
+# }))
+# 
+# fwrite(combinedData,
+#        file = "C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/combinedData.csv")
+```
+
+### HSLV (MIROC-ESM-CHEM)
+
+```{r, message = FALSE, warning = FALSE}
+#----Spp Biomass----#
+mainDir <- "D:/Landis Outputs/Resistance/RCP45/HSLV"
+runs <- paste0("run", 1:5)
+combinedData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "spp-biomass-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+finalTable <- do.call(rbind, combinedData) %>%
+  select(-`...34`)
+
+# Composition through time
+sppBiomass_MIROC_ESM_CHEM_RCP45_Resistance <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  group_by(Time, Species) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n()))) %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", ""),
+         RCP = "RCP45",
+         Model = "MIROC-ESM-CHEM_RCP45",
+         Prescription = "Resistance")
+
+# Proportional composition
+propBiomass_MIROC_ESM_CHEM_RCP45_Resistance <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, Species) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n()))) %>%
+  mutate(RCP = "RCP45",
+         Model = "MIROC-ESM-CHEM_RCP45",
+         Prescription = "Resistance",
+         FunctionalGroup = ifelse(Species %in% softwoods, "Softwoods",
+                                  ifelse(Species %in% oaks, "Oaks", "Hardwoods")),
+         TotalBiomass = sum(Biomass_MG),
+         Biomass_Percent = (Biomass_MG / TotalBiomass) * 100)
+
+propBiomass_MIROC_ESM_CHEM_RCP45_Resistance_AllRuns <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, Run) %>% # Group by time and run
+  mutate(Percent_Biomass = Biomass_MG / sum(Biomass_MG, na.rm = TRUE) * 100,
+         RCP = "RCP45",
+         Model = "MIROC-ESM-CHEM_RCP45",
+         Prescription = "Resistance")
+
+#----Harvesting Rates----#
+## Normal
+combinedData <- list()
+for (run in runs){
+  harvestDir <- file.path(mainDir, run, "Harvest")
+  filePath <- file.path(harvestDir, "biomass-harvest-summary-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+harvest_MIROC_ESM_CHEM_RCP45_Resistance <- do.call(rbind, combinedData) %>%
+  mutate(Prescription_Type = Prescription, RCP = "RCP45", Model = "MIROC-ESM-CHEM_RCP45") %>%
+  mutate(Prescription = "Resistance")
+
+#----Climate----#
+# For loop to read in future climate data. Then organised into appropriate metrics
+climateData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "Climate-future-input-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  climateData[[run]] <- data
+}
+climateData <- do.call(rbind, climateData) %>%
+  select(-`...28`)
+MIROC_ESM_CHEM_RCP45 <- climateData[,c(1,2,5,6,7,28)] %>%
+  mutate(mean_airtemp = (min_airtemp + max_airtemp) / 2) %>%
+  group_by(Year) %>%
+  summarise(meanppt = mean(ppt),
+            sumppt = sum(ppt),
+            airtemp = mean(mean_airtemp)) %>%
+  mutate(Model = "MIROC-ESM-CHEM_RCP45")
+
+#----BIODIVERSITY----#
+diversity_MIROC_ESM_CHEM_RCP45_Resistance <- propBiomass_MIROC_ESM_CHEM_RCP45_Resistance[,c(1:3,9)] %>%
+  mutate(Pi = Biomass_Percent / 100,
+         lnPi = log(Pi),
+         PixlnPi = Pi * lnPi) %>%
+  group_by(Time) %>%
+  summarise(H = -sum(PixlnPi, na.rm = TRUE)) %>%
+  mutate(Model = "MIROC-ESM-CHEM_RCP45",
+         RCP = "RCP45",
+         Prescription = "Resistance")
+
+#----SUCCESSION LOG VARIABLES----#
+combinedData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "NECN-succession-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+successionLog_MIROC_ESM_CHEM_RCP45_Resistance <- rbind(combinedData[[1]], combinedData[[2]], combinedData[[3]], combinedData[[4]], combinedData[[5]]) %>%
+  select(-`...62`) %>%
+  group_by(Time) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n())))) %>%
+  mutate(Model = "MIROC-ESM-CHEM_RCP45",
+         RCP = "RCP45",
+         Prescription = "Resistance")
+
+successionLog_MIROC_ESM_CHEM_RCP45_Resistance_All <- rbind(combinedData[[1]], combinedData[[2]], combinedData[[3]], combinedData[[4]], combinedData[[5]]) %>%
+  select(-`...62`) %>%
+  group_by(Time, Run) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n())))) %>%
+  mutate(Model = "MIROC-ESM-CHEM_RCP45",
+         RCP = "RCP45",
+         Prescription = "Resistance")
+
+#----ANNUAL WATER BUDGET----#
+combinedRasters <- list()
+for (run in 1:5) {
+  runDir <- file.path(mainDir, paste0("run", run))
+  for (year in seq(10, 80, by = 10)) {
+    filename <- paste0("Annual-water-budget-", year, ".img")
+    filePath <- file.path(runDir, filename)
+    rasterData <- rast(filePath)
+    crs(rasterData) <- "epsg:26917"
+    rasterData <- flip(rasterData)
+    newFileName <- sub("\\.img$", paste0("_run", run, ".tif"), filename)
+    combinedRasters[[newFileName]] <- rasterData
+  }
+}
+
+results <- list()
+for (i in 1:8) {
+  indices <- seq(i, 33 + i, by = 8)
+  df <- c(combinedRasters[[indices[1]]], combinedRasters[[indices[2]]], combinedRasters[[indices[3]]], 
+          combinedRasters[[indices[4]]], combinedRasters[[indices[5]]]) %>%
+    as.data.frame() %>%
+    `colnames<-`(c("run1", "run2", "run3", "run4", "run5")) %>%
+    pivot_longer(cols = "run1":"run5", values_to = "AWB", names_to = "Run") %>%
+    filter(AWB > 0) %>%
+    group_by(Run) %>%
+    summarise(AWB = mean(AWB)) %>%
+    mutate(Time = i * 10, Model = "MIROC-ESM-CHEM_RCP45", RCP = "RCP45", Prescription = "Resistance")
+  results[[i]] <- df
+}
+AWB_MIROC_ESM_CHEM_RCP45_ResistanceDf <- bind_rows(results)
+
+#----STRUCTURAL DIVERSITY----#
+combinedData <- list()
+index <- 1
+
+for (run in runs) {
+  runDir <- file.path(mainDir, run)
+  for (year in seq(0, 80, by = 10)) {
+    filename <- paste0("community-input-file-", year, ".csv")
+    filePath <- file.path(runDir, filename)
+    data <- fread(filePath)
+    data <- data %>% mutate(across(where(is.double), as.integer))
+    data$Run <- run
+    data$Time <- year
+    combinedData[[index]] <- data
+    index <- index + 1
+  }
+}
+
+combinedData <- do.call(rbind, lapply(seq_along(combinedData), function(i) {
+  df <- combinedData[[i]]
+  return(df)
+}))
+
+fwrite(combinedData,
+       file = "C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/combinedData.csv")
+
+```
+
+### LSHV (MRI-CGCM3)
+
+```{r, message = FALSE, warning = FALSE}
+#----Spp Biomass----#
+mainDir <- "D:/Landis Outputs/Resistance/RCP45/LSHV"
+runs <- paste0("run", 1:5)
+combinedData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "spp-biomass-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+finalTable <- do.call(rbind, combinedData) %>%
+  select(-`...34`)
+
+# Composition through time
+sppBiomass_MRI_CGCM3_RCP45_Resistance <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  group_by(Time, Species) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n()))) %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", ""),
+         RCP = "RCP45",
+         Model = "MRI-CGCM3_RCP45",
+         Prescription = "Resistance")
+
+# Proportional composition
+propBiomass_MRI_CGCM3_RCP45_Resistance <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, Species) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n()))) %>%
+  mutate(RCP = "RCP45",
+         Model = "MRI-CGCM3_RCP45",
+         Prescription = "Resistance",
+         FunctionalGroup = ifelse(Species %in% softwoods, "Softwoods",
+                                  ifelse(Species %in% oaks, "Oaks", "Hardwoods")),
+         TotalBiomass = sum(Biomass_MG),
+         Biomass_Percent = (Biomass_MG / TotalBiomass) * 100)
+
+propBiomass_MRI_CGCM3_RCP45_Resistance_AllRuns <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, Run) %>% # Group by time and run
+  mutate(Percent_Biomass = Biomass_MG / sum(Biomass_MG, na.rm = TRUE) * 100,
+         RCP = "RCP45",
+         Model = "MRI-CGCM3_RCP45",
+         Prescription = "Resistance")
+
+#----Harvesting Rates----#
+## Normal
+combinedData <- list()
+for (run in runs){
+  harvestDir <- file.path(mainDir, run, "Harvest")
+  filePath <- file.path(harvestDir, "biomass-harvest-summary-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+harvest_MRI_CGCM3_RCP45_Resistance <- do.call(rbind, combinedData) %>%
+  mutate(Prescription_Type = Prescription, RCP = "RCP45", Model = "MRI-CGCM3_RCP45") %>%
+  mutate(Prescription = "Resistance")
+
+#----Climate----#
+# For loop to read in future climate data. Then organised into appropriate metrics
+climateData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "Climate-future-input-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  climateData[[run]] <- data
+}
+climateData <- do.call(rbind, climateData) %>%
+  select(-`...28`)
+MRI_CGCM3_RCP45 <- climateData[,c(1,2,5,6,7,28)] %>%
+  mutate(mean_airtemp = (min_airtemp + max_airtemp) / 2) %>%
+  group_by(Year) %>%
+  summarise(meanppt = mean(ppt),
+            sumppt = sum(ppt),
+            airtemp = mean(mean_airtemp)) %>%
+  mutate(Model = "MRI-CGCM3_RCP45")
+
+#----BIODIVERSITY----#
+diversity_MRI_CGCM3_RCP45_Resistance <- propBiomass_MRI_CGCM3_RCP45_Resistance[,c(1:3,9)] %>%
+  mutate(Pi = Biomass_Percent / 100,
+         lnPi = log(Pi),
+         PixlnPi = Pi * lnPi) %>%
+  group_by(Time) %>%
+  summarise(H = -sum(PixlnPi, na.rm = TRUE)) %>%
+  mutate(Model = "MRI-CGCM3_RCP45",
+         RCP = "RCP45",
+         Prescription = "Resistance")
+
+#----SUCCESSION LOG VARIABLES----#
+combinedData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "NECN-succession-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+successionLog_MRI_CGCM3_RCP45_Resistance <- rbind(combinedData[[1]], combinedData[[2]], combinedData[[3]], combinedData[[4]], combinedData[[5]]) %>%
+  select(-`...62`) %>%
+  group_by(Time) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n())))) %>%
+  mutate(Model = "MRI-CGCM3_RCP45",
+         RCP = "RCP45",
+         Prescription = "Resistance")
+
+successionLog_MRI_CGCM3_RCP45_Resistance_All <- rbind(combinedData[[1]], combinedData[[2]], combinedData[[3]], combinedData[[4]], combinedData[[5]]) %>%
+  select(-`...62`) %>%
+  group_by(Time, Run) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n())))) %>%
+  mutate(Model = "MRI-CGCM3_RCP45",
+         RCP = "RCP45",
+         Prescription = "Resistance")
+
+#----ANNUAL WATER BUDGET----#
+combinedRasters <- list()
+for (run in 1:5) {
+  runDir <- file.path(mainDir, paste0("run", run))
+  for (year in seq(10, 80, by = 10)) {
+    filename <- paste0("Annual-water-budget-", year, ".img")
+    filePath <- file.path(runDir, filename)
+    rasterData <- rast(filePath)
+    crs(rasterData) <- "epsg:26917"
+    rasterData <- flip(rasterData)
+    newFileName <- sub("\\.img$", paste0("_run", run, ".tif"), filename)
+    combinedRasters[[newFileName]] <- rasterData
+  }
+}
+
+results <- list()
+for (i in 1:8) {
+  indices <- seq(i, 33 + i, by = 8)
+  df <- c(combinedRasters[[indices[1]]], combinedRasters[[indices[2]]], combinedRasters[[indices[3]]], 
+          combinedRasters[[indices[4]]], combinedRasters[[indices[5]]]) %>%
+    as.data.frame() %>%
+    `colnames<-`(c("run1", "run2", "run3", "run4", "run5")) %>%
+    pivot_longer(cols = "run1":"run5", values_to = "AWB", names_to = "Run") %>%
+    filter(AWB > 0) %>%
+    group_by(Run) %>%
+    summarise(AWB = mean(AWB)) %>%
+    mutate(Time = i * 10, Model = "MRI-CGCM3_RCP45", RCP = "RCP45", Prescription = "Resistance")
+  results[[i]] <- df
+}
+AWB_MRI_CGCM3_RCP45_ResistanceDf <- bind_rows(results)
+
+#----STRUCTURAL DIVERSITY----#
+# combinedData <- list()
+# index <- 1
+# 
+# for (run in runs) {
+#   runDir <- file.path(mainDir, run)
+#   for (year in seq(0, 80, by = 10)) {
+#     filename <- paste0("community-input-file-", year, ".csv")
+#     filePath <- file.path(runDir, filename)
+#     data <- fread(filePath)
+#     data <- data %>% mutate(across(where(is.double), as.integer))
+#     data$Run <- run
+#     data$Time <- year
+#     combinedData[[index]] <- data
+#     index <- index + 1
+#   }
+# }
+# 
+# combinedData <- do.call(rbind, lapply(seq_along(combinedData), function(i) {
+#   df <- combinedData[[i]]
+#   return(df)
+# }))
+# 
+# fwrite(combinedData,
+#        file = "C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/combinedData.csv")
+```
+
+### LSLV (CCSM4)
+
+```{r, message = FALSE, warning = FALSE}
+#----Spp Biomass----#
+mainDir <- "D:/Landis Outputs/Resistance/RCP45/LSLV"
+runs <- paste0("run", 1:5)
+combinedData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "spp-biomass-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+finalTable <- do.call(rbind, combinedData) %>%
+  select(-`...34`)
+
+# Composition through time
+sppBiomass_CCSM4_RCP45_Resistance <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  group_by(Time, Species) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n()))) %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", ""),
+         RCP = "RCP45",
+         Model = "CCSM4_RCP45",
+         Prescription = "Resistance")
+
+# Proportional composition
+propBiomass_CCSM4_RCP45_Resistance <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, Species) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n()))) %>%
+  mutate(RCP = "RCP45",
+         Model = "CCSM4_RCP45",
+         Prescription = "Resistance",
+         FunctionalGroup = ifelse(Species %in% softwoods, "Softwoods",
+                                  ifelse(Species %in% oaks, "Oaks", "Hardwoods")),
+         TotalBiomass = sum(Biomass_MG),
+         Biomass_Percent = (Biomass_MG / TotalBiomass) * 100)
+
+propBiomass_CCSM4_RCP45_Resistance_AllRuns <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, Run) %>% # Group by time and run
+  mutate(Percent_Biomass = Biomass_MG / sum(Biomass_MG, na.rm = TRUE) * 100,
+         RCP = "RCP45",
+         Model = "CCSM4_RCP45",
+         Prescription = "Resistance")
+
+#----Harvesting Rates----#
+## Normal
+combinedData <- list()
+for (run in runs){
+  harvestDir <- file.path(mainDir, run, "Harvest")
+  filePath <- file.path(harvestDir, "biomass-harvest-summary-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+harvest_CCSM4_RCP45_Resistance <- do.call(rbind, combinedData) %>%
+  mutate(Prescription_Type = Prescription, RCP = "RCP45", Model = "CCSM4_RCP45") %>%
+  mutate(Prescription = "Resistance")
+
+#----Climate----#
+# For loop to read in future climate data. Then organised into appropriate metrics
+climateData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "Climate-future-input-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  climateData[[run]] <- data
+}
+climateData <- do.call(rbind, climateData) %>%
+  select(-`...28`)
+CCSM4_RCP45 <- climateData[,c(1,2,5,6,7,28)] %>%
+  mutate(mean_airtemp = (min_airtemp + max_airtemp) / 2) %>%
+  group_by(Year) %>%
+  summarise(meanppt = mean(ppt),
+            sumppt = sum(ppt),
+            airtemp = mean(mean_airtemp)) %>%
+  mutate(Model = "CCSM4_RCP45")
+
+#----BIODIVERSITY----#
+diversity_CCSM4_RCP45_Resistance <- propBiomass_CCSM4_RCP45_Resistance[,c(1:3,9)] %>%
+  mutate(Pi = Biomass_Percent / 100,
+         lnPi = log(Pi),
+         PixlnPi = Pi * lnPi) %>%
+  group_by(Time) %>%
+  summarise(H = -sum(PixlnPi, na.rm = TRUE)) %>%
+  mutate(Model = "CCSM4_RCP45",
+         RCP = "RCP45",
+         Prescription = "Resistance")
+
+#----SUCCESSION LOG VARIABLES----#
+combinedData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "NECN-succession-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+successionLog_CCSM4_RCP45_Resistance <- rbind(combinedData[[1]], combinedData[[2]], combinedData[[3]], combinedData[[4]], combinedData[[5]]) %>%
+  select(-`...62`) %>%
+  group_by(Time) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n())))) %>%
+  mutate(Model = "CCSM4_RCP45",
+         RCP = "RCP45",
+         Prescription = "Resistance")
+
+successionLog_CCSM4_RCP45_Resistance_All <- rbind(combinedData[[1]], combinedData[[2]], combinedData[[3]], combinedData[[4]], combinedData[[5]]) %>%
+  select(-`...62`) %>%
+  group_by(Time, Run) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n())))) %>%
+  mutate(Model = "CCSM4_RCP45",
+         RCP = "RCP45",
+         Prescription = "Resistance")
+
+#----ANNUAL WATER BUDGET----#
+combinedRasters <- list()
+for (run in 1:5) {
+  runDir <- file.path(mainDir, paste0("run", run))
+  for (year in seq(10, 80, by = 10)) {
+    filename <- paste0("Annual-water-budget-", year, ".img")
+    filePath <- file.path(runDir, filename)
+    rasterData <- rast(filePath)
+    crs(rasterData) <- "epsg:26917"
+    rasterData <- flip(rasterData)
+    newFileName <- sub("\\.img$", paste0("_run", run, ".tif"), filename)
+    combinedRasters[[newFileName]] <- rasterData
+  }
+}
+
+results <- list()
+for (i in 1:8) {
+  indices <- seq(i, 33 + i, by = 8)
+  df <- c(combinedRasters[[indices[1]]], combinedRasters[[indices[2]]], combinedRasters[[indices[3]]], 
+          combinedRasters[[indices[4]]], combinedRasters[[indices[5]]]) %>%
+    as.data.frame() %>%
+    `colnames<-`(c("run1", "run2", "run3", "run4", "run5")) %>%
+    pivot_longer(cols = "run1":"run5", values_to = "AWB", names_to = "Run") %>%
+    filter(AWB > 0) %>%
+    group_by(Run) %>%
+    summarise(AWB = mean(AWB)) %>%
+    mutate(Time = i * 10, Model = "CCSM4_RCP45", RCP = "RCP45", Prescription = "Resistance")
+  results[[i]] <- df
+}
+AWB_CCSM4_RCP45_ResistanceDf <- bind_rows(results)
+
+#----STRUCTURAL DIVERSITY----#
+# combinedData <- list()
+# index <- 1
+# 
+# for (run in runs) {
+#   runDir <- file.path(mainDir, run)
+#   for (year in seq(0, 80, by = 10)) {
+#     filename <- paste0("community-input-file-", year, ".csv")
+#     filePath <- file.path(runDir, filename)
+#     data <- fread(filePath)
+#     data <- data %>% mutate(across(where(is.double), as.integer))
+#     data$Run <- run
+#     data$Time <- year
+#     combinedData[[index]] <- data
+#     index <- index + 1
+#   }
+# }
+# 
+# combinedData <- do.call(rbind, lapply(seq_along(combinedData), function(i) {
+#   df <- combinedData[[i]]
+#   return(df)
+# }))
+# 
+# fwrite(combinedData,
+#        file = "C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/combinedData.csv")
+
+```
+
+## RCP85
+### HSHV (BNU-ESM)
+
+```{r, message = FALSE, warning = FALSE}
+#----Spp Biomass----#
+mainDir <- "D:/Landis Outputs/Resistance/RCP85/HSHV"
+runs <- paste0("run", 1:5)
+combinedData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "spp-biomass-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+finalTable <- do.call(rbind, combinedData) %>%
+  select(-`...34`)
+
+# Composition through time
+sppBiomass_BNU_ESM_RCP85_Resistance <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  group_by(Time, Species) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n()))) %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", ""),
+         RCP = "RCP85",
+         Model = "BNU-ESM_RCP85",
+         Prescription = "Resistance")
+
+# Proportional composition
+propBiomass_BNU_ESM_RCP85_Resistance <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, Species) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n()))) %>%
+  mutate(RCP = "RCP85",
+         Model = "BNU-ESM_RCP85",
+         Prescription = "Resistance",
+         FunctionalGroup = ifelse(Species %in% softwoods, "Softwoods",
+                                  ifelse(Species %in% oaks, "Oaks", "Hardwoods")),
+         TotalBiomass = sum(Biomass_MG),
+         Biomass_Percent = (Biomass_MG / TotalBiomass) * 100)
+
+propBiomass_BNU_ESM_RCP85_Resistance_AllRuns <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, Run) %>% # Group by time and run
+  mutate(Percent_Biomass = Biomass_MG / sum(Biomass_MG, na.rm = TRUE) * 100,
+         RCP = "RCP85",
+         Model = "BNU-ESM_RCP85",
+         Prescription = "Resistance")
+
+#----Harvesting Rates----#
+## Normal
+combinedData <- list()
+for (run in runs){
+  harvestDir <- file.path(mainDir, run, "Harvest")
+  filePath <- file.path(harvestDir, "biomass-harvest-summary-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+harvest_BNU_ESM_RCP85_Resistance <- do.call(rbind, combinedData) %>%
+  mutate(Prescription_Type = Prescription, RCP = "RCP85", Model = "BNU-ESM_RCP85") %>%
+  mutate(Prescription = "Resistance")
+
+#----Climate----#
+# For loop to read in future climate data. Then organised into appropriate metrics
+climateData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "Climate-future-input-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  climateData[[run]] <- data
+}
+climateData <- do.call(rbind, climateData) %>%
+  select(-`...28`)
+BNU_ESM_RCP85 <- climateData[,c(1,2,5,6,7,28)] %>%
+  mutate(mean_airtemp = (min_airtemp + max_airtemp) / 2) %>%
+  group_by(Year) %>%
+  summarise(meanppt = mean(ppt),
+            sumppt = sum(ppt),
+            airtemp = mean(mean_airtemp)) %>%
+  mutate(Model = "BNU-ESM_RCP85")
+
+#----BIODIVERSITY----#
+diversity_BNU_ESM_RCP85_Resistance <- propBiomass_BNU_ESM_RCP85_Resistance[,c(1:3,9)] %>%
+  mutate(Pi = Biomass_Percent / 100,
+         lnPi = log(Pi),
+         PixlnPi = Pi * lnPi) %>%
+  group_by(Time) %>%
+  summarise(H = -sum(PixlnPi, na.rm = TRUE)) %>%
+  mutate(Model = "BNU-ESM_RCP85",
+         RCP = "RCP85",
+         Prescription = "Resistance")
+
+#----SUCCESSION LOG VARIABLES----#
+combinedData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "NECN-succession-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+successionLog_BNU_ESM_RCP85_Resistance <- rbind(combinedData[[1]], combinedData[[2]], combinedData[[3]], combinedData[[4]], combinedData[[5]]) %>%
+  select(-`...62`) %>%
+  group_by(Time) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n())))) %>%
+  mutate(Model = "BNU-ESM_RCP85",
+         RCP = "RCP85",
+         Prescription = "Resistance")
+
+successionLog_BNU_ESM_RCP85_Resistance_All <- rbind(combinedData[[1]], combinedData[[2]], combinedData[[3]], combinedData[[4]], combinedData[[5]]) %>%
+  select(-`...62`) %>%
+  group_by(Time, Run) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n())))) %>%
+  mutate(Model = "BNU-ESM_RCP85",
+         RCP = "RCP85",
+         Prescription = "Resistance")
+
+#----ANNUAL WATER BUDGET----#
+combinedRasters <- list()
+for (run in 1:5) {
+  runDir <- file.path(mainDir, paste0("run", run))
+  for (year in seq(10, 80, by = 10)) {
+    filename <- paste0("Annual-water-budget-", year, ".img")
+    filePath <- file.path(runDir, filename)
+    rasterData <- rast(filePath)
+    crs(rasterData) <- "epsg:26917"
+    rasterData <- flip(rasterData)
+    newFileName <- sub("\\.img$", paste0("_run", run, ".tif"), filename)
+    combinedRasters[[newFileName]] <- rasterData
+  }
+}
+
+results <- list()
+for (i in 1:8) {
+  indices <- seq(i, 33 + i, by = 8)
+  df <- c(combinedRasters[[indices[1]]], combinedRasters[[indices[2]]], combinedRasters[[indices[3]]], 
+          combinedRasters[[indices[4]]], combinedRasters[[indices[5]]]) %>%
+    as.data.frame() %>%
+    `colnames<-`(c("run1", "run2", "run3", "run4", "run5")) %>%
+    pivot_longer(cols = "run1":"run5", values_to = "AWB", names_to = "Run") %>%
+    filter(AWB > 0) %>%
+    group_by(Run) %>%
+    summarise(AWB = mean(AWB)) %>%
+    mutate(Time = i * 10, Model = "BNU-ESM_RCP85", RCP = "RCP85", Prescription = "Resistance")
+  results[[i]] <- df
+}
+AWB_BNU_ESM_RCP85_ResistanceDf <- bind_rows(results)
+
+#----STRUCTURAL DIVERSITY----#
+# combinedData <- list()
+# index <- 1
+# 
+# for (run in runs) {
+#   runDir <- file.path(mainDir, run)
+#   for (year in seq(0, 80, by = 10)) {
+#     filename <- paste0("community-input-file-", year, ".csv")
+#     filePath <- file.path(runDir, filename)
+#     data <- fread(filePath)
+#     data <- data %>% mutate(across(where(is.double), as.integer))
+#     data$Run <- run
+#     data$Time <- year
+#     combinedData[[index]] <- data
+#     index <- index + 1
+#   }
+# }
+# 
+# combinedData <- do.call(rbind, lapply(seq_along(combinedData), function(i) {
+#   df <- combinedData[[i]]
+#   return(df)
+# }))
+# 
+# fwrite(combinedData,
+#        file = "C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/combinedData.csv")
+```
+
+### HSLV (MIROC-ESM-CHEM)
+
+```{r, message = FALSE, warning = FALSE}
+#----Spp Biomass----#
+mainDir <- "D:/Landis Outputs/Resistance/RCP85/HSLV"
+runs <- paste0("run", 1:5)
+combinedData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "spp-biomass-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+finalTable <- do.call(rbind, combinedData) %>%
+  select(-`...34`)
+
+# Composition through time
+sppBiomass_MIROC_ESM_CHEM_RCP85_Resistance <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  group_by(Time, Species) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n()))) %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", ""),
+         RCP = "RCP85",
+         Model = "MIROC-ESM-CHEM_RCP85",
+         Prescription = "Resistance")
+
+# Proportional composition
+propBiomass_MIROC_ESM_CHEM_RCP85_Resistance <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, Species) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n()))) %>%
+  mutate(RCP = "RCP85",
+         Model = "MIROC-ESM-CHEM_RCP85",
+         Prescription = "Resistance",
+         FunctionalGroup = ifelse(Species %in% softwoods, "Softwoods",
+                                  ifelse(Species %in% oaks, "Oaks", "Hardwoods")),
+         TotalBiomass = sum(Biomass_MG),
+         Biomass_Percent = (Biomass_MG / TotalBiomass) * 100)
+
+propBiomass_MIROC_ESM_CHEM_RCP85_Resistance_AllRuns <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, Run) %>% # Group by time and run
+  mutate(Percent_Biomass = Biomass_MG / sum(Biomass_MG, na.rm = TRUE) * 100,
+         RCP = "RCP85",
+         Model = "MIROC-ESM-CHEM_RCP85",
+         Prescription = "Resistance")
+
+#----Harvesting Rates----#
+## Normal
+combinedData <- list()
+for (run in runs){
+  harvestDir <- file.path(mainDir, run, "Harvest")
+  filePath <- file.path(harvestDir, "biomass-harvest-summary-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+harvest_MIROC_ESM_CHEM_RCP85_Resistance <- do.call(rbind, combinedData) %>%
+  mutate(Prescription_Type = Prescription, RCP = "RCP85", Model = "MIROC-ESM-CHEM_RCP85") %>%
+  mutate(Prescription = "Resistance")
+
+#----Climate----#
+# For loop to read in future climate data. Then organised into appropriate metrics
+climateData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "Climate-future-input-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  climateData[[run]] <- data
+}
+climateData <- do.call(rbind, climateData) %>%
+  select(-`...28`)
+MIROC_ESM_CHEM_RCP85 <- climateData[,c(1,2,5,6,7,28)] %>%
+  mutate(mean_airtemp = (min_airtemp + max_airtemp) / 2) %>%
+  group_by(Year) %>%
+  summarise(meanppt = mean(ppt),
+            sumppt = sum(ppt),
+            airtemp = mean(mean_airtemp)) %>%
+  mutate(Model = "MIROC-ESM-CHEM_RCP85")
+
+#----BIODIVERSITY----#
+diversity_MIROC_ESM_CHEM_RCP85_Resistance <- propBiomass_MIROC_ESM_CHEM_RCP85_Resistance[,c(1:3,9)] %>%
+  mutate(Pi = Biomass_Percent / 100,
+         lnPi = log(Pi),
+         PixlnPi = Pi * lnPi) %>%
+  group_by(Time) %>%
+  summarise(H = -sum(PixlnPi, na.rm = TRUE)) %>%
+  mutate(Model = "MIROC-ESM-CHEM_RCP85",
+         RCP = "RCP85",
+         Prescription = "Resistance")
+
+#----SUCCESSION LOG VARIABLES----#
+combinedData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "NECN-succession-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+successionLog_MIROC_ESM_CHEM_RCP85_Resistance <- rbind(combinedData[[1]], combinedData[[2]], combinedData[[3]], combinedData[[4]], combinedData[[5]]) %>%
+  select(-`...62`) %>%
+  group_by(Time) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n())))) %>%
+  mutate(Model = "MIROC-ESM-CHEM_RCP85",
+         RCP = "RCP85",
+         Prescription = "Resistance")
+
+successionLog_MIROC_ESM_CHEM_RCP85_Resistance_All <- rbind(combinedData[[1]], combinedData[[2]], combinedData[[3]], combinedData[[4]], combinedData[[5]]) %>%
+  select(-`...62`) %>%
+  group_by(Time, Run) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n())))) %>%
+  mutate(Model = "MIROC-ESM-CHEM_RCP85",
+         RCP = "RCP85",
+         Prescription = "Resistance")
+
+#----ANNUAL WATER BUDGET----#
+combinedRasters <- list()
+for (run in 1:5) {
+  runDir <- file.path(mainDir, paste0("run", run))
+  for (year in seq(10, 80, by = 10)) {
+    filename <- paste0("Annual-water-budget-", year, ".img")
+    filePath <- file.path(runDir, filename)
+    rasterData <- rast(filePath)
+    crs(rasterData) <- "epsg:26917"
+    rasterData <- flip(rasterData)
+    newFileName <- sub("\\.img$", paste0("_run", run, ".tif"), filename)
+    combinedRasters[[newFileName]] <- rasterData
+  }
+}
+
+results <- list()
+for (i in 1:8) {
+  indices <- seq(i, 33 + i, by = 8)
+  df <- c(combinedRasters[[indices[1]]], combinedRasters[[indices[2]]], combinedRasters[[indices[3]]], 
+          combinedRasters[[indices[4]]], combinedRasters[[indices[5]]]) %>%
+    as.data.frame() %>%
+    `colnames<-`(c("run1", "run2", "run3", "run4", "run5")) %>%
+    pivot_longer(cols = "run1":"run5", values_to = "AWB", names_to = "Run") %>%
+    filter(AWB > 0) %>%
+    group_by(Run) %>%
+    summarise(AWB = mean(AWB)) %>%
+    mutate(Time = i * 10, Model = "MIROC-ESM-CHEM_RCP85", RCP = "RCP85", Prescription = "Resistance")
+  results[[i]] <- df
+}
+AWB_MIROC_ESM_CHEM_RCP85_ResistanceDf <- bind_rows(results)
+
+#----STRUCTURAL DIVERSITY----#
+# combinedData <- list()
+# index <- 1
+# 
+# for (run in runs) {
+#   runDir <- file.path(mainDir, run)
+#   for (year in seq(0, 80, by = 10)) {
+#     filename <- paste0("community-input-file-", year, ".csv")
+#     filePath <- file.path(runDir, filename)
+#     data <- fread(filePath)
+#     data <- data %>% mutate(across(where(is.double), as.integer))
+#     data$Run <- run
+#     data$Time <- year
+#     combinedData[[index]] <- data
+#     index <- index + 1
+#   }
+# }
+# 
+# combinedData <- do.call(rbind, lapply(seq_along(combinedData), function(i) {
+#   df <- combinedData[[i]]
+#   return(df)
+# }))
+# 
+# fwrite(combinedData,
+#        file = "C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/combinedData.csv")
+```
+
+### LSHV (MRI-CGCM3)
+
+```{r, message = FALSE, warning = FALSE}
+#----Spp Biomass----#
+mainDir <- "D:/Landis Outputs/Resistance/RCP85/LSHV"
+runs <- paste0("run", 1:5)
+combinedData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "spp-biomass-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+finalTable <- do.call(rbind, combinedData) %>%
+  select(-`...34`)
+
+# Composition through time
+sppBiomass_MRI_CGCM3_RCP85_Resistance <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  group_by(Time, Species) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n()))) %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", ""),
+         RCP = "RCP85",
+         Model = "MRI-CGCM3_RCP85",
+         Prescription = "Resistance")
+
+# Proportional composition
+propBiomass_MRI_CGCM3_RCP85_Resistance <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, Species) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n()))) %>%
+  mutate(RCP = "RCP85",
+         Model = "MRI-CGCM3_RCP85",
+         Prescription = "Resistance",
+         FunctionalGroup = ifelse(Species %in% softwoods, "Softwoods",
+                                  ifelse(Species %in% oaks, "Oaks", "Hardwoods")),
+         TotalBiomass = sum(Biomass_MG),
+         Biomass_Percent = (Biomass_MG / TotalBiomass) * 100)
+
+propBiomass_MRI_CGCM3_RCP85_Resistance_AllRuns <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, Run) %>% # Group by time and run
+  mutate(Percent_Biomass = Biomass_MG / sum(Biomass_MG, na.rm = TRUE) * 100,
+         RCP = "RCP85",
+         Model = "MRI-CGCM3_RCP85",
+         Prescription = "Resistance")
+
+#----Harvesting Rates----#
+## Normal
+combinedData <- list()
+for (run in runs){
+  harvestDir <- file.path(mainDir, run, "Harvest")
+  filePath <- file.path(harvestDir, "biomass-harvest-summary-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+harvest_MRI_CGCM3_RCP85_Resistance <- do.call(rbind, combinedData) %>%
+  mutate(Prescription_Type = Prescription, RCP = "RCP85", Model = "MRI-CGCM3_RCP85") %>%
+  mutate(Prescription = "Resistance")
+
+#----Climate----#
+# For loop to read in future climate data. Then organised into appropriate metrics
+climateData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "Climate-future-input-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  climateData[[run]] <- data
+}
+climateData <- do.call(rbind, climateData) %>%
+  select(-`...28`)
+MRI_CGCM3_RCP85 <- climateData[,c(1,2,5,6,7,28)] %>%
+  mutate(mean_airtemp = (min_airtemp + max_airtemp) / 2) %>%
+  group_by(Year) %>%
+  summarise(meanppt = mean(ppt),
+            sumppt = sum(ppt),
+            airtemp = mean(mean_airtemp)) %>%
+  mutate(Model = "MRI-CGCM3_RCP85")
+
+#----BIODIVERSITY----#
+diversity_MRI_CGCM3_RCP85_Resistance <- propBiomass_MRI_CGCM3_RCP85_Resistance[,c(1:3,9)] %>%
+  mutate(Pi = Biomass_Percent / 100,
+         lnPi = log(Pi),
+         PixlnPi = Pi * lnPi) %>%
+  group_by(Time) %>%
+  summarise(H = -sum(PixlnPi, na.rm = TRUE)) %>%
+  mutate(Model = "MRI-CGCM3_RCP85",
+         RCP = "RCP85",
+         Prescription = "Resistance")
+
+#----SUCCESSION LOG VARIABLES----#
+combinedData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "NECN-succession-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+successionLog_MRI_CGCM3_RCP85_Resistance <- rbind(combinedData[[1]], combinedData[[2]], combinedData[[3]], combinedData[[4]], combinedData[[5]]) %>%
+  select(-`...62`) %>%
+  group_by(Time) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n())))) %>%
+  mutate(Model = "MRI-CGCM3_RCP85",
+         RCP = "RCP85",
+         Prescription = "Resistance")
+
+successionLog_MRI_CGCM3_RCP85_Resistance_All <- rbind(combinedData[[1]], combinedData[[2]], combinedData[[3]], combinedData[[4]], combinedData[[5]]) %>%
+  select(-`...62`) %>%
+  group_by(Time, Run) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n())))) %>%
+  mutate(Model = "MRI-CGCM3_RCP85",
+         RCP = "RCP85",
+         Prescription = "Resistance")
+
+#----ANNUAL WATER BUDGET----#
+combinedRasters <- list()
+for (run in 1:5) {
+  runDir <- file.path(mainDir, paste0("run", run))
+  for (year in seq(10, 80, by = 10)) {
+    filename <- paste0("Annual-water-budget-", year, ".img")
+    filePath <- file.path(runDir, filename)
+    rasterData <- rast(filePath)
+    crs(rasterData) <- "epsg:26917"
+    rasterData <- flip(rasterData)
+    newFileName <- sub("\\.img$", paste0("_run", run, ".tif"), filename)
+    combinedRasters[[newFileName]] <- rasterData
+  }
+}
+
+results <- list()
+for (i in 1:8) {
+  indices <- seq(i, 33 + i, by = 8)
+  df <- c(combinedRasters[[indices[1]]], combinedRasters[[indices[2]]], combinedRasters[[indices[3]]], 
+          combinedRasters[[indices[4]]], combinedRasters[[indices[5]]]) %>%
+    as.data.frame() %>%
+    `colnames<-`(c("run1", "run2", "run3", "run4", "run5")) %>%
+    pivot_longer(cols = "run1":"run5", values_to = "AWB", names_to = "Run") %>%
+    filter(AWB > 0) %>%
+    group_by(Run) %>%
+    summarise(AWB = mean(AWB)) %>%
+    mutate(Time = i * 10, Model = "MRI-CGCM3_RCP85", RCP = "RCP85", Prescription = "Resistance")
+  results[[i]] <- df
+}
+AWB_MRI_CGCM3_RCP85_ResistanceDf <- bind_rows(results)
+
+#----STRUCTURAL DIVERSITY----#
+# combinedData <- list()
+# index <- 1
+# 
+# for (run in runs) {
+#   runDir <- file.path(mainDir, run)
+#   for (year in seq(0, 80, by = 10)) {
+#     filename <- paste0("community-input-file-", year, ".csv")
+#     filePath <- file.path(runDir, filename)
+#     data <- fread(filePath)
+#     data <- data %>% mutate(across(where(is.double), as.integer))
+#     data$Run <- run
+#     data$Time <- year
+#     combinedData[[index]] <- data
+#     index <- index + 1
+#   }
+# }
+# 
+# combinedData <- do.call(rbind, lapply(seq_along(combinedData), function(i) {
+#   df <- combinedData[[i]]
+#   return(df)
+# }))
+# 
+# fwrite(combinedData,
+#        file = "C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/combinedData.csv")
+```
+
+### LSLV (CCSM4)
+
+```{r, message = FALSE, warning = FALSE}
+#----Spp Biomass----#
+mainDir <- "D:/Landis Outputs/Resistance/RCP85/LSLV"
+runs <- paste0("run", 1:5)
+combinedData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "spp-biomass-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+finalTable <- do.call(rbind, combinedData) %>%
+  select(-`...34`)
+
+# Composition through time
+sppBiomass_CCSM4_RCP85_Resistance <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  group_by(Time, Species) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n()))) %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", ""),
+         RCP = "RCP85",
+         Model = "CCSM4_RCP85",
+         Prescription = "Resistance")
+
+# Proportional composition
+propBiomass_CCSM4_RCP85_Resistance <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, Species) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n()))) %>%
+  mutate(RCP = "RCP85",
+         Model = "CCSM4_RCP85",
+         Prescription = "Resistance",
+         FunctionalGroup = ifelse(Species %in% softwoods, "Softwoods",
+                                  ifelse(Species %in% oaks, "Oaks", "Hardwoods")),
+         TotalBiomass = sum(Biomass_MG),
+         Biomass_Percent = (Biomass_MG / TotalBiomass) * 100)
+
+propBiomass_CCSM4_RCP85_Resistance_AllRuns <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, Run) %>% # Group by time and run
+  mutate(Percent_Biomass = Biomass_MG / sum(Biomass_MG, na.rm = TRUE) * 100,
+         RCP = "RCP85",
+         Model = "CCSM4_RCP85",
+         Prescription = "Resistance")
+
+#----Harvesting Rates----#
+## Normal
+combinedData <- list()
+for (run in runs){
+  harvestDir <- file.path(mainDir, run, "Harvest")
+  filePath <- file.path(harvestDir, "biomass-harvest-summary-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+harvest_CCSM4_RCP85_Resistance <- do.call(rbind, combinedData) %>%
+  mutate(Prescription_Type = Prescription, RCP = "RCP85", Model = "CCSM4_RCP85") %>%
+  mutate(Prescription = "Resistance")
+
+#----Climate----#
+# For loop to read in future climate data. Then organised into appropriate metrics
+climateData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "Climate-future-input-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  climateData[[run]] <- data
+}
+climateData <- do.call(rbind, climateData) %>%
+  select(-`...28`)
+CCSM4_RCP85 <- climateData[,c(1,2,5,6,7,28)] %>%
+  mutate(mean_airtemp = (min_airtemp + max_airtemp) / 2) %>%
+  group_by(Year) %>%
+  summarise(meanppt = mean(ppt),
+            sumppt = sum(ppt),
+            airtemp = mean(mean_airtemp)) %>%
+  mutate(Model = "CCSM4_RCP85")
+
+#----BIODIVERSITY----#
+diversity_CCSM4_RCP85_Resistance <- propBiomass_CCSM4_RCP85_Resistance[,c(1:3,9)] %>%
+  mutate(Pi = Biomass_Percent / 100,
+         lnPi = log(Pi),
+         PixlnPi = Pi * lnPi) %>%
+  group_by(Time) %>%
+  summarise(H = -sum(PixlnPi, na.rm = TRUE)) %>%
+  mutate(Model = "CCSM4_RCP85",
+         RCP = "RCP85",
+         Prescription = "Resistance")
+
+#----SUCCESSION LOG VARIABLES----#
+combinedData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "NECN-succession-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+successionLog_CCSM4_RCP85_Resistance <- rbind(combinedData[[1]], combinedData[[2]], combinedData[[3]], combinedData[[4]], combinedData[[5]]) %>%
+  select(-`...62`) %>%
+  group_by(Time) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n())))) %>%
+  mutate(Model = "CCSM4_RCP85",
+         RCP = "RCP85",
+         Prescription = "Resistance")
+
+successionLog_CCSM4_RCP85_Resistance_All <- rbind(combinedData[[1]], combinedData[[2]], combinedData[[3]], combinedData[[4]], combinedData[[5]]) %>%
+  select(-`...62`) %>%
+  group_by(Time, Run) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n())))) %>%
+  mutate(Model = "CCSM4_RCP85",
+         RCP = "RCP85",
+         Prescription = "Resistance")
+
+#----ANNUAL WATER BUDGET----#
+combinedRasters <- list()
+for (run in 1:5) {
+  runDir <- file.path(mainDir, paste0("run", run))
+  for (year in seq(10, 80, by = 10)) {
+    filename <- paste0("Annual-water-budget-", year, ".img")
+    filePath <- file.path(runDir, filename)
+    rasterData <- rast(filePath)
+    crs(rasterData) <- "epsg:26917"
+    rasterData <- flip(rasterData)
+    newFileName <- sub("\\.img$", paste0("_run", run, ".tif"), filename)
+    combinedRasters[[newFileName]] <- rasterData
+  }
+}
+
+results <- list()
+for (i in 1:8) {
+  indices <- seq(i, 33 + i, by = 8)
+  df <- c(combinedRasters[[indices[1]]], combinedRasters[[indices[2]]], combinedRasters[[indices[3]]], 
+          combinedRasters[[indices[4]]], combinedRasters[[indices[5]]]) %>%
+    as.data.frame() %>%
+    `colnames<-`(c("run1", "run2", "run3", "run4", "run5")) %>%
+    pivot_longer(cols = "run1":"run5", values_to = "AWB", names_to = "Run") %>%
+    filter(AWB > 0) %>%
+    group_by(Run) %>%
+    summarise(AWB = mean(AWB)) %>%
+    mutate(Time = i * 10, Model = "CCSM4_RCP85", RCP = "RCP85", Prescription = "Resistance")
+  results[[i]] <- df
+}
+AWB_CCSM4_RCP85_ResistanceDf <- bind_rows(results)
+
+#----STRUCTURAL DIVERSITY----#
+# combinedData <- list()
+# index <- 1
+# 
+# for (run in runs) {
+#   runDir <- file.path(mainDir, run)
+#   for (year in seq(0, 80, by = 10)) {
+#     filename <- paste0("community-input-file-", year, ".csv")
+#     filePath <- file.path(runDir, filename)
+#     data <- fread(filePath)
+#     data <- data %>% mutate(across(where(is.double), as.integer))
+#     data$Run <- run
+#     data$Time <- year
+#     combinedData[[index]] <- data
+#     index <- index + 1
+#   }
+# }
+# 
+# combinedData <- do.call(rbind, lapply(seq_along(combinedData), function(i) {
+#   df <- combinedData[[i]]
+#   return(df)
+# }))
+# 
+# fwrite(combinedData,
+#        file = "C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/combinedData.csv")
+```
+
+# RESILIENCE
+## RCP45
+### HSHV (BNU-ESM)
+
+```{r, message = FALSE, warning = FALSE}
+#----Spp Biomass----#
+mainDir <- "D:/Landis Outputs/Resilience/RCP45/HSHV"
+runs <- paste0("run", 1:5)
+combinedData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "spp-biomass-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+finalTable <- do.call(rbind, combinedData) %>%
+  select(-`...34`)
+
+# Composition through time
+sppBiomass_BNU_ESM_RCP45_Resilience <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  group_by(Time, Species) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n()))) %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", ""),
+         RCP = "RCP45",
+         Model = "BNU-ESM_RCP45",
+         Prescription = "Resilience")
+
+# Proportional composition
+propBiomass_BNU_ESM_RCP45_Resilience <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, Species) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n()))) %>%
+  mutate(RCP = "RCP45",
+         Model = "BNU-ESM_RCP45",
+         Prescription = "Resilience",
+         FunctionalGroup = ifelse(Species %in% softwoods, "Softwoods",
+                                  ifelse(Species %in% oaks, "Oaks", "Hardwoods")),
+         TotalBiomass = sum(Biomass_MG),
+         Biomass_Percent = (Biomass_MG / TotalBiomass) * 100)
+
+propBiomass_BNU_ESM_RCP45_Resilience_AllRuns <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, Run) %>% # Group by time and run
+  mutate(Percent_Biomass = Biomass_MG / sum(Biomass_MG, na.rm = TRUE) * 100,
+         RCP = "RCP45",
+         Model = "BNU-ESM_RCP45",
+         Prescription = "Resilience")
+
+#----Harvesting Rates----#
+## Normal
+combinedData <- list()
+for (run in runs){
+  harvestDir <- file.path(mainDir, run, "Harvest")
+  filePath <- file.path(harvestDir, "biomass-harvest-summary-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+harvest_BNU_ESM_RCP45_Resilience <- do.call(rbind, combinedData) %>%
+  mutate(Prescription_Type = Prescription, RCP = "RCP45", Model = "BNU-ESM_RCP45") %>%
+  mutate(Prescription = "Resilience")
+
+#----Climate----#
+# For loop to read in future climate data. Then organised into appropriate metrics
+climateData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "Climate-future-input-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  climateData[[run]] <- data
+}
+climateData <- do.call(rbind, climateData) %>%
+  select(-`...28`)
+BNU_ESM_RCP45 <- climateData[,c(1,2,5,6,7,28)] %>%
+  mutate(mean_airtemp = (min_airtemp + max_airtemp) / 2) %>%
+  group_by(Year) %>%
+  summarise(meanppt = mean(ppt),
+            sumppt = sum(ppt),
+            airtemp = mean(mean_airtemp)) %>%
+  mutate(Model = "BNU-ESM_RCP45")
+
+#----BIODIVERSITY----#
+diversity_BNU_ESM_RCP45_Resilience <- propBiomass_BNU_ESM_RCP45_Resilience[,c(1:3,9)] %>%
+  mutate(Pi = Biomass_Percent / 100,
+         lnPi = log(Pi),
+         PixlnPi = Pi * lnPi) %>%
+  group_by(Time) %>%
+  summarise(H = -sum(PixlnPi, na.rm = TRUE)) %>%
+  mutate(Model = "BNU-ESM_RCP45",
+         RCP = "RCP45",
+         Prescription = "Resilience")
+
+#----SUCCESSION LOG VARIABLES----#
+combinedData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "NECN-succession-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+successionLog_BNU_ESM_RCP45_Resilience <- rbind(combinedData[[1]], combinedData[[2]], combinedData[[3]], combinedData[[4]], combinedData[[5]]) %>%
+  select(-`...62`) %>%
+  group_by(Time) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n())))) %>%
+  mutate(Model = "BNU-ESM_RCP45",
+         RCP = "RCP45",
+         Prescription = "Resilience")
+
+successionLog_BNU_ESM_RCP45_Resilience_All <- rbind(combinedData[[1]], combinedData[[2]], combinedData[[3]], combinedData[[4]], combinedData[[5]]) %>%
+  select(-`...62`) %>%
+  group_by(Time, Run) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n())))) %>%
+  mutate(Model = "BNU-ESM_RCP45",
+         RCP = "RCP45",
+         Prescription = "Resilience")
+
+#----ANNUAL WATER BUDGET----#
+combinedRasters <- list()
+for (run in 1:5) {
+  runDir <- file.path(mainDir, paste0("run", run))
+  for (year in seq(10, 80, by = 10)) {
+    filename <- paste0("Annual-water-budget-", year, ".img")
+    filePath <- file.path(runDir, filename)
+    rasterData <- rast(filePath)
+    crs(rasterData) <- "epsg:26917"
+    rasterData <- flip(rasterData)
+    newFileName <- sub("\\.img$", paste0("_run", run, ".tif"), filename)
+    combinedRasters[[newFileName]] <- rasterData
+  }
+}
+
+results <- list()
+for (i in 1:8) {
+  indices <- seq(i, 33 + i, by = 8)
+  df <- c(combinedRasters[[indices[1]]], combinedRasters[[indices[2]]], combinedRasters[[indices[3]]], 
+          combinedRasters[[indices[4]]], combinedRasters[[indices[5]]]) %>%
+    as.data.frame() %>%
+    `colnames<-`(c("run1", "run2", "run3", "run4", "run5")) %>%
+    pivot_longer(cols = "run1":"run5", values_to = "AWB", names_to = "Run") %>%
+    filter(AWB > 0) %>%
+    group_by(Run) %>%
+    summarise(AWB = mean(AWB)) %>%
+    mutate(Time = i * 10, Model = "BNU-ESM_RCP45", RCP = "RCP45", Prescription = "Resilience")
+  results[[i]] <- df
+}
+AWB_BNU_ESM_RCP45_ResilienceDf <- bind_rows(results)
+
+#----STRUCTURAL DIVERSITY----#
+# combinedData <- list()
+# index <- 1
+# 
+# for (run in runs) {
+#   runDir <- file.path(mainDir, run)
+#   for (year in seq(0, 80, by = 10)) {
+#     filename <- paste0("community-input-file-", year, ".csv")
+#     filePath <- file.path(runDir, filename)
+#     data <- fread(filePath)
+#     data <- data %>% mutate(across(where(is.double), as.integer))
+#     data$Run <- run
+#     data$Time <- year
+#     combinedData[[index]] <- data
+#     index <- index + 1
+#   }
+# }
+# 
+# combinedData <- do.call(rbind, lapply(seq_along(combinedData), function(i) {
+#   df <- combinedData[[i]]
+#   return(df)
+# }))
+# 
+# fwrite(combinedData,
+#        file = "C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/combinedData.csv")
+```
+
+### HSLV (MIROC-ESM-CHEM)
+
+```{r, message = FALSE, warning = FALSE}
+#----Spp Biomass----#
+mainDir <- "D:/Landis Outputs/Resilience/RCP45/HSLV"
+runs <- paste0("run", 1:5)
+combinedData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "spp-biomass-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+finalTable <- do.call(rbind, combinedData) %>%
+  select(-`...34`)
+
+# Composition through time
+sppBiomass_MIROC_ESM_CHEM_RCP45_Resilience <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  group_by(Time, Species) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n()))) %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", ""),
+         RCP = "RCP45",
+         Model = "MIROC-ESM-CHEM_RCP45",
+         Prescription = "Resilience")
+
+# Proportional composition
+propBiomass_MIROC_ESM_CHEM_RCP45_Resilience <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, Species) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n()))) %>%
+  mutate(RCP = "RCP45",
+         Model = "MIROC-ESM-CHEM_RCP45",
+         Prescription = "Resilience",
+         FunctionalGroup = ifelse(Species %in% softwoods, "Softwoods",
+                                  ifelse(Species %in% oaks, "Oaks", "Hardwoods")),
+         TotalBiomass = sum(Biomass_MG),
+         Biomass_Percent = (Biomass_MG / TotalBiomass) * 100)
+
+propBiomass_MIROC_ESM_CHEM_RCP45_Resilience_AllRuns <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, Run) %>% # Group by time and run
+  mutate(Percent_Biomass = Biomass_MG / sum(Biomass_MG, na.rm = TRUE) * 100,
+         RCP = "RCP45",
+         Model = "MIROC-ESM-CHEM_RCP45",
+         Prescription = "Resilience")
+
+#----Harvesting Rates----#
+## Normal
+combinedData <- list()
+for (run in runs){
+  harvestDir <- file.path(mainDir, run, "Harvest")
+  filePath <- file.path(harvestDir, "biomass-harvest-summary-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+harvest_MIROC_ESM_CHEM_RCP45_Resilience <- do.call(rbind, combinedData) %>%
+  mutate(Prescription_Type = Prescription, RCP = "RCP45", Model = "MIROC-ESM-CHEM_RCP45") %>%
+  mutate(Prescription = "Resilience")
+
+#----Climate----#
+# For loop to read in future climate data. Then organised into appropriate metrics
+climateData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "Climate-future-input-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  climateData[[run]] <- data
+}
+climateData <- do.call(rbind, climateData) %>%
+  select(-`...28`)
+MIROC_ESM_CHEM_RCP45 <- climateData[,c(1,2,5,6,7,28)] %>%
+  mutate(mean_airtemp = (min_airtemp + max_airtemp) / 2) %>%
+  group_by(Year) %>%
+  summarise(meanppt = mean(ppt),
+            sumppt = sum(ppt),
+            airtemp = mean(mean_airtemp)) %>%
+  mutate(Model = "MIROC-ESM-CHEM_RCP45")
+
+#----BIODIVERSITY----#
+diversity_MIROC_ESM_CHEM_RCP45_Resilience <- propBiomass_MIROC_ESM_CHEM_RCP45_Resilience[,c(1:3,9)] %>%
+  mutate(Pi = Biomass_Percent / 100,
+         lnPi = log(Pi),
+         PixlnPi = Pi * lnPi) %>%
+  group_by(Time) %>%
+  summarise(H = -sum(PixlnPi, na.rm = TRUE)) %>%
+  mutate(Model = "MIROC-ESM-CHEM_RCP45",
+         RCP = "RCP45",
+         Prescription = "Resilience")
+
+#----SUCCESSION LOG VARIABLES----#
+combinedData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "NECN-succession-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+successionLog_MIROC_ESM_CHEM_RCP45_Resilience <- rbind(combinedData[[1]], combinedData[[2]], combinedData[[3]], combinedData[[4]], combinedData[[5]]) %>%
+  select(-`...62`) %>%
+  group_by(Time) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n())))) %>%
+  mutate(Model = "MIROC-ESM-CHEM_RCP45",
+         RCP = "RCP45",
+         Prescription = "Resilience")
+
+successionLog_MIROC_ESM_CHEM_RCP45_Resilience_All <- rbind(combinedData[[1]], combinedData[[2]], combinedData[[3]], combinedData[[4]], combinedData[[5]]) %>%
+  select(-`...62`) %>%
+  group_by(Time, Run) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n())))) %>%
+  mutate(Model = "MIROC-ESM-CHEM_RCP45",
+         RCP = "RCP45",
+         Prescription = "Resilience")
+
+#----ANNUAL WATER BUDGET----#
+combinedRasters <- list()
+for (run in 1:5) {
+  runDir <- file.path(mainDir, paste0("run", run))
+  for (year in seq(10, 80, by = 10)) {
+    filename <- paste0("Annual-water-budget-", year, ".img")
+    filePath <- file.path(runDir, filename)
+    rasterData <- rast(filePath)
+    crs(rasterData) <- "epsg:26917"
+    rasterData <- flip(rasterData)
+    newFileName <- sub("\\.img$", paste0("_run", run, ".tif"), filename)
+    combinedRasters[[newFileName]] <- rasterData
+  }
+}
+
+results <- list()
+for (i in 1:8) {
+  indices <- seq(i, 33 + i, by = 8)
+  df <- c(combinedRasters[[indices[1]]], combinedRasters[[indices[2]]], combinedRasters[[indices[3]]], 
+          combinedRasters[[indices[4]]], combinedRasters[[indices[5]]]) %>%
+    as.data.frame() %>%
+    `colnames<-`(c("run1", "run2", "run3", "run4", "run5")) %>%
+    pivot_longer(cols = "run1":"run5", values_to = "AWB", names_to = "Run") %>%
+    filter(AWB > 0) %>%
+    group_by(Run) %>%
+    summarise(AWB = mean(AWB)) %>%
+    mutate(Time = i * 10, Model = "MIROC-ESM-CHEM_RCP45", RCP = "RCP45", Prescription = "Resilience")
+  results[[i]] <- df
+}
+AWB_MIROC_ESM_CHEM_RCP45_ResilienceDf <- bind_rows(results)
+
+# #----STRUCTURAL DIVERSITY----#
+# combinedData <- list()
+# index <- 1
+# 
+# for (run in runs) {
+#   runDir <- file.path(mainDir, run)
+#   for (year in seq(0, 80, by = 10)) {
+#     filename <- paste0("community-input-file-", year, ".csv")
+#     filePath <- file.path(runDir, filename)
+#     data <- fread(filePath)
+#     data <- data %>% mutate(across(where(is.double), as.integer))
+#     data$Run <- run
+#     data$Time <- year
+#     combinedData[[index]] <- data
+#     index <- index + 1
+#   }
+# }
+# 
+# combinedData <- do.call(rbind, lapply(seq_along(combinedData), function(i) {
+#   df <- combinedData[[i]]
+#   return(df)
+# }))
+# 
+# fwrite(combinedData,
+#        file = "C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/combinedData.csv")
+
+```
+
+### LSHV (MRI-CGCM3)
+
+```{r, message = FALSE, warning = FALSE}
+#----Spp Biomass----#
+mainDir <- "D:/Landis Outputs/Resilience/RCP45/LSHV"
+runs <- paste0("run", 1:5)
+combinedData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "spp-biomass-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+finalTable <- do.call(rbind, combinedData) %>%
+  select(-`...34`)
+
+# Composition through time
+sppBiomass_MRI_CGCM3_RCP45_Resilience <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  group_by(Time, Species) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n()))) %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", ""),
+         RCP = "RCP45",
+         Model = "MRI-CGCM3_RCP45",
+         Prescription = "Resilience")
+
+# Proportional composition
+propBiomass_MRI_CGCM3_RCP45_Resilience <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, Species) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n()))) %>%
+  mutate(RCP = "RCP45",
+         Model = "MRI-CGCM3_RCP45",
+         Prescription = "Resilience",
+         FunctionalGroup = ifelse(Species %in% softwoods, "Softwoods",
+                                  ifelse(Species %in% oaks, "Oaks", "Hardwoods")),
+         TotalBiomass = sum(Biomass_MG),
+         Biomass_Percent = (Biomass_MG / TotalBiomass) * 100)
+
+propBiomass_MRI_CGCM3_RCP45_Resilience_AllRuns <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, Run) %>% # Group by time and run
+  mutate(Percent_Biomass = Biomass_MG / sum(Biomass_MG, na.rm = TRUE) * 100,
+         RCP = "RCP45",
+         Model = "MRI-CGCM3_RCP45",
+         Prescription = "Resilience")
+
+#----Harvesting Rates----#
+## Normal
+combinedData <- list()
+for (run in runs){
+  harvestDir <- file.path(mainDir, run, "Harvest")
+  filePath <- file.path(harvestDir, "biomass-harvest-summary-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+harvest_MRI_CGCM3_RCP45_Resilience <- do.call(rbind, combinedData) %>%
+  mutate(Prescription_Type = Prescription, RCP = "RCP45", Model = "MRI-CGCM3_RCP45") %>%
+  mutate(Prescription = "Resilience")
+
+#----Climate----#
+# For loop to read in future climate data. Then organised into appropriate metrics
+climateData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "Climate-future-input-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  climateData[[run]] <- data
+}
+climateData <- do.call(rbind, climateData) %>%
+  select(-`...28`)
+MIROC_ESM_CHEM_RCP45 <- climateData[,c(1,2,5,6,7,28)] %>%
+  mutate(mean_airtemp = (min_airtemp + max_airtemp) / 2) %>%
+  group_by(Year) %>%
+  summarise(meanppt = mean(ppt),
+            sumppt = sum(ppt),
+            airtemp = mean(mean_airtemp)) %>%
+  mutate(Model = "MRI-CGCM3_RCP45")
+
+#----BIODIVERSITY----#
+diversity_MRI_CGCM3_RCP45_Resilience <- propBiomass_MRI_CGCM3_RCP45_Resilience[,c(1:3,9)] %>%
+  mutate(Pi = Biomass_Percent / 100,
+         lnPi = log(Pi),
+         PixlnPi = Pi * lnPi) %>%
+  group_by(Time) %>%
+  summarise(H = -sum(PixlnPi, na.rm = TRUE)) %>%
+  mutate(Model = "MRI-CGCM3_RCP45",
+         RCP = "RCP45",
+         Prescription = "Resilience")
+
+#----SUCCESSION LOG VARIABLES----#
+combinedData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "NECN-succession-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+successionLog_MRI_CGCM3_RCP45_Resilience <- rbind(combinedData[[1]], combinedData[[2]], combinedData[[3]], combinedData[[4]], combinedData[[5]]) %>%
+  select(-`...62`) %>%
+  group_by(Time) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n())))) %>%
+  mutate(Model = "MRI-CGCM3_RCP45",
+         RCP = "RCP45",
+         Prescription = "Resilience")
+
+successionLog_MRI_CGCM3_RCP45_Resilience_All <- rbind(combinedData[[1]], combinedData[[2]], combinedData[[3]], combinedData[[4]], combinedData[[5]]) %>%
+  select(-`...62`) %>%
+  group_by(Time, Run) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n())))) %>%
+  mutate(Model = "MRI-CGCM3_RCP45",
+         RCP = "RCP45",
+         Prescription = "Resilience")
+
+#----ANNUAL WATER BUDGET----#
+combinedRasters <- list()
+for (run in 1:5) {
+  runDir <- file.path(mainDir, paste0("run", run))
+  for (year in seq(10, 80, by = 10)) {
+    filename <- paste0("Annual-water-budget-", year, ".img")
+    filePath <- file.path(runDir, filename)
+    rasterData <- rast(filePath)
+    crs(rasterData) <- "epsg:26917"
+    rasterData <- flip(rasterData)
+    newFileName <- sub("\\.img$", paste0("_run", run, ".tif"), filename)
+    combinedRasters[[newFileName]] <- rasterData
+  }
+}
+
+results <- list()
+for (i in 1:8) {
+  indices <- seq(i, 33 + i, by = 8)
+  df <- c(combinedRasters[[indices[1]]], combinedRasters[[indices[2]]], combinedRasters[[indices[3]]], 
+          combinedRasters[[indices[4]]], combinedRasters[[indices[5]]]) %>%
+    as.data.frame() %>%
+    `colnames<-`(c("run1", "run2", "run3", "run4", "run5")) %>%
+    pivot_longer(cols = "run1":"run5", values_to = "AWB", names_to = "Run") %>%
+    filter(AWB > 0) %>%
+    group_by(Run) %>%
+    summarise(AWB = mean(AWB)) %>%
+    mutate(Time = i * 10, Model = "MRI-CGCM3_RCP45", RCP = "RCP45", Prescription = "Resilience")
+  results[[i]] <- df
+}
+AWB_MRI_CGCM3_RCP45_ResilienceDf <- bind_rows(results)
+
+#----STRUCTURAL DIVERSITY----#
+# combinedData <- list()
+# index <- 1
+# 
+# for (run in runs) {
+#   runDir <- file.path(mainDir, run)
+#   for (year in seq(0, 80, by = 10)) {
+#     filename <- paste0("community-input-file-", year, ".csv")
+#     filePath <- file.path(runDir, filename)
+#     data <- fread(filePath)
+#     data <- data %>% mutate(across(where(is.double), as.integer))
+#     data$Run <- run
+#     data$Time <- year
+#     combinedData[[index]] <- data
+#     index <- index + 1
+#   }
+# }
+# 
+# combinedData <- do.call(rbind, lapply(seq_along(combinedData), function(i) {
+#   df <- combinedData[[i]]
+#   return(df)
+# }))
+# 
+# fwrite(combinedData,
+#        file = "C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/combinedData.csv")
+```
+
+### LSLV (CCSM4)
+
+```{r, message = FALSE, warning = FALSE}
+#----Spp Biomass----#
+mainDir <- "D:/Landis Outputs/Resilience/RCP45/LSLV"
+runs <- paste0("run", 1:5)
+combinedData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "spp-biomass-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+finalTable <- do.call(rbind, combinedData) %>%
+  select(-`...34`)
+
+# Composition through time
+sppBiomass_CCSM4_RCP45_Resilience <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  group_by(Time, Species) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n()))) %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", ""),
+         RCP = "RCP45",
+         Model = "CCSM4_RCP45",
+         Prescription = "Resilience")
+
+# Proportional composition
+propBiomass_CCSM4_RCP45_Resilience <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, Species) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n()))) %>%
+  mutate(RCP = "RCP45",
+         Model = "CCSM4_RCP45",
+         Prescription = "Resilience",
+         FunctionalGroup = ifelse(Species %in% softwoods, "Softwoods",
+                                  ifelse(Species %in% oaks, "Oaks", "Hardwoods")),
+         TotalBiomass = sum(Biomass_MG),
+         Biomass_Percent = (Biomass_MG / TotalBiomass) * 100)
+
+propBiomass_CCSM4_RCP45_Resilience_AllRuns <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, Run) %>% # Group by time and run
+  mutate(Percent_Biomass = Biomass_MG / sum(Biomass_MG, na.rm = TRUE) * 100,
+         RCP = "RCP45",
+         Model = "CCSM4_RCP45",
+         Prescription = "Resilience")
+
+#----Harvesting Rates----#
+## Normal
+combinedData <- list()
+for (run in runs){
+  harvestDir <- file.path(mainDir, run, "Harvest")
+  filePath <- file.path(harvestDir, "biomass-harvest-summary-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+harvest_CCSM4_RCP45_Resilience <- do.call(rbind, combinedData) %>%
+  mutate(Prescription_Type = Prescription, RCP = "RCP45", Model = "CCSM4_RCP45") %>%
+  mutate(Prescription = "Resilience")
+
+#----Climate----#
+# For loop to read in future climate data. Then organised into appropriate metrics
+climateData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "Climate-future-input-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  climateData[[run]] <- data
+}
+climateData <- do.call(rbind, climateData) %>%
+  select(-`...28`)
+MIROC_ESM_CHEM_RCP45 <- climateData[,c(1,2,5,6,7,28)] %>%
+  mutate(mean_airtemp = (min_airtemp + max_airtemp) / 2) %>%
+  group_by(Year) %>%
+  summarise(meanppt = mean(ppt),
+            sumppt = sum(ppt),
+            airtemp = mean(mean_airtemp)) %>%
+  mutate(Model = "CCSM4_RCP45")
+
+#----BIODIVERSITY----#
+diversity_CCSM4_RCP45_Resilience <- propBiomass_CCSM4_RCP45_Resilience[,c(1:3,9)] %>%
+  mutate(Pi = Biomass_Percent / 100,
+         lnPi = log(Pi),
+         PixlnPi = Pi * lnPi) %>%
+  group_by(Time) %>%
+  summarise(H = -sum(PixlnPi, na.rm = TRUE)) %>%
+  mutate(Model = "CCSM4_RCP45",
+         RCP = "RCP45",
+         Prescription = "Resilience")
+
+#----SUCCESSION LOG VARIABLES----#
+combinedData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "NECN-succession-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+successionLog_CCSM4_RCP45_Resilience <- rbind(combinedData[[1]], combinedData[[2]], combinedData[[3]], combinedData[[4]], combinedData[[5]]) %>%
+  select(-`...62`) %>%
+  group_by(Time) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n())))) %>%
+  mutate(Model = "CCSM4_RCP45",
+         RCP = "RCP45",
+         Prescription = "Resilience")
+
+successionLog_CCSM4_RCP45_Resilience_All <- rbind(combinedData[[1]], combinedData[[2]], combinedData[[3]], combinedData[[4]], combinedData[[5]]) %>%
+  select(-`...62`) %>%
+  group_by(Time, Run) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n())))) %>%
+  mutate(Model = "CCSM4_RCP45",
+         RCP = "RCP45",
+         Prescription = "Resilience")
+
+#----ANNUAL WATER BUDGET----#
+combinedRasters <- list()
+for (run in 1:5) {
+  runDir <- file.path(mainDir, paste0("run", run))
+  for (year in seq(10, 80, by = 10)) {
+    filename <- paste0("Annual-water-budget-", year, ".img")
+    filePath <- file.path(runDir, filename)
+    rasterData <- rast(filePath)
+    crs(rasterData) <- "epsg:26917"
+    rasterData <- flip(rasterData)
+    newFileName <- sub("\\.img$", paste0("_run", run, ".tif"), filename)
+    combinedRasters[[newFileName]] <- rasterData
+  }
+}
+
+results <- list()
+for (i in 1:8) {
+  indices <- seq(i, 33 + i, by = 8)
+  df <- c(combinedRasters[[indices[1]]], combinedRasters[[indices[2]]], combinedRasters[[indices[3]]], 
+          combinedRasters[[indices[4]]], combinedRasters[[indices[5]]]) %>%
+    as.data.frame() %>%
+    `colnames<-`(c("run1", "run2", "run3", "run4", "run5")) %>%
+    pivot_longer(cols = "run1":"run5", values_to = "AWB", names_to = "Run") %>%
+    filter(AWB > 0) %>%
+    group_by(Run) %>%
+    summarise(AWB = mean(AWB)) %>%
+    mutate(Time = i * 10, Model = "CCSM4_RCP45", RCP = "RCP45", Prescription = "Resilience")
+  results[[i]] <- df
+}
+AWB_CCSM4_RCP45_ResilienceDf <- bind_rows(results)
+
+#----STRUCTURAL DIVERSITY----#
+# combinedData <- list()
+# index <- 1
+# 
+# for (run in runs) {
+#   runDir <- file.path(mainDir, run)
+#   for (year in seq(0, 80, by = 10)) {
+#     filename <- paste0("community-input-file-", year, ".csv")
+#     filePath <- file.path(runDir, filename)
+#     data <- fread(filePath)
+#     data <- data %>% mutate(across(where(is.double), as.integer))
+#     data$Run <- run
+#     data$Time <- year
+#     combinedData[[index]] <- data
+#     index <- index + 1
+#   }
+# }
+# 
+# combinedData <- do.call(rbind, lapply(seq_along(combinedData), function(i) {
+#   df <- combinedData[[i]]
+#   return(df)
+# }))
+# 
+# fwrite(combinedData,
+#        file = "C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/combinedData.csv")
+
+```
+
+## RCP85
+### HSHV (BNU-ESM)
+
+```{r, message = FALSE, warning = FALSE}
+#----Spp Biomass----#
+mainDir <- "D:/Landis Outputs/Resilience/RCP85/HSHV"
+runs <- paste0("run", 1:5)
+combinedData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "spp-biomass-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+finalTable <- do.call(rbind, combinedData) %>%
+  select(-`...34`)
+
+# Composition through time
+sppBiomass_BNU_ESM_RCP85_Resilience <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  group_by(Time, Species) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n()))) %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", ""),
+         RCP = "RCP85",
+         Model = "BNU-ESM_RCP85",
+         Prescription = "Resilience")
+
+# Proportional composition
+propBiomass_BNU_ESM_RCP85_Resilience <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, Species) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n()))) %>%
+  mutate(RCP = "RCP85",
+         Model = "BNU-ESM_RCP85",
+         Prescription = "Resilience",
+         FunctionalGroup = ifelse(Species %in% softwoods, "Softwoods",
+                                  ifelse(Species %in% oaks, "Oaks", "Hardwoods")),
+         TotalBiomass = sum(Biomass_MG),
+         Biomass_Percent = (Biomass_MG / TotalBiomass) * 100)
+
+propBiomass_BNU_ESM_RCP85_Resilience_AllRuns <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, Run) %>% # Group by time and run
+  mutate(Percent_Biomass = Biomass_MG / sum(Biomass_MG, na.rm = TRUE) * 100,
+         RCP = "RCP85",
+         Model = "BNU-ESM_RCP85",
+         Prescription = "Resilience")
+
+#----Harvesting Rates----#
+## Normal
+combinedData <- list()
+for (run in runs){
+  harvestDir <- file.path(mainDir, run, "Harvest")
+  filePath <- file.path(harvestDir, "biomass-harvest-summary-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+harvest_BNU_ESM_RCP85_Resilience <- do.call(rbind, combinedData) %>%
+  mutate(Prescription_Type = Prescription, RCP = "RCP85", Model = "BNU-ESM_RCP85") %>%
+  mutate(Prescription = "Resilience")
+
+#----Climate----#
+# For loop to read in future climate data. Then organised into appropriate metrics
+climateData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "Climate-future-input-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  climateData[[run]] <- data
+}
+climateData <- do.call(rbind, climateData) %>%
+  select(-`...28`)
+BNU_ESM_RCP85 <- climateData[,c(1,2,5,6,7,28)] %>%
+  mutate(mean_airtemp = (min_airtemp + max_airtemp) / 2) %>%
+  group_by(Year) %>%
+  summarise(meanppt = mean(ppt),
+            sumppt = sum(ppt),
+            airtemp = mean(mean_airtemp)) %>%
+  mutate(Model = "BNU-ESM_RCP85")
+
+#----BIODIVERSITY----#
+diversity_BNU_ESM_RCP85_Resilience <- propBiomass_BNU_ESM_RCP85_Resilience[,c(1:3,9)] %>%
+  mutate(Pi = Biomass_Percent / 100,
+         lnPi = log(Pi),
+         PixlnPi = Pi * lnPi) %>%
+  group_by(Time) %>%
+  summarise(H = -sum(PixlnPi, na.rm = TRUE)) %>%
+  mutate(Model = "BNU-ESM_RCP85",
+         RCP = "RCP85",
+         Prescription = "Resilience")
+
+#----SUCCESSION LOG VARIABLES----#
+combinedData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "NECN-succession-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+successionLog_BNU_ESM_RCP85_Resilience <- rbind(combinedData[[1]], combinedData[[2]], combinedData[[3]], combinedData[[4]], combinedData[[5]]) %>%
+  select(-`...62`) %>%
+  group_by(Time) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n())))) %>%
+  mutate(Model = "BNU-ESM_RCP85",
+         RCP = "RCP85",
+         Prescription = "Resilience")
+
+successionLog_BNU_ESM_RCP85_Resilience_All <- rbind(combinedData[[1]], combinedData[[2]], combinedData[[3]], combinedData[[4]], combinedData[[5]]) %>%
+  select(-`...62`) %>%
+  group_by(Time, Run) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n())))) %>%
+  mutate(Model = "BNU-ESM_RCP85",
+         RCP = "RCP85",
+         Prescription = "Resilience")
+
+#----ANNUAL WATER BUDGET----#
+combinedRasters <- list()
+for (run in 1:5) {
+  runDir <- file.path(mainDir, paste0("run", run))
+  for (year in seq(10, 80, by = 10)) {
+    filename <- paste0("Annual-water-budget-", year, ".img")
+    filePath <- file.path(runDir, filename)
+    rasterData <- rast(filePath)
+    crs(rasterData) <- "epsg:26917"
+    rasterData <- flip(rasterData)
+    newFileName <- sub("\\.img$", paste0("_run", run, ".tif"), filename)
+    combinedRasters[[newFileName]] <- rasterData
+  }
+}
+
+results <- list()
+for (i in 1:8) {
+  indices <- seq(i, 33 + i, by = 8)
+  df <- c(combinedRasters[[indices[1]]], combinedRasters[[indices[2]]], combinedRasters[[indices[3]]], 
+          combinedRasters[[indices[4]]], combinedRasters[[indices[5]]]) %>%
+    as.data.frame() %>%
+    `colnames<-`(c("run1", "run2", "run3", "run4", "run5")) %>%
+    pivot_longer(cols = "run1":"run5", values_to = "AWB", names_to = "Run") %>%
+    filter(AWB > 0) %>%
+    group_by(Run) %>%
+    summarise(AWB = mean(AWB)) %>%
+    mutate(Time = i * 10, Model = "BNU-ESM_RCP85", RCP = "RCP85", Prescription = "Resilience")
+  results[[i]] <- df
+}
+AWB_BNU_ESM_RCP85_ResilienceDf <- bind_rows(results)
+
+#----STRUCTURAL DIVERSITY----#
+# combinedData <- list()
+# index <- 1
+# 
+# for (run in runs) {
+#   runDir <- file.path(mainDir, run)
+#   for (year in seq(0, 80, by = 10)) {
+#     filename <- paste0("community-input-file-", year, ".csv")
+#     filePath <- file.path(runDir, filename)
+#     data <- fread(filePath)
+#     data <- data %>% mutate(across(where(is.double), as.integer))
+#     data$Run <- run
+#     data$Time <- year
+#     combinedData[[index]] <- data
+#     index <- index + 1
+#   }
+# }
+# 
+# combinedData <- do.call(rbind, lapply(seq_along(combinedData), function(i) {
+#   df <- combinedData[[i]]
+#   return(df)
+# }))
+# 
+# fwrite(combinedData,
+#        file = "C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/combinedData.csv")
+```
+
+### HSLV (MIROC-ESM-CHEM)
+
+```{r, message = FALSE, warning = FALSE}
+#----Spp Biomass----#
+mainDir <- "D:/Landis Outputs/Resilience/RCP85/HSLV"
+runs <- paste0("run", 1:5)
+combinedData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "spp-biomass-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+finalTable <- do.call(rbind, combinedData) %>%
+  select(-`...34`)
+
+# Composition through time
+sppBiomass_MIROC_ESM_CHEM_RCP85_Resilience <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  group_by(Time, Species) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n()))) %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", ""),
+         RCP = "RCP85",
+         Model = "MIROC-ESM-CHEM_RCP85",
+         Prescription = "Resilience")
+
+# Proportional composition
+propBiomass_MIROC_ESM_CHEM_RCP85_Resilience <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, Species) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n()))) %>%
+  mutate(RCP = "RCP85",
+         Model = "MIROC-ESM-CHEM_RCP85",
+         Prescription = "Resilience",
+         FunctionalGroup = ifelse(Species %in% softwoods, "Softwoods",
+                                  ifelse(Species %in% oaks, "Oaks", "Hardwoods")),
+         TotalBiomass = sum(Biomass_MG),
+         Biomass_Percent = (Biomass_MG / TotalBiomass) * 100)
+
+propBiomass_MIROC_ESM_CHEM_RCP85_Resilience_AllRuns <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, Run) %>% # Group by time and run
+  mutate(Percent_Biomass = Biomass_MG / sum(Biomass_MG, na.rm = TRUE) * 100,
+         RCP = "RCP85",
+         Model = "MIROC-ESM-CHEM_RCP85",
+         Prescription = "Resilience")
+
+#----Harvesting Rates----#
+## Normal
+combinedData <- list()
+for (run in runs){
+  harvestDir <- file.path(mainDir, run, "Harvest")
+  filePath <- file.path(harvestDir, "biomass-harvest-summary-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+harvest_MIROC_ESM_CHEM_RCP85_Resilience <- do.call(rbind, combinedData) %>%
+  mutate(Prescription_Type = Prescription, RCP = "RCP85", Model = "MIROC-ESM-CHEM_RCP85") %>%
+  mutate(Prescription = "Resilience")
+
+#----Climate----#
+# For loop to read in future climate data. Then organised into appropriate metrics
+climateData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "Climate-future-input-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  climateData[[run]] <- data
+}
+climateData <- do.call(rbind, climateData) %>%
+  select(-`...28`)
+MIROC_ESM_CHEM_RCP85 <- climateData[,c(1,2,5,6,7,28)] %>%
+  mutate(mean_airtemp = (min_airtemp + max_airtemp) / 2) %>%
+  group_by(Year) %>%
+  summarise(meanppt = mean(ppt),
+            sumppt = sum(ppt),
+            airtemp = mean(mean_airtemp)) %>%
+  mutate(Model = "MIROC-ESM-CHEM_RCP85")
+
+#----BIODIVERSITY----#
+diversity_MIROC_ESM_CHEM_RCP85_Resilience <- propBiomass_MIROC_ESM_CHEM_RCP85_Resilience[,c(1:3,9)] %>%
+  mutate(Pi = Biomass_Percent / 100,
+         lnPi = log(Pi),
+         PixlnPi = Pi * lnPi) %>%
+  group_by(Time) %>%
+  summarise(H = -sum(PixlnPi, na.rm = TRUE)) %>%
+  mutate(Model = "MIROC-ESM-CHEM_RCP85",
+         RCP = "RCP85",
+         Prescription = "Resilience")
+
+#----SUCCESSION LOG VARIABLES----#
+combinedData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "NECN-succession-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+successionLog_MIROC_ESM_CHEM_RCP85_Resilience <- rbind(combinedData[[1]], combinedData[[2]], combinedData[[3]], combinedData[[4]], combinedData[[5]]) %>%
+  select(-`...62`) %>%
+  group_by(Time) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n())))) %>%
+  mutate(Model = "MIROC-ESM-CHEM_RCP85",
+         RCP = "RCP85",
+         Prescription = "Resilience")
+
+successionLog_MIROC_ESM_CHEM_RCP85_Resilience_All <- rbind(combinedData[[1]], combinedData[[2]], combinedData[[3]], combinedData[[4]], combinedData[[5]]) %>%
+  select(-`...62`) %>%
+  group_by(Time, Run) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n())))) %>%
+  mutate(Model = "MIROC-ESM-CHEM_RCP85",
+         RCP = "RCP85",
+         Prescription = "Resilience")
+
+#----ANNUAL WATER BUDGET----#
+combinedRasters <- list()
+for (run in 1:5) {
+  runDir <- file.path(mainDir, paste0("run", run))
+  for (year in seq(10, 80, by = 10)) {
+    filename <- paste0("Annual-water-budget-", year, ".img")
+    filePath <- file.path(runDir, filename)
+    rasterData <- rast(filePath)
+    crs(rasterData) <- "epsg:26917"
+    rasterData <- flip(rasterData)
+    newFileName <- sub("\\.img$", paste0("_run", run, ".tif"), filename)
+    combinedRasters[[newFileName]] <- rasterData
+  }
+}
+
+results <- list()
+for (i in 1:8) {
+  indices <- seq(i, 33 + i, by = 8)
+  df <- c(combinedRasters[[indices[1]]], combinedRasters[[indices[2]]], combinedRasters[[indices[3]]], 
+          combinedRasters[[indices[4]]], combinedRasters[[indices[5]]]) %>%
+    as.data.frame() %>%
+    `colnames<-`(c("run1", "run2", "run3", "run4", "run5")) %>%
+    pivot_longer(cols = "run1":"run5", values_to = "AWB", names_to = "Run") %>%
+    filter(AWB > 0) %>%
+    group_by(Run) %>%
+    summarise(AWB = mean(AWB)) %>%
+    mutate(Time = i * 10, Model = "MIROC-ESM-CHEM_RCP85", RCP = "RCP85", Prescription = "Resilience")
+  results[[i]] <- df
+}
+AWB_MIROC_ESM_CHEM_RCP85_ResilienceDf <- bind_rows(results)
+
+#----STRUCTURAL DIVERSITY----#
+# combinedData <- list()
+# index <- 1
+# 
+# for (run in runs) {
+#   runDir <- file.path(mainDir, run)
+#   for (year in seq(0, 80, by = 10)) {
+#     filename <- paste0("community-input-file-", year, ".csv")
+#     filePath <- file.path(runDir, filename)
+#     data <- fread(filePath)
+#     data <- data %>% mutate(across(where(is.double), as.integer))
+#     data$Run <- run
+#     data$Time <- year
+#     combinedData[[index]] <- data
+#     index <- index + 1
+#   }
+# }
+# 
+# combinedData <- do.call(rbind, lapply(seq_along(combinedData), function(i) {
+#   df <- combinedData[[i]]
+#   return(df)
+# }))
+# 
+# fwrite(combinedData,
+#        file = "C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/combinedData.csv")
+
+```
+
+### LSHV (MRI-CGCM3)
+
+```{r, message = FALSE, warning = FALSE}
+#----Spp Biomass----#
+mainDir <- "D:/Landis Outputs/Resilience/RCP85/LSHV"
+runs <- paste0("run", 1:5)
+combinedData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "spp-biomass-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+finalTable <- do.call(rbind, combinedData) %>%
+  select(-`...34`)
+
+# Composition through time
+sppBiomass_MRI_CGCM3_RCP85_Resilience <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  group_by(Time, Species) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n()))) %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", ""),
+         RCP = "RCP85",
+         Model = "MRI-CGCM3_RCP85",
+         Prescription = "Resilience")
+
+# Proportional composition
+propBiomass_MRI_CGCM3_RCP85_Resilience <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, Species) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n()))) %>%
+  mutate(RCP = "RCP85",
+         Model = "MRI-CGCM3_RCP85",
+         Prescription = "Resilience",
+         FunctionalGroup = ifelse(Species %in% softwoods, "Softwoods",
+                                  ifelse(Species %in% oaks, "Oaks", "Hardwoods")),
+         TotalBiomass = sum(Biomass_MG),
+         Biomass_Percent = (Biomass_MG / TotalBiomass) * 100)
+
+propBiomass_MRI_CGCM3_RCP85_Resilience_AllRuns <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, Run) %>% # Group by time and run
+  mutate(Percent_Biomass = Biomass_MG / sum(Biomass_MG, na.rm = TRUE) * 100,
+         RCP = "RCP85",
+         Model = "MRI-CGCM3_RCP85",
+         Prescription = "Resilience")
+
+#----Harvesting Rates----#
+## Normal
+combinedData <- list()
+for (run in runs){
+  harvestDir <- file.path(mainDir, run, "Harvest")
+  filePath <- file.path(harvestDir, "biomass-harvest-summary-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+harvest_MRI_CGCM3_RCP85_Resilience <- do.call(rbind, combinedData) %>%
+  mutate(Prescription_Type = Prescription, RCP = "RCP85", Model = "MRI-CGCM3_RCP85") %>%
+  mutate(Prescription = "Resilience")
+
+#----Climate----#
+# For loop to read in future climate data. Then organised into appropriate metrics
+climateData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "Climate-future-input-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  climateData[[run]] <- data
+}
+climateData <- do.call(rbind, climateData) %>%
+  select(-`...28`)
+MIROC_ESM_CHEM_RCP85 <- climateData[,c(1,2,5,6,7,28)] %>%
+  mutate(mean_airtemp = (min_airtemp + max_airtemp) / 2) %>%
+  group_by(Year) %>%
+  summarise(meanppt = mean(ppt),
+            sumppt = sum(ppt),
+            airtemp = mean(mean_airtemp)) %>%
+  mutate(Model = "MRI-CGCM3_RCP85")
+
+#----BIODIVERSITY----#
+diversity_MRI_CGCM3_RCP85_Resilience <- propBiomass_MRI_CGCM3_RCP85_Resilience[,c(1:3,9)] %>%
+  mutate(Pi = Biomass_Percent / 100,
+         lnPi = log(Pi),
+         PixlnPi = Pi * lnPi) %>%
+  group_by(Time) %>%
+  summarise(H = -sum(PixlnPi, na.rm = TRUE)) %>%
+  mutate(Model = "MRI-CGCM3_RCP85",
+         RCP = "RCP85",
+         Prescription = "Resilience")
+
+#----SUCCESSION LOG VARIABLES----#
+combinedData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "NECN-succession-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+successionLog_MRI_CGCM3_RCP85_Resilience <- rbind(combinedData[[1]], combinedData[[2]], combinedData[[3]], combinedData[[4]], combinedData[[5]]) %>%
+  select(-`...62`) %>%
+  group_by(Time) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n())))) %>%
+  mutate(Model = "MRI-CGCM3_RCP85",
+         RCP = "RCP85",
+         Prescription = "Resilience")
+
+successionLog_MRI_CGCM3_RCP85_Resilience_All <- rbind(combinedData[[1]], combinedData[[2]], combinedData[[3]], combinedData[[4]], combinedData[[5]]) %>%
+  select(-`...62`) %>%
+  group_by(Time, Run) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n())))) %>%
+  mutate(Model = "MRI-CGCM3_RCP85",
+         RCP = "RCP85",
+         Prescription = "Resilience")
+
+#----ANNUAL WATER BUDGET----#
+combinedRasters <- list()
+for (run in 1:5) {
+  runDir <- file.path(mainDir, paste0("run", run))
+  for (year in seq(10, 80, by = 10)) {
+    filename <- paste0("Annual-water-budget-", year, ".img")
+    filePath <- file.path(runDir, filename)
+    rasterData <- rast(filePath)
+    crs(rasterData) <- "epsg:26917"
+    rasterData <- flip(rasterData)
+    newFileName <- sub("\\.img$", paste0("_run", run, ".tif"), filename)
+    combinedRasters[[newFileName]] <- rasterData
+  }
+}
+
+results <- list()
+for (i in 1:8) {
+  indices <- seq(i, 33 + i, by = 8)
+  df <- c(combinedRasters[[indices[1]]], combinedRasters[[indices[2]]], combinedRasters[[indices[3]]], 
+          combinedRasters[[indices[4]]], combinedRasters[[indices[5]]]) %>%
+    as.data.frame() %>%
+    `colnames<-`(c("run1", "run2", "run3", "run4", "run5")) %>%
+    pivot_longer(cols = "run1":"run5", values_to = "AWB", names_to = "Run") %>%
+    filter(AWB > 0) %>%
+    group_by(Run) %>%
+    summarise(AWB = mean(AWB)) %>%
+    mutate(Time = i * 10, Model = "MRI-CGCM3_RCP85", RCP = "RCP85", Prescription = "Resilience")
+  results[[i]] <- df
+}
+AWB_MRI_CGCM3_RCP85_ResilienceDf <- bind_rows(results)
+
+#----STRUCTURAL DIVERSITY----#
+# combinedData <- list()
+# index <- 1
+# 
+# for (run in runs) {
+#   runDir <- file.path(mainDir, run)
+#   for (year in seq(0, 80, by = 10)) {
+#     filename <- paste0("community-input-file-", year, ".csv")
+#     filePath <- file.path(runDir, filename)
+#     data <- fread(filePath)
+#     data <- data %>% mutate(across(where(is.double), as.integer))
+#     data$Run <- run
+#     data$Time <- year
+#     combinedData[[index]] <- data
+#     index <- index + 1
+#   }
+# }
+# 
+# combinedData <- do.call(rbind, lapply(seq_along(combinedData), function(i) {
+#   df <- combinedData[[i]]
+#   return(df)
+# }))
+# 
+# fwrite(combinedData,
+#        file = "C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/combinedData.csv")
+```
+
+### LSLV (CCSM4)
+
+```{r, message = FALSE, warning = FALSE}
+#----Spp Biomass----#
+mainDir <- "D:/Landis Outputs/Resilience/RCP85/LSLV"
+runs <- paste0("run", 1:5)
+combinedData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "spp-biomass-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+finalTable <- do.call(rbind, combinedData) %>%
+  select(-`...34`)
+
+# Composition through time
+sppBiomass_CCSM4_RCP85_Resilience <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  group_by(Time, Species) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n()))) %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", ""),
+         RCP = "RCP85",
+         Model = "CCSM4_RCP85",
+         Prescription = "Resilience")
+
+# Proportional composition
+propBiomass_CCSM4_RCP85_Resilience <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, Species) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n()))) %>%
+  mutate(RCP = "RCP85",
+         Model = "CCSM4_RCP85",
+         Prescription = "Resilience",
+         FunctionalGroup = ifelse(Species %in% softwoods, "Softwoods",
+                                  ifelse(Species %in% oaks, "Oaks", "Hardwoods")),
+         TotalBiomass = sum(Biomass_MG),
+         Biomass_Percent = (Biomass_MG / TotalBiomass) * 100)
+
+propBiomass_CCSM4_RCP85_Resilience_AllRuns <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, Run) %>% # Group by time and run
+  mutate(Percent_Biomass = Biomass_MG / sum(Biomass_MG, na.rm = TRUE) * 100,
+         RCP = "RCP85",
+         Model = "CCSM4_RCP85",
+         Prescription = "Resilience")
+
+#----Harvesting Rates----#
+## Normal
+combinedData <- list()
+for (run in runs){
+  harvestDir <- file.path(mainDir, run, "Harvest")
+  filePath <- file.path(harvestDir, "biomass-harvest-summary-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+harvest_CCSM4_RCP85_Resilience <- do.call(rbind, combinedData) %>%
+  mutate(Prescription_Type = Prescription, RCP = "RCP85", Model = "CCSM4_RCP85") %>%
+  mutate(Prescription = "Resilience")
+
+#----Climate----#
+# For loop to read in future climate data. Then organised into appropriate metrics
+climateData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "Climate-future-input-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  climateData[[run]] <- data
+}
+climateData <- do.call(rbind, climateData) %>%
+  select(-`...28`)
+MIROC_ESM_CHEM_RCP85 <- climateData[,c(1,2,5,6,7,28)] %>%
+  mutate(mean_airtemp = (min_airtemp + max_airtemp) / 2) %>%
+  group_by(Year) %>%
+  summarise(meanppt = mean(ppt),
+            sumppt = sum(ppt),
+            airtemp = mean(mean_airtemp)) %>%
+  mutate(Model = "CCSM4_RCP85")
+
+#----BIODIVERSITY----#
+diversity_CCSM4_RCP85_Resilience <- propBiomass_CCSM4_RCP85_Resilience[,c(1:3,9)] %>%
+  mutate(Pi = Biomass_Percent / 100,
+         lnPi = log(Pi),
+         PixlnPi = Pi * lnPi) %>%
+  group_by(Time) %>%
+  summarise(H = -sum(PixlnPi, na.rm = TRUE)) %>%
+  mutate(Model = "CCSM4_RCP85",
+         RCP = "RCP85",
+         Prescription = "Resilience")
+
+#----SUCCESSION LOG VARIABLES----#
+combinedData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "NECN-succession-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+successionLog_CCSM4_RCP85_Resilience <- rbind(combinedData[[1]], combinedData[[2]], combinedData[[3]], combinedData[[4]], combinedData[[5]]) %>%
+  select(-`...62`) %>%
+  group_by(Time) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n())))) %>%
+  mutate(Model = "CCSM4_RCP85",
+         RCP = "RCP85",
+         Prescription = "Resilience")
+
+successionLog_CCSM4_RCP85_Resilience_All <- rbind(combinedData[[1]], combinedData[[2]], combinedData[[3]], combinedData[[4]], combinedData[[5]]) %>%
+  select(-`...62`) %>%
+  group_by(Time, Run) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n())))) %>%
+  mutate(Model = "CCSM4_RCP85",
+         RCP = "RCP85",
+         Prescription = "Resilience")
+
+#----ANNUAL WATER BUDGET----#
+combinedRasters <- list()
+for (run in 1:5) {
+  runDir <- file.path(mainDir, paste0("run", run))
+  for (year in seq(10, 80, by = 10)) {
+    filename <- paste0("Annual-water-budget-", year, ".img")
+    filePath <- file.path(runDir, filename)
+    rasterData <- rast(filePath)
+    crs(rasterData) <- "epsg:26917"
+    rasterData <- flip(rasterData)
+    newFileName <- sub("\\.img$", paste0("_run", run, ".tif"), filename)
+    combinedRasters[[newFileName]] <- rasterData
+  }
+}
+
+results <- list()
+for (i in 1:8) {
+  indices <- seq(i, 33 + i, by = 8)
+  df <- c(combinedRasters[[indices[1]]], combinedRasters[[indices[2]]], combinedRasters[[indices[3]]], 
+          combinedRasters[[indices[4]]], combinedRasters[[indices[5]]]) %>%
+    as.data.frame() %>%
+    `colnames<-`(c("run1", "run2", "run3", "run4", "run5")) %>%
+    pivot_longer(cols = "run1":"run5", values_to = "AWB", names_to = "Run") %>%
+    filter(AWB > 0) %>%
+    group_by(Run) %>%
+    summarise(AWB = mean(AWB)) %>%
+    mutate(Time = i * 10, Model = "CCSM4_RCP85", RCP = "RCP85", Prescription = "Resilience")
+  results[[i]] <- df
+}
+AWB_CCSM4_RCP85_ResilienceDf <- bind_rows(results)
+
+#----STRUCTURAL DIVERSITY----#
+# combinedData <- list()
+# index <- 1
+# 
+# for (run in runs) {
+#   runDir <- file.path(mainDir, run)
+#   for (year in seq(0, 80, by = 10)) {
+#     filename <- paste0("community-input-file-", year, ".csv")
+#     filePath <- file.path(runDir, filename)
+#     data <- fread(filePath)
+#     data <- data %>% mutate(across(where(is.double), as.integer))
+#     data$Run <- run
+#     data$Time <- year
+#     combinedData[[index]] <- data
+#     index <- index + 1
+#   }
+# }
+# 
+# combinedData <- do.call(rbind, lapply(seq_along(combinedData), function(i) {
+#   df <- combinedData[[i]]
+#   return(df)
+# }))
+# 
+# fwrite(combinedData,
+#        file = "C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/combinedData.csv")
+```
+
+# TRANSITION
+## RCP45
+### HSHV (BNU-ESM)
+
+```{r, message = FALSE, warning = FALSE}
+#----Spp Biomass----#
+mainDir <- "D:/Landis Outputs/Transition/RCP45/HSHV"
+runs <- paste0("run", 1:5)
+combinedData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "spp-biomass-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+finalTable <- do.call(rbind, combinedData) %>%
+  select(-`...34`)
+
+# Composition through time
+sppBiomass_BNU_ESM_RCP45_Transition <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  group_by(Time, Species) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n()))) %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", ""),
+         RCP = "RCP45",
+         Model = "BNU-ESM_RCP45",
+         Prescription = "Transition")
+
+# Proportional composition
+propBiomass_BNU_ESM_RCP45_Transition <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, Species) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n()))) %>%
+  mutate(RCP = "RCP45",
+         Model = "BNU-ESM_RCP45",
+         Prescription = "Transition",
+         FunctionalGroup = ifelse(Species %in% softwoods, "Softwoods",
+                                  ifelse(Species %in% oaks, "Oaks", "Hardwoods")),
+         TotalBiomass = sum(Biomass_MG),
+         Biomass_Percent = (Biomass_MG / TotalBiomass) * 100)
+
+propBiomass_BNU_ESM_RCP45_Transition_AllRuns <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, Run) %>% # Group by time and run
+  mutate(Percent_Biomass = Biomass_MG / sum(Biomass_MG, na.rm = TRUE) * 100,
+         RCP = "RCP45",
+         Model = "BNU-ESM_RCP45",
+         Prescription = "Transition")
+
+#----Harvesting Rates----#
+## Normal
+combinedData <- list()
+for (run in runs){
+  harvestDir <- file.path(mainDir, run, "Harvest")
+  filePath <- file.path(harvestDir, "biomass-harvest-summary-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+harvest_BNU_ESM_RCP45_Transition <- do.call(rbind, combinedData) %>%
+  mutate(Prescription_Type = Prescription, RCP = "RCP45", Model = "BNU-ESM_RCP45") %>%
+  mutate(Prescription = "Transition")
+
+#----Climate----#
+# For loop to read in future climate data. Then organised into appropriate metrics
+climateData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "Climate-future-input-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  climateData[[run]] <- data
+}
+climateData <- do.call(rbind, climateData) %>%
+  select(-`...28`)
+BNU_ESM_RCP45 <- climateData[,c(1,2,5,6,7,28)] %>%
+  mutate(mean_airtemp = (min_airtemp + max_airtemp) / 2) %>%
+  group_by(Year) %>%
+  summarise(meanppt = mean(ppt),
+            sumppt = sum(ppt),
+            airtemp = mean(mean_airtemp)) %>%
+  mutate(Model = "BNU-ESM_RCP45")
+
+#----BIODIVERSITY----#
+diversity_BNU_ESM_RCP45_Transition <- propBiomass_BNU_ESM_RCP45_Transition[,c(1:3,9)] %>%
+  mutate(Pi = Biomass_Percent / 100,
+         lnPi = log(Pi),
+         PixlnPi = Pi * lnPi) %>%
+  group_by(Time) %>%
+  summarise(H = -sum(PixlnPi, na.rm = TRUE)) %>%
+  mutate(Model = "BNU-ESM_RCP45",
+         RCP = "RCP45",
+         Prescription = "Transition")
+
+#----SUCCESSION LOG VARIABLES----#
+combinedData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "NECN-succession-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+successionLog_BNU_ESM_RCP45_Transition <- rbind(combinedData[[1]], combinedData[[2]], combinedData[[3]], combinedData[[4]], combinedData[[5]]) %>%
+  select(-`...62`) %>%
+  group_by(Time) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n())))) %>%
+  mutate(Model = "BNU-ESM_RCP45",
+         RCP = "RCP45",
+         Prescription = "Transition")
+
+successionLog_BNU_ESM_RCP45_Transition_All <- rbind(combinedData[[1]], combinedData[[2]], combinedData[[3]], combinedData[[4]], combinedData[[5]]) %>%
+  select(-`...62`) %>%
+  group_by(Time, Run) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n())))) %>%
+  mutate(Model = "BNU-ESM_RCP45",
+         RCP = "RCP45",
+         Prescription = "Transition")
+
+#----ANNUAL WATER BUDGET----#
+combinedRasters <- list()
+for (run in 1:5) {
+  runDir <- file.path(mainDir, paste0("run", run))
+  for (year in seq(10, 80, by = 10)) {
+    filename <- paste0("Annual-water-budget-", year, ".img")
+    filePath <- file.path(runDir, filename)
+    rasterData <- rast(filePath)
+    crs(rasterData) <- "epsg:26917"
+    rasterData <- flip(rasterData)
+    newFileName <- sub("\\.img$", paste0("_run", run, ".tif"), filename)
+    combinedRasters[[newFileName]] <- rasterData
+  }
+}
+
+results <- list()
+for (i in 1:8) {
+  indices <- seq(i, 33 + i, by = 8)
+  df <- c(combinedRasters[[indices[1]]], combinedRasters[[indices[2]]], combinedRasters[[indices[3]]], 
+          combinedRasters[[indices[4]]], combinedRasters[[indices[5]]]) %>%
+    as.data.frame() %>%
+    `colnames<-`(c("run1", "run2", "run3", "run4", "run5")) %>%
+    pivot_longer(cols = "run1":"run5", values_to = "AWB", names_to = "Run") %>%
+    filter(AWB > 0) %>%
+    group_by(Run) %>%
+    summarise(AWB = mean(AWB)) %>%
+    mutate(Time = i * 10, Model = "BNU-ESM_RCP45", RCP = "RCP45", Prescription = "Transition")
+  results[[i]] <- df
+}
+AWB_BNU_ESM_RCP45_TransitionDf <- bind_rows(results)
+
+#----STRUCTURAL DIVERSITY----#
+# combinedData <- list()
+# index <- 1
+# 
+# for (run in runs) {
+#   runDir <- file.path(mainDir, run)
+#   for (year in seq(0, 80, by = 10)) {
+#     filename <- paste0("community-input-file-", year, ".csv")
+#     filePath <- file.path(runDir, filename)
+#     data <- fread(filePath)
+#     data <- data %>% mutate(across(where(is.double), as.integer))
+#     data$Run <- run
+#     data$Time <- year
+#     combinedData[[index]] <- data
+#     index <- index + 1
+#   }
+# }
+# 
+# combinedData <- do.call(rbind, lapply(seq_along(combinedData), function(i) {
+#   df <- combinedData[[i]]
+#   return(df)
+# }))
+# 
+# fwrite(combinedData,
+#        file = "C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/combinedData.csv")
+```
+
+### HSLV (MIROC-ESM-CHEM)
+
+```{r, message = FALSE, warning = FALSE}
+#----Spp Biomass----#
+mainDir <- "D:/Landis Outputs/Transition/RCP45/HSLV"
+runs <- paste0("run", 1:5)
+combinedData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "spp-biomass-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+finalTable <- do.call(rbind, combinedData) %>%
+  select(-`...34`)
+
+# Composition through time
+sppBiomass_MIROC_ESM_CHEM_RCP45_Transition <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  group_by(Time, Species) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n()))) %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", ""),
+         RCP = "RCP45",
+         Model = "MIROC-ESM-CHEM_RCP45",
+         Prescription = "Transition")
+
+# Proportional composition
+propBiomass_MIROC_ESM_CHEM_RCP45_Transition <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, Species) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n()))) %>%
+  mutate(RCP = "RCP45",
+         Model = "MIROC-ESM-CHEM_RCP45",
+         Prescription = "Transition",
+         FunctionalGroup = ifelse(Species %in% softwoods, "Softwoods",
+                                  ifelse(Species %in% oaks, "Oaks", "Hardwoods")),
+         TotalBiomass = sum(Biomass_MG),
+         Biomass_Percent = (Biomass_MG / TotalBiomass) * 100)
+
+propBiomass_MIROC_ESM_CHEM_RCP45_Transition_AllRuns <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, Run) %>% # Group by time and run
+  mutate(Percent_Biomass = Biomass_MG / sum(Biomass_MG, na.rm = TRUE) * 100,
+         RCP = "RCP45",
+         Model = "MIROC-ESM-CHEM_RCP45",
+         Prescription = "Transition")
+
+#----Harvesting Rates----#
+## Normal
+combinedData <- list()
+for (run in runs){
+  harvestDir <- file.path(mainDir, run, "Harvest")
+  filePath <- file.path(harvestDir, "biomass-harvest-summary-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+harvest_MIROC_ESM_CHEM_RCP45_Transition <- do.call(rbind, combinedData) %>%
+  mutate(Prescription_Type = Prescription, RCP = "RCP45", Model = "MIROC-ESM-CHEM_RCP45") %>%
+  mutate(Prescription = "Transition")
+
+#----Climate----#
+# For loop to read in future climate data. Then organised into appropriate metrics
+climateData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "Climate-future-input-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  climateData[[run]] <- data
+}
+climateData <- do.call(rbind, climateData) %>%
+  select(-`...28`)
+MIROC_ESM_CHEM_RCP45 <- climateData[,c(1,2,5,6,7,28)] %>%
+  mutate(mean_airtemp = (min_airtemp + max_airtemp) / 2) %>%
+  group_by(Year) %>%
+  summarise(meanppt = mean(ppt),
+            sumppt = sum(ppt),
+            airtemp = mean(mean_airtemp)) %>%
+  mutate(Model = "MIROC-ESM-CHEM_RCP45")
+
+#----BIODIVERSITY----#
+diversity_MIROC_ESM_CHEM_RCP45_Transition <- propBiomass_MIROC_ESM_CHEM_RCP45_Transition[,c(1:3,9)] %>%
+  mutate(Pi = Biomass_Percent / 100,
+         lnPi = log(Pi),
+         PixlnPi = Pi * lnPi) %>%
+  group_by(Time) %>%
+  summarise(H = -sum(PixlnPi, na.rm = TRUE)) %>%
+  mutate(Model = "MIROC-ESM-CHEM_RCP45",
+         RCP = "RCP45",
+         Prescription = "Transition")
+
+#----SUCCESSION LOG VARIABLES----#
+combinedData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "NECN-succession-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+successionLog_MIROC_ESM_CHEM_RCP45_Transition <- rbind(combinedData[[1]], combinedData[[2]], combinedData[[3]], combinedData[[4]], combinedData[[5]]) %>%
+  select(-`...62`) %>%
+  group_by(Time) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n())))) %>%
+  mutate(Model = "MIROC-ESM-CHEM_RCP45",
+         RCP = "RCP45",
+         Prescription = "Transition")
+
+successionLog_MIROC_ESM_CHEM_RCP45_Transition_All <- rbind(combinedData[[1]], combinedData[[2]], combinedData[[3]], combinedData[[4]], combinedData[[5]]) %>%
+  select(-`...62`) %>%
+  group_by(Time, Run) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n())))) %>%
+  mutate(Model = "MIROC-ESM-CHEM_RCP45",
+         RCP = "RCP45",
+         Prescription = "Transition")
+
+#----ANNUAL WATER BUDGET----#
+combinedRasters <- list()
+for (run in 1:5) {
+  runDir <- file.path(mainDir, paste0("run", run))
+  for (year in seq(10, 80, by = 10)) {
+    filename <- paste0("Annual-water-budget-", year, ".img")
+    filePath <- file.path(runDir, filename)
+    rasterData <- rast(filePath)
+    crs(rasterData) <- "epsg:26917"
+    rasterData <- flip(rasterData)
+    newFileName <- sub("\\.img$", paste0("_run", run, ".tif"), filename)
+    combinedRasters[[newFileName]] <- rasterData
+  }
+}
+
+results <- list()
+for (i in 1:8) {
+  indices <- seq(i, 33 + i, by = 8)
+  df <- c(combinedRasters[[indices[1]]], combinedRasters[[indices[2]]], combinedRasters[[indices[3]]], 
+          combinedRasters[[indices[4]]], combinedRasters[[indices[5]]]) %>%
+    as.data.frame() %>%
+    `colnames<-`(c("run1", "run2", "run3", "run4", "run5")) %>%
+    pivot_longer(cols = "run1":"run5", values_to = "AWB", names_to = "Run") %>%
+    filter(AWB > 0) %>%
+    group_by(Run) %>%
+    summarise(AWB = mean(AWB)) %>%
+    mutate(Time = i * 10, Model = "MIROC-ESM-CHEM_RCP45", RCP = "RCP45", Prescription = "Transition")
+  results[[i]] <- df
+}
+AWB_MIROC_ESM_CHEM_RCP45_TransitionDf <- bind_rows(results)
+
+#----STRUCTURAL DIVERSITY----#
+# combinedData <- list()
+# index <- 1
+# 
+# for (run in runs) {
+#   runDir <- file.path(mainDir, run)
+#   for (year in seq(0, 80, by = 10)) {
+#     filename <- paste0("community-input-file-", year, ".csv")
+#     filePath <- file.path(runDir, filename)
+#     data <- fread(filePath)
+#     data <- data %>% mutate(across(where(is.double), as.integer))
+#     data$Run <- run
+#     data$Time <- year
+#     combinedData[[index]] <- data
+#     index <- index + 1
+#   }
+# }
+# 
+# combinedData <- do.call(rbind, lapply(seq_along(combinedData), function(i) {
+#   df <- combinedData[[i]]
+#   return(df)
+# }))
+# 
+# fwrite(combinedData,
+#        file = "C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/combinedData.csv")
+```
+
+### LSHV (MRI-CGCM3)
+
+```{r, message = FALSE, warning = FALSE}
+#----Spp Biomass----#
+mainDir <- "D:/Landis Outputs/Transition/RCP45/LSHV"
+runs <- paste0("run", 1:5)
+combinedData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "spp-biomass-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+finalTable <- do.call(rbind, combinedData) %>%
+  select(-`...34`)
+
+# Composition through time
+sppBiomass_MRI_CGCM3_RCP45_Transition <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  group_by(Time, Species) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n()))) %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", ""),
+         RCP = "RCP45",
+         Model = "MRI-CGCM3_RCP45",
+         Prescription = "Transition")
+
+# Proportional composition
+propBiomass_MRI_CGCM3_RCP45_Transition <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, Species) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n()))) %>%
+  mutate(RCP = "RCP45",
+         Model = "MRI-CGCM3_RCP45",
+         Prescription = "Transition",
+         FunctionalGroup = ifelse(Species %in% softwoods, "Softwoods",
+                                  ifelse(Species %in% oaks, "Oaks", "Hardwoods")),
+         TotalBiomass = sum(Biomass_MG),
+         Biomass_Percent = (Biomass_MG / TotalBiomass) * 100)
+
+propBiomass_MRI_CGCM3_RCP45_Transition_AllRuns <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, Run) %>% # Group by time and run
+  mutate(Percent_Biomass = Biomass_MG / sum(Biomass_MG, na.rm = TRUE) * 100,
+         RCP = "RCP45",
+         Model = "MRI-CGCM3_RCP45",
+         Prescription = "Transition")
+
+#----Harvesting Rates----#
+## Normal
+combinedData <- list()
+for (run in runs){
+  harvestDir <- file.path(mainDir, run, "Harvest")
+  filePath <- file.path(harvestDir, "biomass-harvest-summary-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+harvest_MRI_CGCM3_RCP45_Transition <- do.call(rbind, combinedData) %>%
+  mutate(Prescription_Type = Prescription, RCP = "RCP45", Model = "MRI-CGCM3_RCP45") %>%
+  mutate(Prescription = "Transition")
+
+#----Climate----#
+# For loop to read in future climate data. Then organised into appropriate metrics
+climateData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "Climate-future-input-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  climateData[[run]] <- data
+}
+climateData <- do.call(rbind, climateData) %>%
+  select(-`...28`)
+MRI_CGCM3_RCP45 <- climateData[,c(1,2,5,6,7,28)] %>%
+  mutate(mean_airtemp = (min_airtemp + max_airtemp) / 2) %>%
+  group_by(Year) %>%
+  summarise(meanppt = mean(ppt),
+            sumppt = sum(ppt),
+            airtemp = mean(mean_airtemp)) %>%
+  mutate(Model = "MRI-CGCM3_RCP45")
+
+#----BIODIVERSITY----#
+diversity_MRI_CGCM3_RCP45_Transition <- propBiomass_MRI_CGCM3_RCP45_Transition[,c(1:3,9)] %>%
+  mutate(Pi = Biomass_Percent / 100,
+         lnPi = log(Pi),
+         PixlnPi = Pi * lnPi) %>%
+  group_by(Time) %>%
+  summarise(H = -sum(PixlnPi, na.rm = TRUE)) %>%
+  mutate(Model = "MRI-CGCM3_RCP45",
+         RCP = "RCP45",
+         Prescription = "Transition")
+
+#----SUCCESSION LOG VARIABLES----#
+combinedData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "NECN-succession-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+successionLog_MRI_CGCM3_RCP45_Transition <- rbind(combinedData[[1]], combinedData[[2]], combinedData[[3]], combinedData[[4]], combinedData[[5]]) %>%
+  select(-`...62`) %>%
+  group_by(Time) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n())))) %>%
+  mutate(Model = "MRI-CGCM3_RCP45",
+         RCP = "RCP45",
+         Prescription = "Transition")
+
+successionLog_MRI_CGCM3_RCP45_Transition_All <- rbind(combinedData[[1]], combinedData[[2]], combinedData[[3]], combinedData[[4]], combinedData[[5]]) %>%
+  select(-`...62`) %>%
+  group_by(Time, Run) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n())))) %>%
+  mutate(Model = "MRI-CGCM3_RCP45",
+         RCP = "RCP45",
+         Prescription = "Transition")
+
+#----ANNUAL WATER BUDGET----#
+combinedRasters <- list()
+for (run in 1:5) {
+  runDir <- file.path(mainDir, paste0("run", run))
+  for (year in seq(10, 80, by = 10)) {
+    filename <- paste0("Annual-water-budget-", year, ".img")
+    filePath <- file.path(runDir, filename)
+    rasterData <- rast(filePath)
+    crs(rasterData) <- "epsg:26917"
+    rasterData <- flip(rasterData)
+    newFileName <- sub("\\.img$", paste0("_run", run, ".tif"), filename)
+    combinedRasters[[newFileName]] <- rasterData
+  }
+}
+
+results <- list()
+for (i in 1:8) {
+  indices <- seq(i, 33 + i, by = 8)
+  df <- c(combinedRasters[[indices[1]]], combinedRasters[[indices[2]]], combinedRasters[[indices[3]]], 
+          combinedRasters[[indices[4]]], combinedRasters[[indices[5]]]) %>%
+    as.data.frame() %>%
+    `colnames<-`(c("run1", "run2", "run3", "run4", "run5")) %>%
+    pivot_longer(cols = "run1":"run5", values_to = "AWB", names_to = "Run") %>%
+    filter(AWB > 0) %>%
+    group_by(Run) %>%
+    summarise(AWB = mean(AWB)) %>%
+    mutate(Time = i * 10, Model = "MRI-CGCM3_RCP45", RCP = "RCP45", Prescription = "Transition")
+  results[[i]] <- df
+}
+AWB_MRI_CGCM3_RCP45_TransitionDf <- bind_rows(results)
+
+#----STRUCTURAL DIVERSITY----#
+# combinedData <- list()
+# index <- 1
+# 
+# for (run in runs) {
+#   runDir <- file.path(mainDir, run)
+#   for (year in seq(0, 80, by = 10)) {
+#     filename <- paste0("community-input-file-", year, ".csv")
+#     filePath <- file.path(runDir, filename)
+#     data <- fread(filePath)
+#     data <- data %>% mutate(across(where(is.double), as.integer))
+#     data$Run <- run
+#     data$Time <- year
+#     combinedData[[index]] <- data
+#     index <- index + 1
+#   }
+# }
+# 
+# combinedData <- do.call(rbind, lapply(seq_along(combinedData), function(i) {
+#   df <- combinedData[[i]]
+#   return(df)
+# }))
+# 
+# fwrite(combinedData,
+#        file = "C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/combinedData.csv")
+```
+
+### LSLV (CCSM4)
+
+```{r, message = FALSE, warning = FALSE}
+#----Spp Biomass----#
+mainDir <- "D:/Landis Outputs/Transition/RCP45/LSLV"
+runs <- paste0("run", 1:5)
+combinedData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "spp-biomass-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+finalTable <- do.call(rbind, combinedData) %>%
+  select(-`...34`)
+
+# Composition through time
+sppBiomass_CCSM4_RCP45_Transition <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  group_by(Time, Species) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n()))) %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", ""),
+         RCP = "RCP45",
+         Model = "CCSM4_RCP45",
+         Prescription = "Transition")
+
+# Proportional composition
+propBiomass_CCSM4_RCP45_Transition <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, Species) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n()))) %>%
+  mutate(RCP = "RCP45",
+         Model = "CCSM4_RCP45",
+         Prescription = "Transition",
+         FunctionalGroup = ifelse(Species %in% softwoods, "Softwoods",
+                                  ifelse(Species %in% oaks, "Oaks", "Hardwoods")),
+         TotalBiomass = sum(Biomass_MG),
+         Biomass_Percent = (Biomass_MG / TotalBiomass) * 100)
+
+propBiomass_CCSM4_RCP45_Transition_AllRuns <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, Run) %>% # Group by time and run
+  mutate(Percent_Biomass = Biomass_MG / sum(Biomass_MG, na.rm = TRUE) * 100,
+         RCP = "RCP45",
+         Model = "CCSM4_RCP45",
+         Prescription = "Transition")
+
+#----Harvesting Rates----#
+## Normal
+combinedData <- list()
+for (run in runs){
+  harvestDir <- file.path(mainDir, run, "Harvest")
+  filePath <- file.path(harvestDir, "biomass-harvest-summary-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+harvest_CCSM4_RCP45_Transition <- do.call(rbind, combinedData) %>%
+  mutate(Prescription_Type = Prescription, RCP = "RCP45", Model = "CCSM4_RCP45") %>%
+  mutate(Prescription = "Transition")
+
+#----Climate----#
+# For loop to read in future climate data. Then organised into appropriate metrics
+climateData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "Climate-future-input-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  climateData[[run]] <- data
+}
+climateData <- do.call(rbind, climateData) %>%
+  select(-`...28`)
+CCSM4_RCP45 <- climateData[,c(1,2,5,6,7,28)] %>%
+  mutate(mean_airtemp = (min_airtemp + max_airtemp) / 2) %>%
+  group_by(Year) %>%
+  summarise(meanppt = mean(ppt),
+            sumppt = sum(ppt),
+            airtemp = mean(mean_airtemp)) %>%
+  mutate(Model = "CCSM4_RCP45")
+
+#----BIODIVERSITY----#
+diversity_CCSM4_RCP45_Transition <- propBiomass_CCSM4_RCP45_Transition[,c(1:3,9)] %>%
+  mutate(Pi = Biomass_Percent / 100,
+         lnPi = log(Pi),
+         PixlnPi = Pi * lnPi) %>%
+  group_by(Time) %>%
+  summarise(H = -sum(PixlnPi, na.rm = TRUE)) %>%
+  mutate(Model = "CCSM4_RCP45",
+         RCP = "RCP45",
+         Prescription = "Transition")
+
+#----SUCCESSION LOG VARIABLES----#
+combinedData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "NECN-succession-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+successionLog_CCSM4_RCP45_Transition <- rbind(combinedData[[1]], combinedData[[2]], combinedData[[3]], combinedData[[4]], combinedData[[5]]) %>%
+  select(-`...62`) %>%
+  group_by(Time) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n())))) %>%
+  mutate(Model = "CCSM4_RCP45",
+         RCP = "RCP45",
+         Prescription = "Transition")
+
+successionLog_CCSM4_RCP45_Transition_All <- rbind(combinedData[[1]], combinedData[[2]], combinedData[[3]], combinedData[[4]], combinedData[[5]]) %>%
+  select(-`...62`) %>%
+  group_by(Time, Run) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n())))) %>%
+  mutate(Model = "CCSM4_RCP45",
+         RCP = "RCP45",
+         Prescription = "Transition")
+
+#----ANNUAL WATER BUDGET----#
+combinedRasters <- list()
+for (run in 1:5) {
+  runDir <- file.path(mainDir, paste0("run", run))
+  for (year in seq(10, 80, by = 10)) {
+    filename <- paste0("Annual-water-budget-", year, ".img")
+    filePath <- file.path(runDir, filename)
+    rasterData <- rast(filePath)
+    crs(rasterData) <- "epsg:26917"
+    rasterData <- flip(rasterData)
+    newFileName <- sub("\\.img$", paste0("_run", run, ".tif"), filename)
+    combinedRasters[[newFileName]] <- rasterData
+  }
+}
+
+results <- list()
+for (i in 1:8) {
+  indices <- seq(i, 33 + i, by = 8)
+  df <- c(combinedRasters[[indices[1]]], combinedRasters[[indices[2]]], combinedRasters[[indices[3]]], 
+          combinedRasters[[indices[4]]], combinedRasters[[indices[5]]]) %>%
+    as.data.frame() %>%
+    `colnames<-`(c("run1", "run2", "run3", "run4", "run5")) %>%
+    pivot_longer(cols = "run1":"run5", values_to = "AWB", names_to = "Run") %>%
+    filter(AWB > 0) %>%
+    group_by(Run) %>%
+    summarise(AWB = mean(AWB)) %>%
+    mutate(Time = i * 10, Model = "CCSM4_RCP45", RCP = "RCP45", Prescription = "Transition")
+  results[[i]] <- df
+}
+AWB_CCSM4_RCP45_TransitionDf <- bind_rows(results)
+
+#----STRUCTURAL DIVERSITY----#
+# combinedData <- list()
+# index <- 1
+# 
+# for (run in runs) {
+#   runDir <- file.path(mainDir, run)
+#   for (year in seq(0, 80, by = 10)) {
+#     filename <- paste0("community-input-file-", year, ".csv")
+#     filePath <- file.path(runDir, filename)
+#     data <- fread(filePath)
+#     data <- data %>% mutate(across(where(is.double), as.integer))
+#     data$Run <- run
+#     data$Time <- year
+#     combinedData[[index]] <- data
+#     index <- index + 1
+#   }
+# }
+# 
+# combinedData <- do.call(rbind, lapply(seq_along(combinedData), function(i) {
+#   df <- combinedData[[i]]
+#   return(df)
+# }))
+# 
+# fwrite(combinedData,
+#        file = "C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/combinedData.csv")
+
+```
+
+## RCP85
+### HSHV (BNU-ESM)
+
+```{r, message = FALSE, warning = FALSE}
+#----Spp Biomass----#
+mainDir <- "D:/Landis Outputs/Transition/RCP85/HSHV"
+runs <- paste0("run", 1:5)
+combinedData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "spp-biomass-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+finalTable <- do.call(rbind, combinedData) %>%
+  select(-`...34`)
+
+# Composition through time
+sppBiomass_BNU_ESM_RCP85_Transition <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  group_by(Time, Species) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n()))) %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", ""),
+         RCP = "RCP85",
+         Model = "BNU-ESM_RCP85",
+         Prescription = "Transition")
+
+# Proportional composition
+propBiomass_BNU_ESM_RCP85_Transition <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, Species) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n()))) %>%
+  mutate(RCP = "RCP85",
+         Model = "BNU-ESM_RCP85",
+         Prescription = "Transition",
+         FunctionalGroup = ifelse(Species %in% softwoods, "Softwoods",
+                                  ifelse(Species %in% oaks, "Oaks", "Hardwoods")),
+         TotalBiomass = sum(Biomass_MG),
+         Biomass_Percent = (Biomass_MG / TotalBiomass) * 100)
+
+propBiomass_BNU_ESM_RCP85_Transition_AllRuns <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, Run) %>% # Group by time and run
+  mutate(Percent_Biomass = Biomass_MG / sum(Biomass_MG, na.rm = TRUE) * 100,
+         RCP = "RCP85",
+         Model = "BNU-ESM_RCP85",
+         Prescription = "Transition")
+
+#----Harvesting Rates----#
+## Normal
+combinedData <- list()
+for (run in runs){
+  harvestDir <- file.path(mainDir, run, "Harvest")
+  filePath <- file.path(harvestDir, "biomass-harvest-summary-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+harvest_BNU_ESM_RCP85_Transition <- do.call(rbind, combinedData) %>%
+  mutate(Prescription_Type = Prescription, RCP = "RCP85", Model = "BNU-ESM_RCP85") %>%
+  mutate(Prescription = "Transition")
+
+#----Climate----#
+# For loop to read in future climate data. Then organised into appropriate metrics
+climateData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "Climate-future-input-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  climateData[[run]] <- data
+}
+climateData <- do.call(rbind, climateData) %>%
+  select(-`...28`)
+BNU_ESM_RCP85 <- climateData[,c(1,2,5,6,7,28)] %>%
+  mutate(mean_airtemp = (min_airtemp + max_airtemp) / 2) %>%
+  group_by(Year) %>%
+  summarise(meanppt = mean(ppt),
+            sumppt = sum(ppt),
+            airtemp = mean(mean_airtemp)) %>%
+  mutate(Model = "BNU-ESM_RCP85")
+
+#----BIODIVERSITY----#
+diversity_BNU_ESM_RCP85_Transition <- propBiomass_BNU_ESM_RCP85_Transition[,c(1:3,9)] %>%
+  mutate(Pi = Biomass_Percent / 100,
+         lnPi = log(Pi),
+         PixlnPi = Pi * lnPi) %>%
+  group_by(Time) %>%
+  summarise(H = -sum(PixlnPi, na.rm = TRUE)) %>%
+  mutate(Model = "BNU-ESM_RCP85",
+         RCP = "RCP85",
+         Prescription = "Transition")
+
+#----SUCCESSION LOG VARIABLES----#
+combinedData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "NECN-succession-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+successionLog_BNU_ESM_RCP85_Transition <- rbind(combinedData[[1]], combinedData[[2]], combinedData[[3]], combinedData[[4]], combinedData[[5]]) %>%
+  select(-`...62`) %>%
+  group_by(Time) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n())))) %>%
+  mutate(Model = "BNU-ESM_RCP85",
+         RCP = "RCP85",
+         Prescription = "Transition")
+
+successionLog_BNU_ESM_RCP85_Transition_All <- rbind(combinedData[[1]], combinedData[[2]], combinedData[[3]], combinedData[[4]], combinedData[[5]]) %>%
+  select(-`...62`) %>%
+  group_by(Time, Run) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n())))) %>%
+  mutate(Model = "BNU-ESM_RCP85",
+         RCP = "RCP85",
+         Prescription = "Transition")
+
+#----ANNUAL WATER BUDGET----#
+combinedRasters <- list()
+for (run in 1:5) {
+  runDir <- file.path(mainDir, paste0("run", run))
+  for (year in seq(10, 80, by = 10)) {
+    filename <- paste0("Annual-water-budget-", year, ".img")
+    filePath <- file.path(runDir, filename)
+    rasterData <- rast(filePath)
+    crs(rasterData) <- "epsg:26917"
+    rasterData <- flip(rasterData)
+    newFileName <- sub("\\.img$", paste0("_run", run, ".tif"), filename)
+    combinedRasters[[newFileName]] <- rasterData
+  }
+}
+
+results <- list()
+for (i in 1:8) {
+  indices <- seq(i, 33 + i, by = 8)
+  df <- c(combinedRasters[[indices[1]]], combinedRasters[[indices[2]]], combinedRasters[[indices[3]]], 
+          combinedRasters[[indices[4]]], combinedRasters[[indices[5]]]) %>%
+    as.data.frame() %>%
+    `colnames<-`(c("run1", "run2", "run3", "run4", "run5")) %>%
+    pivot_longer(cols = "run1":"run5", values_to = "AWB", names_to = "Run") %>%
+    filter(AWB > 0) %>%
+    group_by(Run) %>%
+    summarise(AWB = mean(AWB)) %>%
+    mutate(Time = i * 10, Model = "BNU-ESM_RCP85", RCP = "RCP85", Prescription = "Transition")
+  results[[i]] <- df
+}
+AWB_BNU_ESM_RCP85_TransitionDf <- bind_rows(results)
+
+#----STRUCTURAL DIVERSITY----#
+# combinedData <- list()
+# index <- 1
+# 
+# for (run in runs) {
+#   runDir <- file.path(mainDir, run)
+#   for (year in seq(0, 80, by = 10)) {
+#     filename <- paste0("community-input-file-", year, ".csv")
+#     filePath <- file.path(runDir, filename)
+#     data <- fread(filePath)
+#     data <- data %>% mutate(across(where(is.double), as.integer))
+#     data$Run <- run
+#     data$Time <- year
+#     combinedData[[index]] <- data
+#     index <- index + 1
+#   }
+# }
+# 
+# combinedData <- do.call(rbind, lapply(seq_along(combinedData), function(i) {
+#   df <- combinedData[[i]]
+#   return(df)
+# }))
+# 
+# fwrite(combinedData,
+#        file = "C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/combinedData.csv")
+```
+
+### HSLV (MIROC-ESM-CHEM)
+
+```{r, message = FALSE, warning = FALSE}
+#----Spp Biomass----#
+mainDir <- "D:/Landis Outputs/Transition/RCP85/HSLV"
+runs <- paste0("run", 1:5)
+combinedData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "spp-biomass-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+finalTable <- do.call(rbind, combinedData) %>%
+  select(-`...34`)
+
+# Composition through time
+sppBiomass_MIROC_ESM_CHEM_RCP85_Transition <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  group_by(Time, Species) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n()))) %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", ""),
+         RCP = "RCP85",
+         Model = "MIROC-ESM-CHEM_RCP85",
+         Prescription = "Transition")
+
+# Proportional composition
+propBiomass_MIROC_ESM_CHEM_RCP85_Transition <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, Species) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n()))) %>%
+  mutate(RCP = "RCP85",
+         Model = "MIROC-ESM-CHEM_RCP85",
+         Prescription = "Transition",
+         FunctionalGroup = ifelse(Species %in% softwoods, "Softwoods",
+                                  ifelse(Species %in% oaks, "Oaks", "Hardwoods")),
+         TotalBiomass = sum(Biomass_MG),
+         Biomass_Percent = (Biomass_MG / TotalBiomass) * 100)
+
+propBiomass_MIROC_ESM_CHEM_RCP85_Transition_AllRuns <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, Run) %>% # Group by time and run
+  mutate(Percent_Biomass = Biomass_MG / sum(Biomass_MG, na.rm = TRUE) * 100,
+         RCP = "RCP85",
+         Model = "MIROC-ESM-CHEM_RCP85",
+         Prescription = "Transition")
+
+#----Harvesting Rates----#
+## Normal
+combinedData <- list()
+for (run in runs){
+  harvestDir <- file.path(mainDir, run, "Harvest")
+  filePath <- file.path(harvestDir, "biomass-harvest-summary-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+harvest_MIROC_ESM_CHEM_RCP85_Transition <- do.call(rbind, combinedData) %>%
+  mutate(Prescription_Type = Prescription, RCP = "RCP85", Model = "MIROC-ESM-CHEM_RCP85") %>%
+  mutate(Prescription = "Transition")
+
+#----Climate----#
+# For loop to read in future climate data. Then organised into appropriate metrics
+climateData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "Climate-future-input-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  climateData[[run]] <- data
+}
+climateData <- do.call(rbind, climateData) %>%
+  select(-`...28`)
+MIROC_ESM_CHEM_RCP85 <- climateData[,c(1,2,5,6,7,28)] %>%
+  mutate(mean_airtemp = (min_airtemp + max_airtemp) / 2) %>%
+  group_by(Year) %>%
+  summarise(meanppt = mean(ppt),
+            sumppt = sum(ppt),
+            airtemp = mean(mean_airtemp)) %>%
+  mutate(Model = "MIROC-ESM-CHEM_RCP85")
+
+#----BIODIVERSITY----#
+diversity_MIROC_ESM_CHEM_RCP85_Transition <- propBiomass_MIROC_ESM_CHEM_RCP85_Transition[,c(1:3,9)] %>%
+  mutate(Pi = Biomass_Percent / 100,
+         lnPi = log(Pi),
+         PixlnPi = Pi * lnPi) %>%
+  group_by(Time) %>%
+  summarise(H = -sum(PixlnPi, na.rm = TRUE)) %>%
+  mutate(Model = "MIROC-ESM-CHEM_RCP85",
+         RCP = "RCP85",
+         Prescription = "Transition")
+
+#----SUCCESSION LOG VARIABLES----#
+combinedData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "NECN-succession-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+successionLog_MIROC_ESM_CHEM_RCP85_Transition <- rbind(combinedData[[1]], combinedData[[2]], combinedData[[3]], combinedData[[4]], combinedData[[5]]) %>%
+  select(-`...62`) %>%
+  group_by(Time) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n())))) %>%
+  mutate(Model = "MIROC-ESM-CHEM_RCP85",
+         RCP = "RCP85",
+         Prescription = "Transition")
+
+successionLog_MIROC_ESM_CHEM_RCP85_Transition_All <- rbind(combinedData[[1]], combinedData[[2]], combinedData[[3]], combinedData[[4]], combinedData[[5]]) %>%
+  select(-`...62`) %>%
+  group_by(Time, Run) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n())))) %>%
+  mutate(Model = "MIROC-ESM-CHEM_RCP85",
+         RCP = "RCP85",
+         Prescription = "Transition")
+
+#----ANNUAL WATER BUDGET----#
+combinedRasters <- list()
+for (run in 1:5) {
+  runDir <- file.path(mainDir, paste0("run", run))
+  for (year in seq(10, 80, by = 10)) {
+    filename <- paste0("Annual-water-budget-", year, ".img")
+    filePath <- file.path(runDir, filename)
+    rasterData <- rast(filePath)
+    crs(rasterData) <- "epsg:26917"
+    rasterData <- flip(rasterData)
+    newFileName <- sub("\\.img$", paste0("_run", run, ".tif"), filename)
+    combinedRasters[[newFileName]] <- rasterData
+  }
+}
+
+results <- list()
+for (i in 1:8) {
+  indices <- seq(i, 33 + i, by = 8)
+  df <- c(combinedRasters[[indices[1]]], combinedRasters[[indices[2]]], combinedRasters[[indices[3]]], 
+          combinedRasters[[indices[4]]], combinedRasters[[indices[5]]]) %>%
+    as.data.frame() %>%
+    `colnames<-`(c("run1", "run2", "run3", "run4", "run5")) %>%
+    pivot_longer(cols = "run1":"run5", values_to = "AWB", names_to = "Run") %>%
+    filter(AWB > 0) %>%
+    group_by(Run) %>%
+    summarise(AWB = mean(AWB)) %>%
+    mutate(Time = i * 10, Model = "MIROC-ESM-CHEM_RCP85", RCP = "RCP85", Prescription = "Transition")
+  results[[i]] <- df
+}
+AWB_MIROC_ESM_CHEM_RCP85_TransitionDf <- bind_rows(results)
+
+#----STRUCTURAL DIVERSITY----#
+# combinedData <- list()
+# index <- 1
+# 
+# for (run in runs) {
+#   runDir <- file.path(mainDir, run)
+#   for (year in seq(0, 80, by = 10)) {
+#     filename <- paste0("community-input-file-", year, ".csv")
+#     filePath <- file.path(runDir, filename)
+#     data <- fread(filePath)
+#     data <- data %>% mutate(across(where(is.double), as.integer))
+#     data$Run <- run
+#     data$Time <- year
+#     combinedData[[index]] <- data
+#     index <- index + 1
+#   }
+# }
+# 
+# combinedData <- do.call(rbind, lapply(seq_along(combinedData), function(i) {
+#   df <- combinedData[[i]]
+#   return(df)
+# }))
+# 
+# fwrite(combinedData,
+#        file = "C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/combinedData.csv")
+```
+
+### LSHV (MRI-CGCM3)
+
+```{r, message = FALSE, warning = FALSE}
+#----Spp Biomass----#
+mainDir <- "D:/Landis Outputs/Transition/RCP85/LSHV"
+runs <- paste0("run", 1:5)
+combinedData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "spp-biomass-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+finalTable <- do.call(rbind, combinedData) %>%
+  select(-`...34`)
+
+# Composition through time
+sppBiomass_MRI_CGCM3_RCP85_Transition <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  group_by(Time, Species) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n()))) %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", ""),
+         RCP = "RCP85",
+         Model = "MRI-CGCM3_RCP85",
+         Prescription = "Transition")
+
+# Proportional composition
+propBiomass_MRI_CGCM3_RCP85_Transition <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, Species) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n()))) %>%
+  mutate(RCP = "RCP85",
+         Model = "MRI-CGCM3_RCP85",
+         Prescription = "Transition",
+         FunctionalGroup = ifelse(Species %in% softwoods, "Softwoods",
+                                  ifelse(Species %in% oaks, "Oaks", "Hardwoods")),
+         TotalBiomass = sum(Biomass_MG),
+         Biomass_Percent = (Biomass_MG / TotalBiomass) * 100)
+
+propBiomass_MRI_CGCM3_RCP85_Transition_AllRuns <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, Run) %>% # Group by time and run
+  mutate(Percent_Biomass = Biomass_MG / sum(Biomass_MG, na.rm = TRUE) * 100,
+         RCP = "RCP85",
+         Model = "MRI-CGCM3_RCP85",
+         Prescription = "Transition")
+
+#----Harvesting Rates----#
+## Normal
+combinedData <- list()
+for (run in runs){
+  harvestDir <- file.path(mainDir, run, "Harvest")
+  filePath <- file.path(harvestDir, "biomass-harvest-summary-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+harvest_MRI_CGCM3_RCP85_Transition <- do.call(rbind, combinedData) %>%
+  mutate(Prescription_Type = Prescription, RCP = "RCP85", Model = "MRI-CGCM3_RCP85") %>%
+  mutate(Prescription = "Transition")
+
+#----Climate----#
+# For loop to read in future climate data. Then organised into appropriate metrics
+climateData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "Climate-future-input-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  climateData[[run]] <- data
+}
+climateData <- do.call(rbind, climateData) %>%
+  select(-`...28`)
+MRI_CGCM3_RCP85 <- climateData[,c(1,2,5,6,7,28)] %>%
+  mutate(mean_airtemp = (min_airtemp + max_airtemp) / 2) %>%
+  group_by(Year) %>%
+  summarise(meanppt = mean(ppt),
+            sumppt = sum(ppt),
+            airtemp = mean(mean_airtemp)) %>%
+  mutate(Model = "MRI-CGCM3_RCP85")
+
+#----BIODIVERSITY----#
+diversity_MRI_CGCM3_RCP85_Transition <- propBiomass_MRI_CGCM3_RCP85_Transition[,c(1:3,9)] %>%
+  mutate(Pi = Biomass_Percent / 100,
+         lnPi = log(Pi),
+         PixlnPi = Pi * lnPi) %>%
+  group_by(Time) %>%
+  summarise(H = -sum(PixlnPi, na.rm = TRUE)) %>%
+  mutate(Model = "MRI-CGCM3_RCP85",
+         RCP = "RCP85",
+         Prescription = "Transition")
+
+#----SUCCESSION LOG VARIABLES----#
+combinedData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "NECN-succession-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+successionLog_MRI_CGCM3_RCP85_Transition <- rbind(combinedData[[1]], combinedData[[2]], combinedData[[3]], combinedData[[4]], combinedData[[5]]) %>%
+  select(-`...62`) %>%
+  group_by(Time) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n())))) %>%
+  mutate(Model = "MRI-CGCM3_RCP85",
+         RCP = "RCP85",
+         Prescription = "Transition")
+
+successionLog_MRI_CGCM3_RCP85_Transition_All <- rbind(combinedData[[1]], combinedData[[2]], combinedData[[3]], combinedData[[4]], combinedData[[5]]) %>%
+  select(-`...62`) %>%
+  group_by(Time, Run) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n())))) %>%
+  mutate(Model = "MRI-CGCM3_RCP85",
+         RCP = "RCP85",
+         Prescription = "Transition")
+
+#----ANNUAL WATER BUDGET----#
+combinedRasters <- list()
+for (run in 1:5) {
+  runDir <- file.path(mainDir, paste0("run", run))
+  for (year in seq(10, 80, by = 10)) {
+    filename <- paste0("Annual-water-budget-", year, ".img")
+    filePath <- file.path(runDir, filename)
+    rasterData <- rast(filePath)
+    crs(rasterData) <- "epsg:26917"
+    rasterData <- flip(rasterData)
+    newFileName <- sub("\\.img$", paste0("_run", run, ".tif"), filename)
+    combinedRasters[[newFileName]] <- rasterData
+  }
+}
+
+results <- list()
+for (i in 1:8) {
+  indices <- seq(i, 33 + i, by = 8)
+  df <- c(combinedRasters[[indices[1]]], combinedRasters[[indices[2]]], combinedRasters[[indices[3]]], 
+          combinedRasters[[indices[4]]], combinedRasters[[indices[5]]]) %>%
+    as.data.frame() %>%
+    `colnames<-`(c("run1", "run2", "run3", "run4", "run5")) %>%
+    pivot_longer(cols = "run1":"run5", values_to = "AWB", names_to = "Run") %>%
+    filter(AWB > 0) %>%
+    group_by(Run) %>%
+    summarise(AWB = mean(AWB)) %>%
+    mutate(Time = i * 10, Model = "MRI-CGCM3_RCP85", RCP = "RCP85", Prescription = "Transition")
+  results[[i]] <- df
+}
+AWB_MRI_CGCM3_RCP85_TransitionDf <- bind_rows(results)
+
+#----STRUCTURAL DIVERSITY----#
+# combinedData <- list()
+# index <- 1
+# 
+# for (run in runs) {
+#   runDir <- file.path(mainDir, run)
+#   for (year in seq(0, 80, by = 10)) {
+#     filename <- paste0("community-input-file-", year, ".csv")
+#     filePath <- file.path(runDir, filename)
+#     data <- fread(filePath)
+#     data <- data %>% mutate(across(where(is.double), as.integer))
+#     data$Run <- run
+#     data$Time <- year
+#     combinedData[[index]] <- data
+#     index <- index + 1
+#   }
+# }
+# 
+# combinedData <- do.call(rbind, lapply(seq_along(combinedData), function(i) {
+#   df <- combinedData[[i]]
+#   return(df)
+# }))
+# 
+# fwrite(combinedData,
+#        file = "C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/combinedData.csv")
+```
+
+### LSLV (CCSM4)
+
+```{r, message = FALSE, warning = FALSE}
+#----Spp Biomass----#
+mainDir <- "D:/Landis Outputs/Transition/RCP85/LSLV"
+runs <- paste0("run", 1:5)
+combinedData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "spp-biomass-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+finalTable <- do.call(rbind, combinedData) %>%
+  select(-`...34`)
+
+# Composition through time
+sppBiomass_CCSM4_RCP85_Transition <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  group_by(Time, Species) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n()))) %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", ""),
+         RCP = "RCP85",
+         Model = "CCSM4_RCP85",
+         Prescription = "Transition")
+
+# Proportional composition
+propBiomass_CCSM4_RCP85_Transition <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, Species) %>%
+  summarise(Biomass_MG = weighted.mean(x = Biomass_MG, w = rep(c(528897,24948), length.out = n()))) %>%
+  mutate(RCP = "RCP85",
+         Model = "CCSM4_RCP85",
+         Prescription = "Transition",
+         FunctionalGroup = ifelse(Species %in% softwoods, "Softwoods",
+                                  ifelse(Species %in% oaks, "Oaks", "Hardwoods")),
+         TotalBiomass = sum(Biomass_MG),
+         Biomass_Percent = (Biomass_MG / TotalBiomass) * 100)
+
+propBiomass_CCSM4_RCP85_Transition_AllRuns <- finalTable %>%
+  filter(NumActiveSites != 0) %>%
+  select(-EcoName, -NumActiveSites) %>%
+  pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"), names_to = "Species", values_to = "Biomass_MG") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  group_by(Time, Run) %>% # Group by time and run
+  mutate(Percent_Biomass = Biomass_MG / sum(Biomass_MG, na.rm = TRUE) * 100,
+         RCP = "RCP85",
+         Model = "CCSM4_RCP85",
+         Prescription = "Transition")
+
+#----Harvesting Rates----#
+## Normal
+combinedData <- list()
+for (run in runs){
+  harvestDir <- file.path(mainDir, run, "Harvest")
+  filePath <- file.path(harvestDir, "biomass-harvest-summary-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+harvest_CCSM4_RCP85_Transition <- do.call(rbind, combinedData) %>%
+  mutate(Prescription_Type = Prescription, RCP = "RCP85", Model = "CCSM4_RCP85") %>%
+  mutate(Prescription = "Transition")
+
+#----Climate----#
+# For loop to read in future climate data. Then organised into appropriate metrics
+climateData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "Climate-future-input-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  climateData[[run]] <- data
+}
+climateData <- do.call(rbind, climateData) %>%
+  select(-`...28`)
+CCSM4_RCP85 <- climateData[,c(1,2,5,6,7,28)] %>%
+  mutate(mean_airtemp = (min_airtemp + max_airtemp) / 2) %>%
+  group_by(Year) %>%
+  summarise(meanppt = mean(ppt),
+            sumppt = sum(ppt),
+            airtemp = mean(mean_airtemp)) %>%
+  mutate(Model = "CCSM4_RCP85")
+
+#----BIODIVERSITY----#
+diversity_CCSM4_RCP85_Transition <- propBiomass_CCSM4_RCP85_Transition[,c(1:3,9)] %>%
+  mutate(Pi = Biomass_Percent / 100,
+         lnPi = log(Pi),
+         PixlnPi = Pi * lnPi) %>%
+  group_by(Time) %>%
+  summarise(H = -sum(PixlnPi, na.rm = TRUE)) %>%
+  mutate(Model = "CCSM4_RCP85",
+         RCP = "RCP85",
+         Prescription = "Transition")
+
+#----SUCCESSION LOG VARIABLES----#
+combinedData <- list()
+for (run in runs){
+  runDir <- file.path(mainDir, run)
+  filePath <- file.path(runDir, "NECN-succession-log.csv")
+  data <- read_csv(filePath)
+  data$Run <- run
+  combinedData[[run]] <- data
+}
+successionLog_CCSM4_RCP85_Transition <- rbind(combinedData[[1]], combinedData[[2]], combinedData[[3]], combinedData[[4]], combinedData[[5]]) %>%
+  select(-`...62`) %>%
+  group_by(Time) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n())))) %>%
+  mutate(Model = "CCSM4_RCP85",
+         RCP = "RCP85",
+         Prescription = "Transition")
+
+successionLog_CCSM4_RCP85_Transition_All <- rbind(combinedData[[1]], combinedData[[2]], combinedData[[3]], combinedData[[4]], combinedData[[5]]) %>%
+  select(-`...62`) %>%
+  group_by(Time, Run) %>%
+  summarise(across(where(is.numeric), ~ weighted.mean(x = ., w = rep(c(528897, 24948), length.out = n())))) %>%
+  mutate(Model = "CCSM4_RCP85",
+         RCP = "RCP85",
+         Prescription = "Transition")
+
+#----ANNUAL WATER BUDGET----#
+combinedRasters <- list()
+for (run in 1:5) {
+  runDir <- file.path(mainDir, paste0("run", run))
+  for (year in seq(10, 80, by = 10)) {
+    filename <- paste0("Annual-water-budget-", year, ".img")
+    filePath <- file.path(runDir, filename)
+    rasterData <- rast(filePath)
+    crs(rasterData) <- "epsg:26917"
+    rasterData <- flip(rasterData)
+    newFileName <- sub("\\.img$", paste0("_run", run, ".tif"), filename)
+    combinedRasters[[newFileName]] <- rasterData
+  }
+}
+
+results <- list()
+for (i in 1:8) {
+  indices <- seq(i, 33 + i, by = 8)
+  df <- c(combinedRasters[[indices[1]]], combinedRasters[[indices[2]]], combinedRasters[[indices[3]]], 
+          combinedRasters[[indices[4]]], combinedRasters[[indices[5]]]) %>%
+    as.data.frame() %>%
+    `colnames<-`(c("run1", "run2", "run3", "run4", "run5")) %>%
+    pivot_longer(cols = "run1":"run5", values_to = "AWB", names_to = "Run") %>%
+    filter(AWB > 0) %>%
+    group_by(Run) %>%
+    summarise(AWB = mean(AWB)) %>%
+    mutate(Time = i * 10, Model = "CCSM4_RCP85", RCP = "RCP85", Prescription = "Transition")
+  results[[i]] <- df
+}
+AWB_CCSM4_RCP85_TransitionDf <- bind_rows(results)
+
+#----STRUCTURAL DIVERSITY----#
+# combinedData <- list()
+# index <- 1
+# 
+# for (run in runs) {
+#   runDir <- file.path(mainDir, run)
+#   for (year in seq(0, 80, by = 10)) {
+#     filename <- paste0("community-input-file-", year, ".csv")
+#     filePath <- file.path(runDir, filename)
+#     data <- fread(filePath)
+#     data <- data %>% mutate(across(where(is.double), as.integer))
+#     data$Run <- run
+#     data$Time <- year
+#     combinedData[[index]] <- data
+#     index <- index + 1
+#   }
+# }
+# 
+# combinedData <- do.call(rbind, lapply(seq_along(combinedData), function(i) {
+#   df <- combinedData[[i]]
+#   return(df)
+# }))
+# 
+# fwrite(combinedData,
+#        file = "C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/combinedData.csv")
+
+```
+
+# Final Data
+
+
+
+## Maps
+## Total Biomass
+
+
+## Annual Water Budget
+
+```{r}
+mainDir <- "D:/Landis Outputs"
+scenarios <- c("Resistance", "Resilience", "Transition")
+rcps <- c("RCP45", "RCP85")
+climates <- c("HSHV", "HSLV", "LSHV", "LSLV")
+runs <- paste0("run",1:5)
+timesteps <- seq(10,80,10)
+
+raster_list <- list()
+for (scenario in scenarios) {
+  for (rcp in rcps) {
+    for (climate in climates){
+      for (run in runs) {
+        for (timestep in timesteps) {
+          img_file <- file.path(mainDir, scenario, rcp, climate, run, paste0("Annual-water-budget-", timestep, ".img"))
+          raster <- rast(img_file)
+          crs(raster) <- "epsg:26917"
+          raster <- flip(raster)
+          ext(raster) <- ext(templateRaster)
+          # raster <- project(raster, res = 70.71068, templateRaster, method = "bilinear")
+          # raster_list[[length(raster_list) + 1]] <- raster
+          raster_list[[img_file]] <- raster
+        }
+      }
+    }
+  }
+}
+
+
+
+# Resistance
+AWB_Resistance_RCP45_HSHV <- c(raster_list[[1]],raster_list[[2]],raster_list[[3]],raster_list[[4]],raster_list[[5]]) %>% app(., "mean") %>% app(., function(x) ifelse(x == 0, NA, x))
+AWB_Resistance_RCP45_HSLV <- c(raster_list[[6]],raster_list[[7]],raster_list[[8]],raster_list[[9]],raster_list[[10]]) %>% app(., "mean") %>% app(., function(x) ifelse(x == 0, NA, x))
+AWB_Resistance_RCP45_LSHV <- c(raster_list[[11]],raster_list[[12]],raster_list[[13]],raster_list[[14]],raster_list[[15]]) %>% app(., "mean") %>% app(., function(x) ifelse(x == 0, NA, x))
+AWB_Resistance_RCP45_LSLV <- c(raster_list[[16]],raster_list[[17]],raster_list[[18]],raster_list[[19]],raster_list[[20]]) %>% app(., "mean") %>% app(., function(x) ifelse(x == 0, NA, x))
+AWB_Resistance_RCP85_HSHV <- c(raster_list[[21]],raster_list[[22]],raster_list[[23]],raster_list[[24]],raster_list[[25]]) %>% app(., "mean") %>% app(., function(x) ifelse(x == 0, NA, x))
+AWB_Resistance_RCP85_HSLV <- c(raster_list[[26]],raster_list[[27]],raster_list[[28]],raster_list[[29]],raster_list[[30]]) %>% app(., "mean") %>% app(., function(x) ifelse(x == 0, NA, x))
+AWB_Resistance_RCP85_LSHV <- c(raster_list[[31]],raster_list[[32]],raster_list[[33]],raster_list[[34]],raster_list[[35]]) %>% app(., "mean") %>% app(., function(x) ifelse(x == 0, NA, x))
+AWB_Resistance_RCP85_LSLV <- c(raster_list[[36]],raster_list[[37]],raster_list[[38]],raster_list[[39]],raster_list[[40]]) %>% app(., "mean") %>% app(., function(x) ifelse(x == 0, NA, x))
+resistance_RCP45_AWB_Stack <- c(AWB_Resistance_RCP45_HSHV,AWB_Resistance_RCP45_HSLV,AWB_Resistance_RCP45_LSHV,AWB_Resistance_RCP45_LSLV) %>%
+  as.data.frame(xy = TRUE) %>%
+  `colnames<-`(c("x","y","BNU-ESM","MIROC-ESM-CHEM","MRI-CGCM3","CCSM4")) %>%
+  mutate(RCP = "RCP45", Prescription = "Resistance")
+resistance_RCP85_AWB_Stack <- c(AWB_Resistance_RCP85_HSHV,AWB_Resistance_RCP85_HSLV,AWB_Resistance_RCP85_LSHV,AWB_Resistance_RCP85_LSLV) %>%
+  as.data.frame(xy = TRUE) %>%
+  `colnames<-`(c("x","y","BNU-ESM","MIROC-ESM-CHEM","MRI-CGCM3","CCSM4")) %>%
+  mutate(RCP = "RCP85", Prescription = "Resistance")
+# Resilience
+AWB_Resilience_RCP45_HSHV <- c(raster_list[[41]],raster_list[[42]],raster_list[[43]],raster_list[[44]],raster_list[[45]]) %>% app(., "mean") %>% app(., function(x) ifelse(x == 0, NA, x))
+AWB_Resilience_RCP45_HSLV <- c(raster_list[[46]],raster_list[[47]],raster_list[[48]],raster_list[[49]],raster_list[[50]]) %>% app(., "mean") %>% app(., function(x) ifelse(x == 0, NA, x))
+AWB_Resilience_RCP45_LSHV <- c(raster_list[[51]],raster_list[[52]],raster_list[[53]],raster_list[[54]],raster_list[[55]]) %>% app(., "mean") %>% app(., function(x) ifelse(x == 0, NA, x))
+AWB_Resilience_RCP45_LSLV <- c(raster_list[[56]],raster_list[[57]],raster_list[[58]],raster_list[[59]],raster_list[[60]]) %>% app(., "mean") %>% app(., function(x) ifelse(x == 0, NA, x))
+AWB_Resilience_RCP85_HSHV <- c(raster_list[[61]],raster_list[[62]],raster_list[[63]],raster_list[[64]],raster_list[[65]]) %>% app(., "mean") %>% app(., function(x) ifelse(x == 0, NA, x))
+AWB_Resilience_RCP85_HSLV <- c(raster_list[[66]],raster_list[[67]],raster_list[[68]],raster_list[[69]],raster_list[[70]]) %>% app(., "mean") %>% app(., function(x) ifelse(x == 0, NA, x))
+AWB_Resilience_RCP85_LSHV <- c(raster_list[[71]],raster_list[[72]],raster_list[[73]],raster_list[[74]],raster_list[[75]]) %>% app(., "mean") %>% app(., function(x) ifelse(x == 0, NA, x))
+AWB_Resilience_RCP85_LSLV <- c(raster_list[[76]],raster_list[[77]],raster_list[[78]],raster_list[[79]],raster_list[[80]]) %>% app(., "mean") %>% app(., function(x) ifelse(x == 0, NA, x))
+resilience_RCP45_AWB_Stack <- c(AWB_Resilience_RCP45_HSHV,AWB_Resilience_RCP45_HSLV,AWB_Resilience_RCP45_LSHV,AWB_Resilience_RCP45_LSLV) %>%
+  as.data.frame(xy = TRUE) %>%
+  `colnames<-`(c("x","y","BNU-ESM","MIROC-ESM-CHEM","MRI-CGCM3","CCSM4")) %>%
+  mutate(RCP = "RCP45", Prescription = "Resilience")
+resilience_RCP85_AWB_Stack <- c(AWB_Resilience_RCP85_HSHV,AWB_Resilience_RCP85_HSLV,AWB_Resilience_RCP85_LSHV,AWB_Resilience_RCP85_LSLV) %>%
+  as.data.frame(xy = TRUE) %>%
+  `colnames<-`(c("x","y","BNU-ESM","MIROC-ESM-CHEM","MRI-CGCM3","CCSM4")) %>%
+  mutate(RCP = "RCP85", Prescription = "Resilience")
+# Transition
+AWB_Transition_RCP45_HSHV <- c(raster_list[[81]],raster_list[[82]],raster_list[[83]],raster_list[[84]],raster_list[[85]]) %>% app(., "mean") %>% app(., function(x) ifelse(x == 0, NA, x))
+AWB_Transition_RCP45_HSLV <- c(raster_list[[86]],raster_list[[87]],raster_list[[88]],raster_list[[89]],raster_list[[90]]) %>% app(., "mean") %>% app(., function(x) ifelse(x == 0, NA, x))
+AWB_Transition_RCP45_LSHV <- c(raster_list[[91]],raster_list[[92]],raster_list[[93]],raster_list[[94]],raster_list[[95]]) %>% app(., "mean") %>% app(., function(x) ifelse(x == 0, NA, x))
+AWB_Transition_RCP45_LSLV <- c(raster_list[[96]],raster_list[[97]],raster_list[[98]],raster_list[[99]],raster_list[[100]]) %>% app(., "mean") %>% app(., function(x) ifelse(x == 0, NA, x))
+AWB_Transition_RCP85_HSHV <- c(raster_list[[101]],raster_list[[102]],raster_list[[103]],raster_list[[104]],raster_list[[105]]) %>% app(., "mean") %>% app(., function(x) ifelse(x == 0, NA, x))
+AWB_Transition_RCP85_HSLV <- c(raster_list[[106]],raster_list[[107]],raster_list[[108]],raster_list[[109]],raster_list[[110]]) %>% app(., "mean") %>% app(., function(x) ifelse(x == 0, NA, x))
+AWB_Transition_RCP85_LSHV <- c(raster_list[[111]],raster_list[[112]],raster_list[[113]],raster_list[[114]],raster_list[[115]]) %>% app(., "mean") %>% app(., function(x) ifelse(x == 0, NA, x))
+AWB_Transition_RCP85_LSLV <- c(raster_list[[116]],raster_list[[117]],raster_list[[118]],raster_list[[119]],raster_list[[110]]) %>% app(., "mean") %>% app(., function(x) ifelse(x == 0, NA, x))
+transition_RCP45_AWB_Stack <- c(AWB_Transition_RCP45_HSHV,AWB_Transition_RCP45_HSLV,AWB_Transition_RCP45_LSHV,AWB_Transition_RCP45_LSLV) %>%
+  as.data.frame(xy = TRUE) %>%
+  `colnames<-`(c("x","y","BNU-ESM","MIROC-ESM-CHEM","MRI-CGCM3","CCSM4")) %>%
+  mutate(RCP = "RCP45", Prescription = "Transition")
+transition_RCP85_AWB_Stack <- c(AWB_Transition_RCP85_HSHV,AWB_Transition_RCP85_HSLV,AWB_Transition_RCP85_LSHV,AWB_Transition_RCP85_LSLV) %>%
+  as.data.frame(xy = TRUE) %>%
+  `colnames<-`(c("x","y","BNU-ESM","MIROC-ESM-CHEM","MRI-CGCM3","CCSM4")) %>%
+  mutate(RCP = "RCP85", Prescription = "Transition")
+
+final_Resistance_AWB <- rbind(resistance_RCP45_AWB_Stack %>%
+  pivot_longer(cols = c("BNU-ESM":"CCSM4"), values_to = "value", names_to = "Model"),
+resistance_RCP85_AWB_Stack %>%
+  pivot_longer(cols = c("BNU-ESM":"CCSM4"), values_to = "value", names_to = "Model"))
+
+final_Resilience_AWB <- rbind(resilience_RCP45_AWB_Stack %>%
+  pivot_longer(cols = c("BNU-ESM":"CCSM4"), values_to = "value", names_to = "Model"),
+resilience_RCP85_AWB_Stack %>%
+  pivot_longer(cols = c("BNU-ESM":"CCSM4"), values_to = "value", names_to = "Model"))
+
+final_Transition_AWB <- rbind(transition_RCP45_AWB_Stack %>%
+  pivot_longer(cols = c("BNU-ESM":"CCSM4"), values_to = "value", names_to = "Model"),
+transition_RCP85_AWB_Stack %>%
+  pivot_longer(cols = c("BNU-ESM":"CCSM4"), values_to = "value", names_to = "Model"))
+
+final_AWB <- rbind(final_Resilience_AWB, final_Resistance_AWB, final_Transition_AWB)
+
+
+
+ggplot(final_Resistance_AWB) +
+  geom_raster(aes(x = x, y = y, fill = value)) +
+  scale_fill_gradient(low = "#a8dadc", high = "#1d3557", name = "AWB") +
+  theme_classic() +
+  facet_wrap(RCP ~ Model, ncol = 4)
+
+ggplot(final_Resilience_AWB) +
+  geom_raster(aes(x = x, y = y, fill = value)) +
+  scale_fill_gradient(low = "#a8dadc", high = "#1d3557", name = "AWB") +
+  theme_classic() +
+  facet_wrap(RCP ~ Model, ncol = 4)
+
+ggplot(final_Transition_AWB) +
+  geom_raster(aes(x = x, y = y, fill = value)) +
+  scale_fill_gradient(low = "#a8dadc", high = "#1d3557", name = "AWB") +
+  theme_classic() +
+  facet_wrap(RCP ~ Model, ncol = 4)
+
+
+
+ggplot(final_AWB, aes(x = Model, y = value, fill = Model)) +
+  geom_violin(width = 1) +
+  geom_boxplot(width = 0.05) +
+  theme_classic() +
+  facet_grid(RCP~Prescription)
+
+
+
+```
+
+
+### Total Carbon
+
+```{r}
+mainDir <- "D:/Landis Outputs"
+scenarios <- c("Resistance", "Resilience", "Transition") # Fill in with Resilience
+rcps <- c("RCP45", "RCP85")
+climates <- c("HSHV", "HSLV", "LSHV", "LSLV")
+runs <- paste0("run",1:5)
+
+raster_list <- list()
+for (scenario in scenarios) {
+  for (rcp in rcps) {
+    for (climate in climates){
+      for (run in runs) {
+        for (timestep in timesteps) {
+          img_file <- file.path(mainDir, scenario, rcp, climate, run, paste0("TotalC-", timestep, ".img"))
+          raster <- rast(img_file)
+          crs(raster) <- "epsg:26917"
+          raster <- flip(raster)
+          ext(raster) <- ext(templateRaster)
+          # raster <- project(raster, res = 70.71068, templateRaster, method = "bilinear")
+          raster_list[[length(raster_list) + 1]] <- raster
+        }
+      }
+    }
+  }
+}
+
+# Resistance
+TotalC_Resistance_RCP45_HSHV <- c(raster_list[[1]],raster_list[[2]],raster_list[[3]],raster_list[[4]],raster_list[[5]]) %>% app(., "mean")
+TotalC_Resistance_RCP45_HSLV <- c(raster_list[[6]],raster_list[[7]],raster_list[[8]],raster_list[[9]],raster_list[[10]]) %>% app(., "mean")
+TotalC_Resistance_RCP45_LSHV <- c(raster_list[[11]],raster_list[[12]],raster_list[[13]],raster_list[[14]],raster_list[[15]]) %>% app(., "mean")
+TotalC_Resistance_RCP45_LSLV <- c(raster_list[[16]],raster_list[[17]],raster_list[[18]],raster_list[[19]],raster_list[[20]]) %>% app(., "mean")
+TotalC_Resistance_RCP85_HSHV <- c(raster_list[[21]],raster_list[[22]],raster_list[[23]],raster_list[[24]],raster_list[[25]]) %>% app(., "mean")
+TotalC_Resistance_RCP85_HSLV <- c(raster_list[[26]],raster_list[[27]],raster_list[[28]],raster_list[[29]],raster_list[[30]]) %>% app(., "mean")
+TotalC_Resistance_RCP85_LSHV <- c(raster_list[[31]],raster_list[[32]],raster_list[[33]],raster_list[[34]],raster_list[[35]]) %>% app(., "mean")
+TotalC_Resistance_RCP85_LSLV <- c(raster_list[[36]],raster_list[[37]],raster_list[[38]],raster_list[[39]],raster_list[[40]]) %>% app(., "mean")
+resistance_RCP45_C_Stack <- c(TotalC_Resistance_RCP45_HSHV,TotalC_Resistance_RCP45_HSLV,TotalC_Resistance_RCP45_LSHV,TotalC_Resistance_RCP45_LSLV) %>%
+  as.data.frame(xy = TRUE) %>%
+  `colnames<-`(c("x","y","BNU-ESM","MIROC-ESM-CHEM","MRI-CGCM3","CCSM4")) %>%
+  mutate(RCP = "RCP45", Prescription = "Resistance")
+resistance_RCP85_C_Stack <- c(TotalC_Resistance_RCP85_HSHV,TotalC_Resistance_RCP85_HSLV,TotalC_Resistance_RCP85_LSHV,TotalC_Resistance_RCP85_LSLV) %>%
+  as.data.frame(xy = TRUE) %>%
+  `colnames<-`(c("x","y","BNU-ESM","MIROC-ESM-CHEM","MRI-CGCM3","CCSM4")) %>%
+  mutate(RCP = "RCP85", Prescription = "Resistance")
+# Resilience
+TotalC_Resilience_RCP45_HSHV <- c(raster_list[[41]],raster_list[[42]],raster_list[[43]],raster_list[[44]],raster_list[[45]]) %>% app(., "mean")
+TotalC_Resilience_RCP45_HSLV <- c(raster_list[[46]],raster_list[[47]],raster_list[[48]],raster_list[[49]],raster_list[[50]]) %>% app(., "mean")
+TotalC_Resilience_RCP45_LSHV <- c(raster_list[[51]],raster_list[[52]],raster_list[[53]],raster_list[[54]],raster_list[[55]]) %>% app(., "mean")
+TotalC_Resilience_RCP45_LSLV <- c(raster_list[[56]],raster_list[[57]],raster_list[[58]],raster_list[[59]],raster_list[[60]]) %>% app(., "mean")
+TotalC_Resilience_RCP85_HSHV <- c(raster_list[[61]],raster_list[[62]],raster_list[[63]],raster_list[[64]],raster_list[[65]]) %>% app(., "mean")
+TotalC_Resilience_RCP85_HSLV <- c(raster_list[[66]],raster_list[[67]],raster_list[[68]],raster_list[[69]],raster_list[[70]]) %>% app(., "mean")
+TotalC_Resilience_RCP85_LSHV <- c(raster_list[[71]],raster_list[[72]],raster_list[[73]],raster_list[[74]],raster_list[[75]]) %>% app(., "mean")
+TotalC_Resilience_RCP85_LSLV <- c(raster_list[[76]],raster_list[[77]],raster_list[[78]],raster_list[[79]],raster_list[[80]]) %>% app(., "mean")
+resilience_RCP45_C_Stack <- c(TotalC_Resilience_RCP45_HSHV,TotalC_Resilience_RCP45_HSLV,TotalC_Resilience_RCP45_LSHV,TotalC_Resilience_RCP45_LSLV) %>%
+  as.data.frame(xy = TRUE) %>%
+  `colnames<-`(c("x","y","BNU-ESM","MIROC-ESM-CHEM","MRI-CGCM3","CCSM4")) %>%
+  mutate(RCP = "RCP45", Prescription = "Resilience")
+resilience_RCP85_C_Stack <- c(TotalC_Resilience_RCP85_HSHV,TotalC_Resilience_RCP85_HSLV,TotalC_Resilience_RCP85_LSHV,TotalC_Resilience_RCP85_LSLV) %>%
+  as.data.frame(xy = TRUE) %>%
+  `colnames<-`(c("x","y","BNU-ESM","MIROC-ESM-CHEM","MRI-CGCM3","CCSM4")) %>%
+  mutate(RCP = "RCP85", Prescription = "Resilience")
+# Transition
+TotalC_Transition_RCP45_HSHV <- c(raster_list[[81]],raster_list[[82]],raster_list[[83]],raster_list[[84]],raster_list[[85]]) %>% app(., "mean")
+TotalC_Transition_RCP45_HSLV <- c(raster_list[[86]],raster_list[[87]],raster_list[[88]],raster_list[[89]],raster_list[[90]]) %>% app(., "mean")
+TotalC_Transition_RCP45_LSHV <- c(raster_list[[91]],raster_list[[92]],raster_list[[93]],raster_list[[94]],raster_list[[95]]) %>% app(., "mean")
+TotalC_Transition_RCP45_LSLV <- c(raster_list[[96]],raster_list[[97]],raster_list[[98]],raster_list[[99]],raster_list[[100]]) %>% app(., "mean")
+TotalC_Transition_RCP85_HSHV <- c(raster_list[[101]],raster_list[[102]],raster_list[[103]],raster_list[[104]],raster_list[[105]]) %>% app(., "mean")
+TotalC_Transition_RCP85_HSLV <- c(raster_list[[106]],raster_list[[107]],raster_list[[108]],raster_list[[109]],raster_list[[110]]) %>% app(., "mean")
+TotalC_Transition_RCP85_LSHV <- c(raster_list[[111]],raster_list[[112]],raster_list[[113]],raster_list[[114]],raster_list[[115]]) %>% app(., "mean")
+TotalC_Transition_RCP85_LSLV <- c(raster_list[[116]],raster_list[[117]],raster_list[[118]],raster_list[[119]],raster_list[[110]]) %>% app(., "mean")
+transition_RCP45_C_Stack <- c(TotalC_Transition_RCP45_HSHV,TotalC_Transition_RCP45_HSLV,TotalC_Transition_RCP45_LSHV,TotalC_Transition_RCP45_LSLV) %>%
+  as.data.frame(xy = TRUE) %>%
+  `colnames<-`(c("x","y","BNU-ESM","MIROC-ESM-CHEM","MRI-CGCM3","CCSM4")) %>%
+  mutate(RCP = "RCP45", Prescription = "Transition")
+transition_RCP85_C_Stack <- c(TotalC_Transition_RCP85_HSHV,TotalC_Transition_RCP85_HSLV,TotalC_Transition_RCP85_LSHV,TotalC_Transition_RCP85_LSLV) %>%
+  as.data.frame(xy = TRUE) %>%
+  `colnames<-`(c("x","y","BNU-ESM","MIROC-ESM-CHEM","MRI-CGCM3","CCSM4")) %>%
+  mutate(RCP = "RCP85", Prescription = "Transition")
+
+
+final_Resistance_C <- rbind(resistance_RCP45_C_Stack %>%
+  pivot_longer(cols = c("BNU-ESM":"CCSM4"), values_to = "value", names_to = "Model"),
+  resistance_RCP85_C_Stack %>%
+  pivot_longer(cols = c("BNU-ESM":"CCSM4"), values_to = "value", names_to = "Model"))
+
+final_Resilience_C <- rbind(resilience_RCP45_C_Stack %>%
+  pivot_longer(cols = c("BNU-ESM":"CCSM4"), values_to = "value", names_to = "Model"),
+resilience_RCP85_C_Stack %>%
+  pivot_longer(cols = c("BNU-ESM":"CCSM4"), values_to = "value", names_to = "Model"))
+
+final_Transition_C <- rbind(transition_RCP45_C_Stack %>%
+  pivot_longer(cols = c("BNU-ESM":"CCSM4"), values_to = "value", names_to = "Model"),
+transition_RCP85_C_Stack %>%
+  pivot_longer(cols = c("BNU-ESM":"CCSM4"), values_to = "value", names_to = "Model"))
+
+
+ggplot(final_Resistance_C) +
+  geom_raster(aes(x = x, y = y, fill = value)) +
+  scale_fill_viridis_c() +
+  theme_classic() +
+  facet_grid(RCP ~ Model)
+
+ggplot(final_Resilience_C) +
+  geom_raster(aes(x = x, y = y, fill = value)) +
+  scale_fill_viridis_c() +
+  theme_classic() +
+  facet_grid(RCP ~ Model)
+
+ggplot(final_Transition_C) +
+  geom_raster(aes(x = x, y = y, fill = value)) +
+  scale_fill_viridis_c() +
+  theme_classic() +
+  facet_grid(RCP ~ Model)
+
+
+rbind(final_Resistance_C, final_Resilience_C, final_Transition_C) %>%
+  filter(value > 0) %>%
+  aov(value ~ RCP * Prescription * Model, data = .) %>%
+  summary(.)
+
+```
+
+
+
+
+```{r}
+library(tidyverse)
+library(terra)
+library(data.table)
+
+args <- commandArgs(trailingOnly = TRUE)
+job_index <- as.numeric(args[1])
+
+# Set up objects so that we can then run the for loop
+mainDir <- "/share/tcsi/lagoodal/R/MAPS"
+scenarios <- c("Resistance", "Resilience", "Transition")
+rcps <- c("RCP45", "RCP85")
+climates <- c("HSHV", "HSLV", "LSHV", "LSLV")
+runs <- paste0("run", 1:5)
+timesteps <- seq(10, 80, 10)
+
+# Determine scenario/rcp/climate combo
+combo_df <- expand.grid(Scenario = scenarios, RCP = rcps, Climate = climates)
+this_combo <- combo_df[job_index, ]
+scenario <- as.character(this_combo$Scenario)
+rcp <- as.character(this_combo$RCP)
+climate <- as.character(this_combo$Climate)
+
+cat("Processing combo:", scenario, rcp, climate, "\n")
+
+# For loop to calculate the weighte biomass of fruit and nut bearing trees
+strList <- list()
+
+for (run in runs) {
+  for (year in timesteps) {
+    runDir <- file.path(mainDir, scenario, rcp, climate, paste0("run", run))
+    filePath <- file.path(runDir, paste0("community-input-file-", year, ".csv"))
+    
+    if (file.exists(filePath)) {
+      strData <- data.table::fread(filePath)
+      
+      df <- strData %>%
+        filter((SpeciesName == "CAAL27" & CohortAge >= 25) |
+                 (SpeciesName == "CAGL8" & CohortAge >= 30) |
+                 (SpeciesName == "QUAL" & CohortAge >= 30) |
+                 (SpeciesName == "QUCO2" & CohortAge >= 30) |
+                 (SpeciesName == "QUFA" & CohortAge >= 25) |
+                 (SpeciesName == "QULA3" & CohortAge >= 35) |
+                 (SpeciesName == "QUNI" & CohortAge >= 35) |
+                 (SpeciesName == "QUPR2" & CohortAge >= 25) |
+                 (SpeciesName == "QUPH" & CohortAge >= 35) |
+                 (SpeciesName == "QURU" & CohortAge >= 25) |
+                 (SpeciesName == "QUST" & CohortAge >= 35) |
+                 (SpeciesName == "QUVE" & CohortAge >= 25)) %>%
+  group_by(SpeciesName, CohortAge, Run, Time) %>%
+  summarise(CohortBiomass = sum(CohortBiomass), .groups = "drop") %>%
+  mutate(Weight = CohortAge / max(CohortAge, na.rm = TRUE)) %>%
+  mutate(WeightedBiomass = CohortBiomass * Weight) %>%
+  ungroup() %>%
+  group_by(Time, Run) %>%
+  summarise(Score = sum(WeightedBiomass), .groups = "drop")
+      
+      df$Scenario <- scenario
+      df$RCP <- rcp
+      df$Climate <- climate
+      
+      strList[[length(strList) + 1]] <- df
+    }
+  }
+}
+
+strDf <- bind_rows(strList)
+
+# Make a for loop to assign the fruit/nut tree ecosystem service tree to the indiviudal
+# cells within the raster. Check to make sure they all assigned properly
+strRasters <- list()
+
+for (run in runs) {
+  for (timestep in timesteps) {
+    rasterPath <- file.path(mainDir, scenario, rcp, climate, paste0("run", run), paste0("output-community-", timestep, ".img"))
+    rasterRun <- rast(rasterPath) %>% flip()
+    dfRun <- strDf %>%
+      filter(Run == run, Time == timestep) %>%
+      mutate(MapCode = as.numeric(MapCode))
+    rasterFruit <- subst(rasterRun, from = dfRun$MapCode, to = dfRun$Score)
+    
+    # medianValue <- median(values(rasterRaster), na.rm = TRUE)
+    # rasterH <- ifel(rasterH > 3, medianValue, rasterH)
+    
+    name <- paste(scenario, rcp, climate, paste0("run", run), timestep, sep = "_")
+    strRasters[[name]] <- rasterH
+  }
+}
+
+# Calculate the mean score for each cell across all runs for each raster
+meanRasters <- list()
+raster_names <- names(strRasters)
+group_keys <- gsub("_run[0-9]+", "", raster_names) # Create groupings based on prescription, rcp, climate and timestep
+unique_keys <- unique(group_keys)
+
+for (key in unique_keys) {
+  matched_rasters <- strRasters[which(group_keys == key)] # Grab the 5 runs for each model scenario
+  raster_stack <- rast(matched_rasters)
+  mean_raster <- app(raster_stack, mean, na.rm = TRUE)
+  meanRasters[[key]] <- mean_raster
+}
+
+# Write the raster out
+writeRaster(meanRasters[[key]], file = '/share/tcsi/lagoodal/R/Outputs/Structural_Diversity_Maps/',
+            NAflag = 0, overwrite = TRUE, datatype = "FLT4S")
+
+
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

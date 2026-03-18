@@ -1,0 +1,85 @@
+---
+title: "Untitled"
+output: pdf_document
+date: "2024-12-02"
+---
+
+
+```{r}
+library(tidyverse)
+library(terra)
+library(sf)
+```
+
+
+
+```{r}
+# Get the file directory and then for loop them into a list
+directory <- "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/NECN"
+file_list <- list.files(directory, pattern = "AG_NPP.*\\.img$", full.names = TRUE)
+AG_NPP <- list()
+for (i in file_list) {
+  raster <- rast(i)
+  raster_name <- sub("\\.img$", "", basename(i))
+  AG_NPP[[raster_name]] <- raster
+}
+
+# Move the second list item to the last
+if (length(AG_NPP) > 1) {
+  second_item <- AG_NPP[[2]]                 # Extract the second item
+  second_item_name <- names(AG_NPP)[2]       # Get the name of the second item
+  AG_NPP <- AG_NPP[-2]                       # Remove the second item
+  AG_NPP[[second_item_name]] <- second_item  # Append it back as the last item
+}
+
+
+# Now for the replicates (this is an example where I will change the input values for demonstration)
+directory <- "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL Experiment/NECN"
+file_list <- list.files(directory, pattern = "AG_NPP.*\\.img$", full.names = TRUE)
+AG_NPP2 <- list()
+for (i in file_list) {
+  raster <- rast(i)
+  raster_name <- sub("\\.img$", "", basename(i))
+  AG_NPP2[[raster_name]] <- raster
+}
+
+# Move the second list item to the last
+if (length(AG_NPP2) > 1) {
+  second_item <- AG_NPP2[[2]]
+  second_item_name <- names(AG_NPP2)[2]
+  AG_NPP2 <- AG_NPP2[-2]
+  AG_NPP2[[second_item_name]] <- second_item
+}
+AG_NPP2 <- lapply(AG_NPP2, function(x){x * 2})
+
+
+averaged_rasters <- list()
+
+# Initialize a list to store the averaged rasters
+averaged_rasters <- list()
+
+# Iterate through both lists and calculate the average
+for (i in seq_along(AG_NPP)) {
+  # Load corresponding rasters from each list
+  raster1 <- AG_NPP[[i]]
+  raster2 <- AG_NPP2[[i]]
+  
+  # Compute the average
+  averaged_rasters[[i]] <- (raster1 + raster2) / 2
+}
+
+
+for (i in averaged_rasters) {
+  plot(i)
+}
+```
+
+
+
+
+
+
+
+
+
+

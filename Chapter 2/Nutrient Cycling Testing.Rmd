@@ -1,0 +1,33 @@
+---
+title: "Untitled"
+output: pdf_document
+date: "2024-09-30"
+---
+
+```{r}
+library(tidyverse)
+```
+
+
+```{r}
+fciDf <- read_csv("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/LANDIS Outputs/Biomass-Harvest/Resistance/Test 1/NECN-succession-log.csv")
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

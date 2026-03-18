@@ -1,0 +1,584 @@
+---
+title: "Harvesting"
+output: pdf_document
+date: "2025-02-14"
+---
+
+
+```{r}
+library(tidyverse)
+library(terra)
+library(sf)
+library(forcats)
+```
+
+
+
+```{r}
+sppBiomassDfAll <- rbind(sppBiomass_BNU_ESM_RCP45_Resilience,
+      sppBiomass_BNU_ESM_RCP45_Resistance,
+      sppBiomass_BNU_ESM_RCP45_Transition,
+      sppBiomass_BNU_ESM_RCP85_Resilience,
+      sppBiomass_BNU_ESM_RCP85_Resistance,
+      sppBiomass_BNU_ESM_RCP85_Transition,
+      sppBiomass_MIROC_ESM_CHEM_RCP45_Resilience,
+      sppBiomass_MIROC_ESM_CHEM_RCP45_Resistance,
+      sppBiomass_MIROC_ESM_CHEM_RCP45_Transition,
+      sppBiomass_MIROC_ESM_CHEM_RCP85_Resilience,
+      sppBiomass_MIROC_ESM_CHEM_RCP85_Resistance,
+      sppBiomass_MIROC_ESM_CHEM_RCP85_Transition,
+      sppBiomass_MRI_CGCM3_RCP45_Resilience,
+      sppBiomass_MRI_CGCM3_RCP45_Resistance,
+      sppBiomass_MRI_CGCM3_RCP45_Transition,
+      sppBiomass_MRI_CGCM3_RCP85_Resilience,
+      sppBiomass_MRI_CGCM3_RCP85_Resistance,
+      sppBiomass_MRI_CGCM3_RCP85_Transition,
+      sppBiomass_CCSM4_RCP45_Resilience,
+      sppBiomass_CCSM4_RCP45_Resistance,
+      sppBiomass_CCSM4_RCP45_Transition,
+      sppBiomass_CCSM4_RCP85_Resilience,
+      sppBiomass_CCSM4_RCP85_Resistance,
+      sppBiomass_CCSM4_RCP85_Transition)
+
+data <- sppBiomassDfAll %>%
+  mutate(Model = sub("_[^_]+$", "", Model)) %>%
+  group_by(Time, RCP, Model, Prescription) %>%
+  summarise(Biomass_MG = mean(Biomass_MG)) %>%
+  filter(Time != 0)
+
+
+# RCP & Model
+sppBiomassDfAll %>%
+  mutate(Model = sub("_[^_]+$", "", Model)) %>%
+  group_by(Time, Species, RCP, Model) %>%
+  summarise(Biomass_MG = mean(Biomass_MG)) %>%
+  ggplot(., aes(x = Time, y = Biomass_MG, fill = Species)) +
+  geom_bar(stat = "identity", col = "black") +
+  theme_classic() +
+  facet_wrap(RCP~Model, ncol = 4) +
+  scale_x_continuous(name = "Year", breaks = seq(0,80,10), labels = seq(2020,2100,10)) +
+  scale_y_continuous(name = "Biomass (kg/m2)", breaks = seq(0,12000,2000), labels = seq(0,12,2))
+
+sppBiomassDfAll %>%
+  mutate(Model = sub("_[^_]+$", "", Model)) %>%
+  group_by(Time, Species, RCP, Model) %>%
+  summarise(Biomass_MG = mean(Biomass_MG), .groups = "drop") %>%
+  group_by(Time, RCP, Model) %>%
+  mutate(Total_Biomass = sum(Biomass_MG),
+         Percent = (Biomass_MG / Total_Biomass) * 100) %>%
+  ggplot(., aes(x = Time, y = Percent, fill = Species)) +
+  geom_bar(stat = "identity", col = "black") +
+  theme_classic() +
+  facet_grid(RCP~Model)
+
+sppBiomassDfAll %>%
+  mutate(Model = sub("_[^_]+$", "", Model)) %>%
+  group_by(Time, Species, RCP, Model) %>%
+  summarise(Biomass_MG = mean(Biomass_MG)) %>%
+  mutate(FunctionalGroup = ifelse(Species %in% softwoods, "Softwood", ifelse(Species %in% oaks, "Oaks", "Hardwoods"))) %>%
+  ggplot(., aes(x = Time, y = Biomass_MG, fill = FunctionalGroup)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  facet_grid(RCP~Model) +
+  scale_x_continuous(name = "Year", breaks = seq(0,80,10), labels = seq(2020,2100,10)) +
+  scale_y_continuous(name = "Biomass (kg/m2)", breaks = seq(0,12000,2000), labels = seq(0,12,2))
+
+sppBiomassDfAll %>%
+  mutate(Model = sub("_[^_]+$", "", Model)) %>%
+  group_by(Time, Species, RCP, Model) %>%
+  summarise(Biomass_MG = mean(Biomass_MG), .groups = "drop") %>%
+  group_by(Time, RCP, Model) %>%
+  mutate(Total_Biomass = sum(Biomass_MG),
+         Percent = (Biomass_MG / Total_Biomass) * 100,
+         FunctionalGroup = ifelse(Species %in% softwoods, "Softwood", ifelse(Species %in% oaks, "Oaks", "Hardwoods"))) %>%
+  ggplot(., aes(x = Time, y = Percent, fill = FunctionalGroup)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  facet_grid(RCP~Model)
+
+# RCP & Prescription
+sppBiomassDfAll %>%
+  mutate(Model = sub("_[^_]+$", "", Model)) %>%
+  group_by(Time, Species, Prescription, RCP) %>%
+  summarise(Biomass_MG = mean(Biomass_MG)) %>%
+  ggplot(., aes(x = Time, y = Biomass_MG, fill = Species)) +
+  geom_bar(stat = "identity", col = "black") +
+  theme_classic() +
+  facet_wrap(RCP~Prescription, ncol = 3) +
+  scale_x_continuous(name = "Year", breaks = seq(0,80,10), labels = seq(2020,2100,10)) +
+  scale_y_continuous(name = "Biomass (kg/m2)", breaks = seq(0,12000,2000), labels = seq(0,12,2))
+
+sppBiomassDfAll %>%
+  mutate(Model = sub("_[^_]+$", "", Model)) %>%
+  group_by(Time, Species, Prescription, RCP) %>%
+  summarise(Biomass_MG = mean(Biomass_MG)) %>%
+  mutate(FunctionalGroup = ifelse(Species %in% softwoods, "Softwood", ifelse(Species %in% oaks, "Oaks", "Hardwoods"))) %>%
+  ggplot(., aes(x = Time, y = Biomass_MG, fill = FunctionalGroup)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  facet_wrap(RCP~Prescription, ncol = 3) +
+  scale_x_continuous(name = "Year", breaks = seq(0,80,10), labels = seq(2020,2100,10)) +
+  scale_y_continuous(name = "Biomass (kg/m2)", breaks = seq(0,12000,2000), labels = seq(0,12,2))
+
+sppBiomassDfAll %>%
+  mutate(Model = sub("_[^_]+$", "", Model)) %>%
+  group_by(Time, Species, RCP, Prescription) %>%
+  summarise(Biomass_MG = mean(Biomass_MG), .groups = "drop") %>%
+  group_by(Time, RCP, Prescription) %>%
+  mutate(Total_Biomass = sum(Biomass_MG),
+         Percent = (Biomass_MG / Total_Biomass) * 100) %>%
+  ggplot(., aes(x = Time, y = Percent, fill = Species)) +
+  geom_bar(stat = "identity", col = "black") +
+  theme_classic() +
+  facet_grid(RCP~Prescription)
+
+sppBiomassDfAll %>%
+  mutate(Model = sub("_[^_]+$", "", Model)) %>%
+  group_by(Time, Species, RCP, Prescription) %>%
+  summarise(Biomass_MG = mean(Biomass_MG), .groups = "drop") %>%
+  group_by(Time, RCP, Prescription) %>%
+  mutate(Total_Biomass = sum(Biomass_MG),
+         Percent = (Biomass_MG / Total_Biomass) * 100,
+         FunctionalGroup = ifelse(Species %in% softwoods, "Softwood", ifelse(Species %in% oaks, "Oaks", "Hardwoods"))) %>%
+  ggplot(., aes(x = Time, y = Percent, fill = FunctionalGroup)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  facet_grid(RCP~Prescription)
+
+# Model & Prescription
+sppBiomassDfAll %>%
+  mutate(Model = sub("_[^_]+$", "", Model)) %>%
+  group_by(Time, Species, Prescription, Model) %>%
+  summarise(Biomass_MG = mean(Biomass_MG)) %>%
+  ggplot(., aes(x = Time, y = Biomass_MG, fill = Species)) +
+  geom_bar(stat = "identity", col = "black") +
+  theme_classic() +
+  facet_grid(Prescription~Model) +
+  scale_x_continuous(name = "Year", breaks = seq(0,80,10), labels = seq(2020,2100,10)) +
+  scale_y_continuous(name = "Biomass (kg/m2)", breaks = seq(0,12000,2000), labels = seq(0,12,2))
+
+sppBiomassDfAll %>%
+  mutate(Model = sub("_[^_]+$", "", Model)) %>%
+  group_by(Time, Species, Prescription, Model) %>%
+  summarise(Biomass_MG = mean(Biomass_MG)) %>%
+  mutate(FunctionalGroup = ifelse(Species %in% softwoods, "Softwood", ifelse(Species %in% oaks, "Oaks", "Hardwoods"))) %>%
+  ggplot(., aes(x = Time, y = Biomass_MG, fill = FunctionalGroup)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  facet_grid(Prescription~Model) +
+  scale_x_continuous(name = "Year", breaks = seq(0,80,10), labels = seq(2020,2100,10)) +
+  scale_y_continuous(name = "Biomass (kg/m2)", breaks = seq(0,12000,2000), labels = seq(0,12,2))
+
+sppBiomassDfAll %>%
+  mutate(Model = sub("_[^_]+$", "", Model)) %>%
+  group_by(Time, Species, Model, Prescription) %>%
+  summarise(Biomass_MG = mean(Biomass_MG), .groups = "drop") %>%
+  group_by(Time, Model, Prescription) %>%
+  mutate(Total_Biomass = sum(Biomass_MG),
+         Percent = (Biomass_MG / Total_Biomass) * 100) %>%
+  ggplot(., aes(x = Time, y = Percent, fill = Species)) +
+  geom_bar(stat = "identity", col = "black") +
+  theme_classic() +
+  facet_grid(Prescription~Model)
+
+sppBiomassDfAll %>%
+  mutate(Model = sub("_[^_]+$", "", Model)) %>%
+  group_by(Time, Species, Model, Prescription) %>%
+  summarise(Biomass_MG = mean(Biomass_MG), .groups = "drop") %>%
+  group_by(Time, Model, Prescription) %>%
+  mutate(Total_Biomass = sum(Biomass_MG),
+         Percent = (Biomass_MG / Total_Biomass) * 100,
+         FunctionalGroup = ifelse(Species %in% softwoods, "Softwood", ifelse(Species %in% oaks, "Oaks", "Hardwoods"))) %>%
+  ggplot(., aes(x = Time, y = Percent, fill = FunctionalGroup)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  facet_grid(Prescription~Model)
+
+
+aov.1 <- aov(Biomass_MG ~ Prescription * RCP * Model, data = data)
+summary(aov.1)
+TukeyHSD(aov.1)
+
+
+
+
+sppBiomassDfAll %>%
+  mutate(Model = sub("_[^_]+$", "", Model)) %>%
+  group_by(Time, Species, Prescription) %>%
+  summarise(Biomass_MG = mean(Biomass_MG)) %>%
+  mutate(FunctionalGroup = ifelse(Species %in% softwoods, "Softwoods", ifelse(Species %in% oaks, "Oaks", "Hardwoods"))) %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance", "Resilience", "Transition"))) %>%
+  ggplot(., aes(x = Time, y = Biomass_MG, fill = FunctionalGroup)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  facet_wrap(~Prescription) +
+  scale_x_continuous(name = "Year", breaks = seq(0,80,20), labels = seq(2020,2100,20)) +
+  scale_y_continuous(name = "Biomass (kg/m2)", breaks = seq(0,12000,2000), labels = seq(0,12,2)) +
+  scale_fill_manual(values = c(
+      "Hardwoods" = "#0072B2",
+      "Softwoods" = "#E69F00",
+      "Oaks"      = "#999999"
+    ))
+
+
+```
+
+
+
+```{r}
+successionLogDf <- rbind(successionLog_BNU_ESM_RCP45_Resilience,
+                     successionLog_BNU_ESM_RCP45_Resistance,
+                     successionLog_BNU_ESM_RCP45_Transition,
+                     successionLog_BNU_ESM_RCP85_Resilience,
+                     successionLog_BNU_ESM_RCP85_Resistance,
+                     successionLog_BNU_ESM_RCP85_Transition,
+                     successionLog_MIROC_ESM_CHEM_RCP45_Resilience,
+                     successionLog_MIROC_ESM_CHEM_RCP45_Resistance,
+                     successionLog_MIROC_ESM_CHEM_RCP45_Transition,
+                     successionLog_MIROC_ESM_CHEM_RCP85_Resilience,
+                     successionLog_MIROC_ESM_CHEM_RCP85_Resistance,
+                     successionLog_MIROC_ESM_CHEM_RCP85_Transition,
+                     successionLog_MRI_CGCM3_RCP45_Resilience,
+                     successionLog_MRI_CGCM3_RCP45_Resistance,
+                     successionLog_MRI_CGCM3_RCP45_Transition,
+                     successionLog_MRI_CGCM3_RCP85_Resilience,
+                     successionLog_MRI_CGCM3_RCP85_Resistance,
+                     successionLog_MRI_CGCM3_RCP85_Transition,
+                     successionLog_CCSM4_RCP45_Resilience,
+                     successionLog_CCSM4_RCP45_Resistance,
+                     successionLog_CCSM4_RCP45_Transition,
+                     successionLog_CCSM4_RCP85_Resilience,
+                     successionLog_CCSM4_RCP85_Resistance,
+                     successionLog_CCSM4_RCP85_Transition)
+
+
+# Make harvestDf dataframe
+harvestDf <- rbind(harvest_BNU_ESM_RCP45_Resilience,
+                   harvest_BNU_ESM_RCP45_Resistance,
+                   harvest_BNU_ESM_RCP45_Transition,
+                   harvest_BNU_ESM_RCP85_Resilience,
+                   harvest_BNU_ESM_RCP85_Resistance,
+                   harvest_BNU_ESM_RCP85_Transition,
+                   harvest_MIROC_ESM_CHEM_RCP45_Resilience,
+                   harvest_MIROC_ESM_CHEM_RCP45_Resistance,
+                   harvest_MIROC_ESM_CHEM_RCP45_Transition,
+                   harvest_MIROC_ESM_CHEM_RCP85_Resilience,
+                   harvest_MIROC_ESM_CHEM_RCP85_Resistance,
+                   harvest_MIROC_ESM_CHEM_RCP85_Transition,
+                   harvest_MRI_CGCM3_RCP45_Resilience,
+                   harvest_MRI_CGCM3_RCP45_Resistance,
+                   harvest_MRI_CGCM3_RCP45_Transition,
+                   harvest_MRI_CGCM3_RCP85_Resilience,
+                   harvest_MRI_CGCM3_RCP85_Resistance,
+                   harvest_MRI_CGCM3_RCP85_Transition,
+                   harvest_CCSM4_RCP45_Resilience,
+                   harvest_CCSM4_RCP45_Resistance,
+                   harvest_CCSM4_RCP45_Transition,
+                   harvest_CCSM4_RCP85_Resilience,
+                   harvest_CCSM4_RCP85_Resistance,
+                   harvest_CCSM4_RCP85_Transition)
+
+
+harvestDfAll <- harvestDf[,c(1,2,70,38:67,69,3,71,72)] %>%
+  pivot_longer(cols = c("BiomassHarvestedMg_ACRU":"BiomassHarvestedMg_TADI2"), names_to = "Species", values_to = "Harvested_Biomass") %>%
+  group_by(Time, Species, Prescription, RCP, Model) %>%
+  summarise(Total_Harvest = sum(Harvested_Biomass)) %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", ""),
+         Model = sub("_[^_]+$", "", Model))
+
+harvestDfAll %>%
+  group_by(Time, Species, Prescription, RCP) %>%
+  summarise(Total_Harvest = mean(Total_Harvest)) %>%
+  ggplot(., aes(x = Time, y = Total_Harvest, fill = Species)) +
+  geom_bar(stat = "identity", col = "black") +
+  theme_classic() +
+  scale_y_continuous(breaks = c(0, 2e7, 4e7), labels = c(0,2,4), name = "Biomass (Mg) 10's millions") +
+  facet_grid(RCP~Prescription)
+
+harvestDfAll %>%
+  group_by(Time, Species, Prescription, Model) %>%
+  summarise(Total_Harvest = mean(Total_Harvest)) %>%
+  ggplot(., aes(x = Time, y = Total_Harvest, fill = Species)) +
+  geom_bar(stat = "identity", col = "black") +
+  theme_classic() +
+  scale_y_continuous(breaks = c(0, 2e7, 4e7), labels = c(0,2,4), name = "Biomass (Mg) 10's millions") +
+  facet_grid(Prescription~Model)
+
+harvestDfAll %>%
+  group_by(Time, Species, RCP, Model) %>%
+  summarise(Total_Harvest = mean(Total_Harvest)) %>%
+  ggplot(., aes(x = Time, y = Total_Harvest, fill = Species)) +
+  geom_bar(stat = "identity", col = "black") +
+  theme_classic() +
+  scale_y_continuous(breaks = c(0, 2e7, 4e7), labels = c(0,2,4), name = "Biomass (Mg) 10's millions") +
+  facet_grid(RCP ~ Model)
+
+# Cumulative total
+
+
+x <- harvestDf[,c(1,2,70,38:67,69,3,71,72)] %>%
+  pivot_longer(cols = c("BiomassHarvestedMg_ACRU":"BiomassHarvestedMg_TADI2"), names_to = "Species", values_to = "Harvested_Biomass") %>%
+  group_by(Time, Prescription, RCP, Model) %>%
+  summarise(Total_Harvest = sum(Harvested_Biomass)) %>%
+  ungroup() %>%
+  mutate(Model = sub("_[^_]+$", "", Model))
+
+aov.1 <- aov(Total_Harvest ~ RCP * Prescription * Model, data = x)
+summary(aov.1)
+TukeyHSD(aov.1)
+
+x %>%
+  group_by(Prescription, Model, RCP) %>%
+  summarise(Total_Harvest = sum(Total_Harvest)) %>%
+  ggplot(., aes(x = Prescription, y = Total_Harvest, fill = Model)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  theme_classic() +
+  facet_wrap(~RCP)
+
+x %>%
+  group_by(Prescription, Model, RCP) %>%
+  summarise(Total_Harvest = sum(Total_Harvest)) %>%
+  arrange(desc(Total_Harvest))
+
+ggplot(x, aes(x = Time, y = Total_Harvest, fill = Prescription)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  theme_classic() +
+  facet_grid(RCP ~ Model)
+
+```
+
+
+
+```{r}
+# This dataframe has the means for harvested biomass. MAY NOT NEED, AVERAGE IS ODD METRIC
+data <- harvestDf[,c(1,2,70,38:67,69,3,71,72)] %>%
+  pivot_longer(cols = c("BiomassHarvestedMg_ACRU":"BiomassHarvestedMg_TADI2"), names_to = "Species", values_to = "Harvested_Biomass") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", ""),
+         Prescription_Type = str_replace(Prescription_Type, "\\s*\\([^)]*\\)", ""),
+         Model = sub("_[^_]+$", "", Model)) %>%
+  group_by(Time, Prescription_Type, Prescription, RCP, Model) %>%
+  summarise(Harvested_Biomass = mean(Harvested_Biomass))
+
+# This dataframe has the totals
+totalHarvestDf <- harvestDf[,c(1,2,70,38:67,69,3,71,72)] %>%
+  pivot_longer(cols = c("BiomassHarvestedMg_ACRU":"BiomassHarvestedMg_TADI2"), names_to = "Species", values_to = "Harvested_Biomass") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", ""),
+         Prescription_Type = str_replace(Prescription_Type, "\\s*\\([^)]*\\)", ""),
+         Model = sub("_[^_]+$", "", Model)) %>%
+  group_by(Prescription_Type, Prescription, RCP, Model) %>%
+  summarise(Total_Harvest = sum(Harvested_Biomass))
+
+
+ggplot(totalHarvestDf, aes(x = Prescription_Type, y = Total_Harvest, fill = Prescription)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  theme_classic() +
+  facet_grid(RCP ~ Model) +
+  scale_y_continuous(labels = c(0,5,10,15), breaks = c(0,5e7,1e8,1.5e8), name = "Total Biomass Harvested in 10s Millions (Mg)")
+
+
+# Total harvested biomass by Prescription & RCP
+harvestDf[,c(1,2,70,38:67,69,3,71,72)] %>%
+  pivot_longer(cols = c("BiomassHarvestedMg_ACRU":"BiomassHarvestedMg_TADI2"), names_to = "Species", values_to = "Harvested_Biomass") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", ""),
+         Prescription_Type = str_replace(Prescription_Type, "\\s*\\([^)]*\\)", ""),
+         Model = sub("_[^_]+$", "", Model)) %>%
+  group_by(Prescription, RCP, Model) %>%
+  summarise(Total_Harvest = sum(Harvested_Biomass)) %>%
+  ggplot(., aes(x = Prescription, y = Total_Harvest, fill = Model)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  theme_classic() +
+  scale_y_continuous(name = "Cumulative Biomass Harvested in Millions (Mg)",
+                     breaks = c(0,2e8,4e8,6e8,8e8,1e9,1.2e9),
+                     labels = c(0,200,400,600,800,1000,1200)) +
+  facet_wrap(~RCP)
+
+
+# Total amount harvested by Prescription Type and RCP
+colours <- c("LOB_PLANTATION" = "#CA6B02","OH_RESISTANCE" = "#52763c","OH_RESILIENCE" = "#83b167","OH_TRANSITION" = "#bad4ab","OP_RESISTANCE" = "#9B111E","OP_RESILIENCE" = "#d31729","OP_TRANSITION" = "#f07984","SOFT_RESISTANCE" = "#0077b6","SOFT_RESILIENCE" = "#15aeff","SOFT_TRANSITION" = "#95daff","THINNING" = "#6930c3")
+
+harvestDf[,c(1,2,70,38:67,69,3,71,72)] %>%
+  pivot_longer(cols = c("BiomassHarvestedMg_ACRU":"BiomassHarvestedMg_TADI2"), names_to = "Species", values_to = "Harvested_Biomass") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", ""),
+         Prescription_Type = str_replace(Prescription_Type, "\\s*\\([^)]*\\)", ""),
+         Model = sub("_[^_]+$", "", Model)) %>%
+  group_by(Time, Prescription_Type, RCP) %>%
+  summarise(Total_Harvested = sum(Harvested_Biomass) / 4) %>%
+  ggplot(., aes(x = Time, y = Total_Harvested, fill = Prescription_Type)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  theme_classic() +
+  scale_y_continuous(name = "Cumulative Biomass Harvested in Millions (Mg)",
+                     breaks = c(0,1e7,2e7,3e7,4e7),
+                     labels = c(0,1,2,3,4)) +
+  scale_fill_manual(values = colours) +
+  facet_grid(~RCP)
+
+
+harvestDf[,c(1,2,70,38:67,69,3,71,72)] %>%
+  pivot_longer(cols = c("BiomassHarvestedMg_ACRU":"BiomassHarvestedMg_TADI2"), names_to = "Species", values_to = "Harvested_Biomass") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", ""),
+         Prescription_Type = str_replace(Prescription_Type, "\\s*\\([^)]*\\)", ""),
+         Model = sub("_[^_]+$", "", Model)) %>%
+  group_by(Time, Prescription_Type, RCP) %>%
+  summarise(Total_Harvested = sum(Harvested_Biomass) / 4) %>%
+  group_by(Time) %>%
+  mutate(Prescription_Type = reorder(Prescription_Type, -Total_Harvested)) %>%
+  ungroup() %>%
+  ggplot(., aes(x = factor(Time), y = Total_Harvested, fill = Prescription_Type)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  scale_fill_manual(values = colours) +
+  facet_wrap(~RCP) +
+  labs(x = "Time", y = "Total Harvest", fill = "Prescription Type") +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+harvestDf[,c(1,2,70,38:67,69,3,71,72)] %>%
+  pivot_longer(cols = c("BiomassHarvestedMg_ACRU":"BiomassHarvestedMg_TADI2"), 
+               names_to = "Species", values_to = "Harvested_Biomass") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", ""),
+         Prescription_Type = str_replace(Prescription_Type, "\\s*\\([^)]*\\)", ""),
+         Model = sub("_[^_]+$", "", Model)) %>%
+  group_by(Time, Prescription_Type, RCP) %>%
+  summarise(Total_Harvested = sum(Harvested_Biomass) / 4, .groups = "drop") %>%
+  group_by(Time, RCP) %>%
+  mutate(Reordered_Prescription = tidytext::reorder_within(Prescription_Type, -Total_Harvested, Time)) %>% 
+  ungroup() %>%
+  ggplot(aes(x = interaction(Time, Reordered_Prescription), y = Total_Harvested, fill = Prescription_Type)) +  
+  geom_bar(stat = "identity") +  
+  tidytext::scale_x_reordered() +  # Keeps the correct ordering
+  facet_wrap(~RCP) +
+  scale_fill_manual(values = colours) +  # Ensure correct color mapping
+  labs(x = "Time", y = "Total Harvest", fill = "Prescription Type") +
+  theme_classic()
+
+
+
+
+harvestDf[,c(1,2,70,38:67,69,3,71,72)] %>%
+  pivot_longer(cols = c("BiomassHarvestedMg_ACRU":"BiomassHarvestedMg_TADI2"), names_to = "Species", values_to = "Harvested_Biomass") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", ""),
+         Prescription_Type = str_replace(Prescription_Type, "\\s*\\([^)]*\\)", ""),
+         Model = sub("_[^_]+$", "", Model)) %>%
+  group_by(Prescription_Type, RCP) %>%
+  summarise(Total_Harvested = sum(Harvested_Biomass)) %>%
+  ggplot(., aes(x = Prescription_Type, y = Total_Harvested, fill = RCP)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  theme_classic() +
+  scale_y_continuous(name = "Cumulative Biomass Harvested in Millions (Mg)",
+                     breaks = c(0,2e8,4e8,6e8),
+                     labels = c(0,200,400,600))
+
+data <- harvestDf[,c(1,2,70,38:67,69,3,71,72)] %>%
+  pivot_longer(cols = c("BiomassHarvestedMg_ACRU":"BiomassHarvestedMg_TADI2"), names_to = "Species", values_to = "Harvested_Biomass") %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", ""),
+         Prescription_Type = str_replace(Prescription_Type, "\\s*\\([^)]*\\)", ""),
+         Model = sub("_[^_]+$", "", Model)) %>%
+  group_by(Time, Prescription_Type, Prescription, RCP, Model) %>%
+  summarise(Harvested_Biomass = mean(Harvested_Biomass))
+
+
+aov.1 <- aov(Harvested_Biomass ~ Prescription_Type * RCP * Model, data = data)
+summary(aov.1)
+TukeyHSD(aov.1)
+```
+
+
+
+```{r}
+mainDir <- "D:/Landis Outputs/Resilience/RCP45/HSHV"
+runs <- paste0("run", 1:5)
+combinedRasters <- list()
+for (run in 1:5) {
+  runDir <- file.path(mainDir, paste0("run", run, "/Harvest"))
+  for (year in seq(10, 80, by = 10)) {
+    filename <- paste0("biomass-harvest-prescripts-", year,".img")
+    filePath <- file.path(runDir, filename)
+    rasterData <- rast(filePath)
+    crs(rasterData) <- "epsg:26917"
+    rasterData <- flip(rasterData)
+    newFileName <- sub("\\.img$", paste0("_run", run, ".tif"), filename)
+    combinedRasters[[newFileName]] <- rasterData
+  }
+}
+
+
+plot(combinedRasters[[1]], col = c(NA, NA, NA, "forestgreen", NA, NA))
+plot(combinedRasters[[2]], col = c(NA, NA, NA, "forestgreen", NA, NA))
+plot(combinedRasters[[3]], col = c(NA, NA, NA, "forestgreen", NA))
+plot(combinedRasters[[4]], col = c(NA, NA, NA, NA, "forestgreen", NA))
+plot(combinedRasters[[5]], col = c(NA, NA, NA, "forestgreen", NA, NA))
+plot(combinedRasters[[6]], col = c(NA, NA, NA, "forestgreen", NA, NA))
+plot(combinedRasters[[7]], col = c(NA, NA, NA, NA, "forestgreen", NA))
+plot(combinedRasters[[8]], col = c(NA, NA, NA, NA, "forestgreen", NA))
+```
+
+
+
+```{r}
+# Make a dataframe with the specific gravities
+# 0.49 is the average specific gravity in the SE
+
+sgDf <- data.frame(
+  Species = c("ACRU","CAAL27","CAGL8","CAOV2","FRPE","JUVI","LIST2","LITU","NYBI","NYSY","PIEC2","PIPA2","PITA","PIVI2","QUAL","QUCO2","QUFA","QULA2","QULA3","QUMA3","QUNI","QUPR2","QURU","QUST","QUVE","TADI2"),
+  specificGravity = c(0.49,0.62,0.62,0.62,0.53,0.44,0.46,0.40,0.49,0.49,0.47,0.54,0.47,0.49,0.60,0.60,0.52,0.49,0.56,0.49,0.56,0.57,0.56,0.60,0.56,0.34))
+
+harvestDf <- read_csv("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 3/SOSIEL_Experiment/Harvest/biomass-harvest-summary-log.csv")
+harvestDf[,c(1,2,34:59)] %>%
+  pivot_longer(cols = c("BiomassHarvestedMg_ACRU":"BiomassHarvestedMg_TADI2"), names_to = "Species", values_to = "Harvested_Biomass_Mg") %>%
+  group_by(Time, Species, ManagementArea) %>%
+  summarise(Total_Harvest = sum(Harvested_Biomass_Mg)) %>%
+  mutate(Species = str_replace(Species, "^[^_]*_", "")) %>%
+  inner_join(sgDf, by = "Species") %>%
+  mutate(Volume_m3 = Total_Harvest / specificGravity) %>%
+  ggplot(., aes(x = Time, y = Volume_m3, col = Species)) +
+  geom_line(size = 1) +
+  theme_classic() +
+  facet_wrap(~ ManagementArea) +
+  scale_y_continuous(breaks = c(0,5e5,1e6,1.5e6), labels = c(0,0.5,1,1.5), name = "Harvested in millions of m3")
+
+
+# ((Anson County Delivered Value / average price of pine sawtimber in Q4 2022) * conversion to Mg) / P. taeda specific gravity
+((42358600 / 30.48) * 0.907185) / 0.47
+2,682,407
+# Montgomery County
+((35187263 / 30.48) * 0.907185) / 0.47
+2,228,274
+# Richmond County
+((28634301 / 30.48) * 0.907185) / 0.47
+1,813,300
+
+
+((1157425605 / 30.48) * 0.907185) / 0.47
+73,295,300
+
+73295300 / 100
+
+732,953 # average volume per county in NC
+
+# Durham, Granville, Orange, Alamance, Person, Caswell
+
+(((846754 + 14686824 + 3511070 + 7107018 + 9934773 + 8866736) / 30.48) * 0.907185) / 0.47
+2,846,711 # Volume
+1,337,954 # Mg
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

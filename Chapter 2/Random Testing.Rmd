@@ -1,0 +1,94 @@
+---
+title: "Untitled"
+output: pdf_document
+date: "2024-09-10"
+---
+
+```{r}
+library(tidyverse)
+library(neonUtilities)
+library(terra)
+```
+
+
+
+```{r}
+mapCodeDf <- read_csv("C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/treeMap/finalMapCodeDf.csv")
+
+mapCodeDf %>%
+  group_by(SpeciesName, CohortAge) %>%
+  summarise(max = max(CohortBiomass)) %>%
+  ggplot(., aes(x = SpeciesName, y = max, col = factor(CohortAge))) +
+  geom_point() +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggplot(mapCodeDf, aes(x = SpeciesName, y = CohortBiomass)) +
+  geom_boxplot() +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
+# mapCodeDf %>%
+#   group_by(SpeciesName) %>%
+#   summarise(MaxValue = quantile(CohortBiomass, 0.75) + IQR(CohortBiomass) * 1.5)
+
+
+# testMapCode <- mapCodeDf %>%
+#   group_by(SpeciesName) %>%
+#   mutate(threshold = quantile(CohortBiomass, 0.75) + IQR(CohortBiomass) * 1.5,
+#          CohortBiomass = pmin(CohortBiomass, threshold)) %>%
+#   select(-threshold)
+
+
+ggplot(testMapCode, aes(x = SpeciesName, y = CohortBiomass)) +
+  geom_boxplot() +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+# write_csv(testMapCode, "C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/treeMap Harvest Testing/testMapCodeDf.csv")
+
+```
+
+
+
+```{r}
+a <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/treeMap/Biomass Testing/cypressEcoregions.tif")
+b <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/treeMap/Biomass Testing/oaksEcoregions.tif")
+c <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/treeMap/Biomass Testing/hardwoodsEcoregions.tif")
+d <- rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/treeMap/Biomass Testing/softwoodsEcoregions.tif")
+
+stack <- c(a,b,c,d)
+
+plot(stack)
+
+x <- min(stack, na.rm = TRUE)
+
+
+plot(a)
+plot(b)
+plot(c)
+plot(d)
+plot(x)
+
+writeRaster(x,
+            filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Clipped Test/treeMap/Biomass Testing/allTestEcoregions.tif",
+            datatype = "INT1U",
+            NAflag = NA,
+            overwrite = TRUE)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
