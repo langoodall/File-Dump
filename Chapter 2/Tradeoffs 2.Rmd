@@ -1,0 +1,2826 @@
+---
+title: "Untitled"
+output: pdf_document
+date: "2025-08-19"
+---
+
+```{r}
+library(tidyverse)
+library(terra)
+library(sf)
+library(data.table)
+library(corrplot)
+library(lmerTest)
+library(gt)
+library(broom)
+library(FIESTA)
+library(RSQLite)
+templateRaster <- rast("D:/Landis Outputs/Raster Template/templateRaster.tif")
+options(scipen = 999)
+softwoods <- c("JUVI","PIEC2","PIPA2","PIST","PITA","PIVI2","TAAS","TADI2")
+oaks <- c("QUAL","QUCO2","QUFA","QULA3","QUNI","QUPH","QUPR2","QURU","QUST","QUVE")
+hardwoods <- c("ACRU","CAAL27","CAGL8","FAGR","FRAM2","FRPE","LIST2","LITU","NYBI","NYSY","OXAR","PRSE2")
+```
+
+# FIA Plots
+
+```{r}
+NC.shp <- st_read("C:/Users/lagoodal/Desktop/Ecoregion Level 3 Full/Full/nc_eco_l3.shp") %>% st_transform(., crs = crs(templateRaster))
+
+plots_nc <- DBgetPlots(
+  states = "North Carolina",
+  eval = "custom",
+  eval_opts = eval_options(Cur = TRUE),
+  coordType = "PUBLIC",
+  issp = TRUE
+)
+
+plots <- plots_nc$xyCur_PUBLIC
+plotsUnique <- plots %>% distinct(PLOT_ID, .keep_all = TRUE)
+plotsUnique <- st_transform(plotsUnique, crs = crs(templateRaster))
+#plotsUnique <- st_drop_geometry(plotsUnique)
+
+
+ggplot() +
+  geom_sf(data = NC.shp[2], fill = "grey95", color = "black", linewidth = 1) +
+  geom_sf(data = plotsUnique, color = "darkgreen", size = 0.5, alpha = 0.7) +
+  coord_sf(clip = "on") +
+  theme_classic() +
+  theme(plot.background  = element_rect(fill = "transparent", color = NA), panel.background = element_rect(fill = "transparent", color = NA))
+
+
+
+
+ggsave(height = 5, width = 8, dpi = 600,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/Images/Final/FIA.png")
+
+
+```
+
+
+
+```{r}
+# Climate
+climateAllDf <- rbind(Resistance_Climate,
+      BNU_ESM_RCP45,
+      BNU_ESM_RCP85,
+      MIROC_ESM_CHEM_RCP45,
+      MIROC_ESM_CHEM_RCP85,
+      MRI_CGCM3_RCP45,
+      MRI_CGCM3_RCP85,
+      CCSM4_RCP45,
+      CCSM4_RCP85)
+
+
+climateAllDf %>%
+  select(-meanppt, -sumppt) %>%
+  filter(Model != "Historical") %>%
+  pivot_wider(names_from = Year, values_from = airtemp, names_prefix = "T") %>%
+  select(Model, T2020, T2099) %>%
+  mutate(T2020 = round(T2020, 2),
+         T2099 = round(T2099, 2),
+         Diff = round(T2099 - T2020, 2))
+
+climateAllDf %>%
+  group_by(Model) %>%
+  summarise(sumPpt = mean(sumppt),
+            sdPpt = sd(sumppt),
+            airTemp = mean(airtemp),
+            sdTemp = sd(airtemp)) %>%
+  arrange(desc(sdTemp))
+
+
+# Diversity
+diversityAllDf <- rbind(propBiomass_Resistance_AllRuns,
+                        propBiomass_BNU_ESM_RCP45_Resistance_AllRuns,
+                        propBiomass_BNU_ESM_RCP85_Resistance_AllRuns,
+                        propBiomass_CCSM4_RCP45_Resistance_AllRuns,
+                        propBiomass_CCSM4_RCP85_Resistance_AllRuns,
+                        propBiomass_MIROC_ESM_CHEM_RCP45_Resistance_AllRuns,
+                        propBiomass_MIROC_ESM_CHEM_RCP85_Resistance_AllRuns,
+                        propBiomass_MRI_CGCM3_RCP45_Resistance_AllRuns,
+                        propBiomass_MRI_CGCM3_RCP85_Resistance_AllRuns) %>%
+  group_by(Time, Run, Prescription, Model, RCP) %>%
+  mutate(Pi = Percent_Biomass / 100,
+         lnPi = log(Pi),
+         PixlnPi = Pi * lnPi) %>%
+  summarise(H = -sum(PixlnPi, na.rm = TRUE)) %>%
+  mutate(RCP = ifelse(is.na(RCP), "Historical", RCP)) %>%
+  mutate(
+    Model = case_when(
+      grepl("BNU-ESM", Model) ~ "HSHV",
+      grepl("MIROC-ESM", Model) ~ "HSLV",
+      grepl("MRI-CGCM3", Model) ~ "LSHV",
+      grepl("CCSM4", Model) ~ "LSLV",
+      TRUE ~ Model   # keep others unchanged
+    )
+  )
+
+
+diversityAllDf %>%
+  group_by(Time, Prescription, Model, RCP) %>%
+  summarise(H = mean(H)) %>%
+  pivot_wider(names_from = Time, values_from = H, names_prefix = "T") %>%
+  select(Model, RCP, T10, T80) %>%
+  mutate(T10 = round(T10, 2),
+         T80 = round(T80, 2),
+         Diff = round(T80 - T10, 2))
+
+
+# Succession log variables
+successionLogAllDf <- rbind(successionLog_Resistance_All,
+                            successionLog_BNU_ESM_RCP45_Resistance_All,
+                            successionLog_BNU_ESM_RCP85_Resistance_All,
+                            successionLog_CCSM4_RCP45_Resistance_All,
+                            successionLog_CCSM4_RCP85_Resistance_All,
+                            successionLog_MIROC_ESM_CHEM_RCP45_Resistance_All,
+                            successionLog_MIROC_ESM_CHEM_RCP85_Resistance_All,
+                            successionLog_MRI_CGCM3_RCP45_Resistance_All,
+                            successionLog_MRI_CGCM3_RCP85_Resistance_All) %>%
+  mutate(RCP = ifelse(is.na(RCP), "Historical", RCP)) 
+
+# Harvest dataframe
+harvestDfAll <- rbind(harvest_BNU_ESM_RCP45_Resistance,
+      harvest_BNU_ESM_RCP85_Resistance,
+      harvest_MIROC_ESM_CHEM_RCP45_Resistance,
+      harvest_MIROC_ESM_CHEM_RCP85_Resistance,
+      harvest_MRI_CGCM3_RCP45_Resistance,
+      harvest_MRI_CGCM3_RCP85_Resistance,
+      harvest_CCSM4_RCP45_Resistance,
+      harvest_CCSM4_RCP85_Resistance,
+      harvest_Resistance) %>%
+  mutate(RCP = ifelse(is.na(RCP), "Historical", RCP)) %>%
+  pivot_longer(cols = c("BiomassHarvestedMg_ACRU":"BiomassHarvestedMg_TADI2"), names_to = "Species", values_to = "Harvested_Biomass") %>%
+  group_by(Time, Run, Prescription, RCP, Model, Species) %>%
+  summarise(Total_Harvest = sum(Harvested_Biomass))%>%
+  mutate(Species = str_replace(Species, "^[^_]+_", ""))
+
+harvestDf <- harvestDfAll %>%
+  group_by(Time, Run, Prescription, RCP, Model) %>%
+  summarise(Total_Harvest = sum(Total_Harvest)) %>%
+  mutate(
+    Model = case_when(
+      grepl("BNU-ESM", Model) ~ "HSHV",
+      grepl("MIROC-ESM", Model) ~ "HSLV",
+      grepl("MRI-CGCM3", Model) ~ "LSHV",
+      grepl("CCSM4", Model) ~ "LSLV",
+      TRUE ~ Model)) 
+
+harvestDf %>%
+  group_by(Time, Model, RCP) %>%
+  summarise(Total_Harvest = mean(Total_Harvest), .groups = "drop_last") %>%
+  group_by(Model, RCP) %>%
+  mutate(cumulative_harvest = cumsum(Total_Harvest)) %>%
+  filter(Time == 80)
+
+harvestDf %>%
+  group_by(Time, Model, RCP) %>%
+  summarise(Total_Harvest = mean(Total_Harvest), .groups = "drop_last") %>%
+  group_by(Model, RCP) %>%
+  summarise(mean = mean(Total_Harvest),
+            sd = sd(Total_Harvest)) %>%
+  arrange(desc(sd))
+
+
+harvestDf %>%
+  group_by(Time, Model, RCP) %>%
+  summarise(Total_Harvest = mean(Total_Harvest), .groups = "drop_last") %>%
+  group_by(Model, RCP) %>%
+  mutate(cumulative_harvest = cumsum(Total_Harvest)) %>%
+  ggplot(., aes(x = Time, y = cumulative_harvest, col = Model)) +
+  geom_line(size = 1.2) +
+  theme_classic()
+
+
+#----TOTAL CARBON----#
+# Resistance
+mainDir <- "D:/Landis Outputs"
+scenarios <- c("Resistance")
+rcps <- c("RCP45", "RCP85")
+climates <- c("HSHV", "HSLV", "LSHV", "LSLV")
+runs <- paste0("run",1:5)
+timesteps <- seq(10,80,10)
+
+rasterList <- list()
+for (scenario in scenarios) {
+  for (rcp in rcps) {
+    for (climate in climates) {
+      for (run in runs) {
+        for (timestep in timesteps) {
+          img_file <- file.path(mainDir, scenario, rcp, climate, run, paste0("TotalC-", timestep, ".img"))
+          raster <- rast(img_file)
+          crs(raster) <- "epsg:26917"
+          raster <- flip(raster)
+          ext(raster) <- ext(templateRaster)
+          name <- paste(scenario, rcp, climate, run, timestep, sep = "_")
+          rasterList[[name]] <- raster
+        }
+      }
+    }
+  }
+}
+
+carbonMeans <- list()
+for (name in names(rasterList)) {
+  raster <- rasterList[[name]]
+  raster[raster == 0] <- NA
+  meanValue <- as.numeric(global(raster, fun = "mean", na.rm = TRUE)[1, 1])
+  carbonMeans[[name]] <- meanValue
+}
+
+Total_CDfAll <- carbonMeans %>%
+  as.data.frame() %>%
+  t() %>%
+  as.data.frame() %>%
+  rownames_to_column() %>%
+  separate(rowname, into = c("Prescription", "RCP", "Model", "Run", "Time"), sep = "_") %>%
+  rename(Total_C = V1) %>%
+  mutate(Model = ifelse(Model == "HSHV" & RCP == "RCP45", "BNU-ESM_RCP45",
+                        ifelse(Model == "HSHV" & RCP == "RCP85", "BNU-ESM_RCP85",
+                               ifelse(Model == "HSLV" & RCP == "RCP45", "MIROC-ESM-CHEM_RCP45",
+                                      ifelse(Model == "HSLV" & RCP == "RCP85", "MIROC-ESM-CHEM_RCP85",
+                                             ifelse(Model == "LSHV" & RCP == "RCP45", "MRI-CGCM3_RCP45",
+                                                    ifelse(Model == "LSHV" & RCP == "RCP85", "MRI-CGCM3_RCP85",
+                                                           ifelse(Model == "LSLV" & RCP == "RCP45", "CCSM4_RCP45", "CCSM4_RCP85"))))))))
+
+# Historical
+mainDir <- "D:/Historical_LANDIS/Resistance/"
+runs <- paste0("run", 1:5)
+timesteps <- seq(10,80,10)
+
+rasterList <- list()
+for (run in runs) {
+  for (timestep in timesteps) {
+    imgFile <- file.path(mainDir, run, paste0("TotalC-", timestep, ".img"))
+    raster <- rast(imgFile)
+    crs(raster) <- "epsg:26917"
+    raster <- flip(raster)
+    ext(raster) <- ext(templateRaster)
+    name <- paste(run, timestep, sep = "_")
+    rasterList[[name]] <- raster
+  }
+}
+
+carbonMeans <- list()
+for (name in names(rasterList)) {
+  raster <- rasterList[[name]]
+  raster[raster == 0] <- NA
+  meanValue <- as.numeric(global(raster, fun = "mean", na.rm = TRUE)[1, 1])
+  carbonMeans[[name]] <- meanValue
+}
+
+df <- as.data.frame(carbonMeans) %>% t() %>%
+  as.data.frame() %>%
+  rownames_to_column %>%
+  mutate(rowname = paste0("Resistance_NA_Historical_", rowname)) %>%
+  `colnames<-`(c("Scenarios", "Total_C")) %>%
+  separate(Scenarios, into = c("Prescription", "RCP", "Model", "Run", "Time"), sep = "_")
+
+Total_CDfAll <- rbind(Total_CDfAll, df)
+Total_CDfAll$Time <- as.numeric(Total_CDfAll$Time)
+Total_CDfAll <- Total_CDfAll %>%
+  mutate(RCP = ifelse(RCP == "NA", "Historical", RCP)) %>%
+  mutate(
+    Model = case_when(
+      grepl("BNU-ESM", Model) ~ "HSHV",
+      grepl("MIROC-ESM", Model) ~ "HSLV",
+      grepl("MRI-CGCM3", Model) ~ "LSHV",
+      grepl("CCSM4", Model) ~ "LSLV",
+      TRUE ~ Model   # keep others unchanged
+    )
+  )
+
+
+Total_CDfAll %>%
+  group_by(Time, Prescription, Model, RCP) %>%
+  summarise(Total_C = mean(Total_C)) %>%
+  pivot_wider(names_from = Time, values_from = Total_C, names_prefix = "T") %>%
+  select(Model, T10, T80) %>%
+  mutate(T10 = round(T10, 2),
+         T80 = round(T80, 2),
+         Diff = round(T80 - T10, 2))
+
+Total_CDfAll %>%
+  group_by(Time, Prescription, Model, RCP) %>%
+  summarise(Total_C = mean(Total_C), .groups = "drop") %>%
+  group_by(Model) %>%
+  summarise(mean = mean(Total_C),
+            sd = sd(Total_C)) %>%
+  arrange(desc(sd))
+
+#----ANNUAL WATER BUDGET----#
+AWBAllDf <- rbind(AWB_ResistanceDf,
+                  AWB_BNU_ESM_RCP45_ResistanceDf,
+                  AWB_BNU_ESM_RCP85_ResistanceDf,
+                  AWB_CCSM4_RCP45_ResistanceDf,
+                  AWB_CCSM4_RCP85_ResistanceDf,
+                  AWB_MIROC_ESM_CHEM_RCP45_ResistanceDf,
+                  AWB_MIROC_ESM_CHEM_RCP85_ResistanceDf,
+                  AWB_MRI_CGCM3_RCP45_ResistanceDf,
+                  AWB_MRI_CGCM3_RCP85_ResistanceDf) %>%
+  group_by(Time, Run, Prescription, Model, RCP) %>%
+  summarise(AWB = mean(AWB)) %>%
+  mutate(RCP = ifelse(is.na(RCP), "Historical", RCP)) %>%
+  mutate(
+    Model = case_when(
+      grepl("BNU-ESM", Model) ~ "HSHV",
+      grepl("MIROC-ESM", Model) ~ "HSLV",
+      grepl("MRI-CGCM3", Model) ~ "LSHV",
+      grepl("CCSM4", Model) ~ "LSLV",
+      TRUE ~ Model)) 
+
+
+AWBAllDf %>%
+  group_by(Time, Prescription, Model, RCP) %>%
+  summarise(AWB = mean(AWB)) %>%
+  pivot_wider(names_from = Time, values_from = AWB, names_prefix = "T") %>%
+  select(Model, RCP, T10, T80) %>%
+  mutate(T10 = round(T10, 2),
+         T80 = round(T80, 2),
+         Diff = round(T80 - T10, 2))
+
+AWBAllDf %>%
+  group_by(Time, Prescription, Model, RCP) %>%
+  summarise(AWB = mean(AWB), .groups = "drop") %>%
+  group_by(Model) %>%
+  summarise(mean = mean(AWB),
+            sd = sd(AWB)) %>%
+  arrange(desc(sd))
+  
+#----STRUCTURAL DIVERSITY----#
+strTreesAllDf <- read_csv("D:/Historical_LANDIS/Structural_Diversity_Chapter2.csv")
+# filepath <- "C:/Users/lagoodal/Desktop/Dissertation Stuff/Historical_LANDIS/Structural Diversity/"
+# files <- list.files(path = filepath, pattern = "*.csv", full.names = TRUE)
+# strList <- lapply(files, function(x) fread(x))
+# strTreesAllDf <- do.call(rbind, strList)
+strDivDf <- strTreesAllDf %>%
+  group_by(Time, RCP, Model) %>%
+  summarise(H = mean(H))
+
+strDivDf %>%
+  filter(Time > 0) %>%
+  group_by(Time, Model, RCP) %>%
+  pivot_wider(names_from = Time, values_from = H, names_prefix = "T") %>%
+  select(Model, T80, T10) %>%
+  mutate(T10 = round(T10, 2),
+         T80 = round(T80, 2),
+         Diff = round(T80 - T10, 2)) %>%
+  arrange(desc(Diff))
+
+strDivDf %>%
+  filter(Time > 0) %>%
+  group_by(Time, Model, RCP) %>%
+  summarise(H = mean(H), .groups = "drop") %>%
+  group_by(Model) %>%
+  summarise(mean = mean(H),
+            sd = sd(H)) %>%
+  arrange(desc(sd))
+
+#----FRUIT TREES----#
+# filepath <- "C:/Users/lagoodal/Desktop/Dissertation Stuff/Historical_LANDIS/Fruit Trees/"
+# files <- list.files(path = filepath, pattern = "*.csv", full.names = TRUE)
+# fruitList <- lapply(files, function(x) fread(x))
+# fruitTreesAllDf <- do.call(rbind, fruitList)
+fruitTreesAllDf <- read_csv("D:/Historical_LANDIS/Fruit_Trees_Chapter2.csv")
+
+fruitDf <- fruitTreesAllDf  %>%
+  group_by(Time, Run, Model, RCP) %>%
+  summarise(Fruit_Trees = mean(Score), .groups = "drop")
+
+fruitTreesDf <- fruitTreesAllDf %>%
+  group_by(Time, SpeciesName, Model, RCP) %>%
+  summarise(Fruit_Tree = mean(Score * 0.01), .groups = "drop") %>%
+  group_by(Time, Model, RCP) %>%
+  summarise(Fruit_Tree = mean(Fruit_Tree))
+
+fruitTreesDf %>%
+  filter(Time > 0) %>%
+  pivot_wider(names_from = Time, values_from = Fruit_Tree, names_prefix = "T") %>%
+  select(Model, RCP, T10, T80) %>%
+  mutate(T10 = round(T10, 2),
+         T80 = round(T80, 2),
+         Diff = round(T80 - T10, 2)) %>%
+  arrange(Diff)
+
+fruitTreesAllDf %>%
+  filter(Time > 0) %>%
+  group_by(RCP, Model) %>%
+  summarise(mean = mean(Score),
+            sd = sd(Score, na.rm = TRUE)) %>%
+  arrange(desc(sd))
+
+fruitTreesDf %>%
+  filter(Time > 0) %>%
+  ggplot(., aes(x = Time, y = Fruit_Tree * 0.01, col = Model)) +
+  geom_line(size = 1.2) +
+  theme_classic() +
+  facet_grid(~ RCP) +
+  scale_x_continuous(name = "Year", breaks = seq(0,80,20), labels = seq(2020,2100,20)) +
+  scale_y_continuous(name = "Biomass of Fruit/Nut Trees (Mg/ha)")
+
+#----CULTURE TREES----#
+cultureTreesAllDf <- read_csv("D:/Historical_LANDIS/Culture_Trees_Chapter2.csv")
+
+cultureDf <- cultureTreesAllDf %>%
+  group_by(Time, Run, Model, RCP) %>%
+  summarise(Culture_Trees = mean(Score), .groups = "drop")
+
+cultureTreesDf <- cultureTreesAllDf %>%
+  group_by(Time, SpeciesName, Model, RCP) %>%
+  summarise(Culture_Tree = mean(Score * 0.01), .groups = "drop") %>%
+  group_by(Time, Model, RCP) %>%
+  summarise(Culture_Tree = sum(Culture_Tree), .groups = "drop")
+
+cultureTreesDf %>%
+  filter(Time > 0) %>%
+  pivot_wider(names_from = Time, values_from = Culture_Tree, names_prefix = "T") %>%
+  select(Model, RCP, T10, T80) %>%
+  mutate(T10 = round(T10, 2),
+         T80 = round(T80, 2),
+         Diff = round(T80 - T10, 2)) %>%
+  arrange(Diff)
+
+cultureTreesAllDf %>%
+  filter(Time > 0) %>%
+  group_by(RCP, Model) %>%
+  summarise(mean = mean(Score),
+            sd = sd(Score, na.rm = TRUE)) %>%
+  arrange(desc(sd))
+
+cultureTreesDf %>%
+  filter(Time > 0) %>%
+  ggplot(., aes(x = Time, y = Culture_Tree, col = Model)) +
+  geom_line(size = 1.2) +
+  theme_classic() +
+  facet_grid(~ RCP) +
+  scale_x_continuous(name = "Year", breaks = seq(0,80,20), labels = seq(2020,2100,20)) +
+  scale_y_continuous(name = "Biomass of Cultural Trees (Mg/ha)")
+
+#----NEEC----#
+successionLogAllDf %>%
+  filter(Time > 0) %>%
+  group_by(Time, Model, RCP, Prescription) %>%
+  summarise(NEEC = mean(NEEC), .groups = "drop") %>%
+  ggplot(., aes(x = Time, y = NEEC, col = Model)) +
+  # geom_line() +
+  geom_smooth(se = FALSE, method = "lm", size = 1.2) +
+  theme_classic() +
+  geom_hline(yintercept = 0) +
+  facet_wrap(~ RCP)
+
+successionLogAllDf %>%
+  filter(Time > 0) %>%
+  group_by(Time, Model, RCP, Prescription) %>%
+  summarise(NEEC = mean(NEEC), .groups = "drop") %>%
+  pivot_wider(names_from = Time, values_from = NEEC, names_prefix = "T") %>%
+  select(Model, T10, T80) %>%
+  mutate(T10 = round(T10, 2),
+         T80 = round(T80, 2),
+         Diff = round(T80 - T10, 2))
+
+successionLogAllDf %>%
+  filter(Time > 0) %>%
+  group_by(Time, Model, RCP, Prescription) %>%
+  summarise(NEEC = mean(NEEC), .groups = "drop") %>%
+  group_by(Model) %>%
+  summarise(mean = mean(NEEC),
+            sd = sd(NEEC)) %>%
+  arrange(desc(sd))
+
+#----ANPP----#
+successionLogAllDf %>%
+  mutate(ANPP = AG_NPPC * 2) %>%
+  group_by(Time, Model, RCP, Prescription) %>%
+  summarise(ANPP = mean(ANPP)) %>%
+  filter(Time > 0) %>%
+  pivot_wider(names_from = Time, values_from = ANPP, names_prefix = "T") %>%
+  select(Model, T10, T80) %>%
+  mutate(T10 = round(T10, 2),
+         T80 = round(T80, 2),
+         Diff = round(T80 - T10, 2))
+
+successionLogAllDf %>%
+  mutate(ANPP = AG_NPPC * 2) %>%
+  filter(Time > 0) %>%
+  group_by(Time, Model, RCP, Prescription) %>%
+  summarise(ANPP = mean(ANPP), .groups = "drop") %>%
+  group_by(Model) %>%
+  summarise(mean = mean(ANPP),
+            sd = sd(ANPP)) %>%
+  arrange(desc(sd))
+
+#----ABOVEGROUND BIOMASS----#
+rbind(propBiomass_Resistance_AllRuns,
+      propBiomass_BNU_ESM_RCP45_Resistance_AllRuns,
+      propBiomass_BNU_ESM_RCP85_Resistance_AllRuns,
+      propBiomass_CCSM4_RCP45_Resistance_AllRuns,
+      propBiomass_CCSM4_RCP85_Resistance_AllRuns,
+      propBiomass_MIROC_ESM_CHEM_RCP45_Resistance_AllRuns,
+      propBiomass_MIROC_ESM_CHEM_RCP85_Resistance_AllRuns,
+      propBiomass_MRI_CGCM3_RCP45_Resistance_AllRuns,
+      propBiomass_MRI_CGCM3_RCP85_Resistance_AllRuns) %>%
+  mutate(RCP = ifelse(is.na(RCP), "Historical", RCP)) %>%
+  group_by(Time, RCP, Model, Species) %>%
+  summarise(Biomass_MG = mean(Biomass_MG), .groups = "drop") %>%
+  group_by(Time, RCP, Model) %>%
+  summarise(Biomass_MG = sum(Biomass_MG)) %>%
+  # mutate(Model = sub("_[^_]+$", "", Model)) %>%
+  filter(Time > 0) %>%
+  pivot_wider(names_from = Time, values_from = Biomass_MG, names_prefix = "T") %>%
+  select(Model, RCP, T10, T80) %>%
+  mutate(T10 = round(T10, 2),
+         T80 = round(T80, 2),
+         Diff = round(T80 - T10, 2))
+
+rbind(propBiomass_Resistance_AllRuns,
+      propBiomass_BNU_ESM_RCP45_Resistance_AllRuns,
+      propBiomass_BNU_ESM_RCP85_Resistance_AllRuns,
+      propBiomass_CCSM4_RCP45_Resistance_AllRuns,
+      propBiomass_CCSM4_RCP85_Resistance_AllRuns,
+      propBiomass_MIROC_ESM_CHEM_RCP45_Resistance_AllRuns,
+      propBiomass_MIROC_ESM_CHEM_RCP85_Resistance_AllRuns,
+      propBiomass_MRI_CGCM3_RCP45_Resistance_AllRuns,
+      propBiomass_MRI_CGCM3_RCP85_Resistance_AllRuns) %>%
+  mutate(RCP = ifelse(is.na(RCP), "Historical", RCP)) %>%
+  group_by(Time, RCP, Model, Species) %>%
+  summarise(Biomass_MG = mean(Biomass_MG), .groups = "drop") %>%
+  group_by(Time, RCP, Model) %>%
+  summarise(Biomass_MG = sum(Biomass_MG)) %>%
+  filter(Time > 0) %>%
+  group_by(Model, RCP) %>%
+  summarise(mean = mean(Biomass_MG),
+            sd = sd(Biomass_MG)) %>%
+  arrange(desc(sd))
+
+#----SOMTC----#
+successionLogAllDf %>%
+  group_by(Time, Model, RCP, Prescription) %>%
+  summarise(SOMTC = mean(SOMTC)) %>%
+  filter(Time > 0) %>%
+  pivot_wider(names_from = Time, values_from = SOMTC, names_prefix = "T") %>%
+  select(Model, T10, T80) %>%
+  mutate(T10 = round(T10, 2),
+         T80 = round(T80, 2),
+         Diff = round(T80 - T10, 2))
+
+successionLogAllDf %>%
+  filter(Time > 0) %>%
+  group_by(Time, Model, RCP, Prescription) %>%
+  summarise(SOMTC = mean(SOMTC), .groups = "drop") %>%
+  group_by(Model) %>%
+  summarise(mean = mean(SOMTC),
+            sd = sd(SOMTC)) %>%
+  arrange(desc(sd))
+```
+
+
+
+```{r}
+#----TRADEOFFS----#
+tradeOffDf <- successionLogAllDf[, c(1,2,5,6,7,8,9,62:64)] %>%
+  filter(Time < 81, Time > 0) %>%
+  mutate(
+    Model = case_when(
+      grepl("BNU-ESM", Model) ~ "HSHV",
+      grepl("MIROC-ESM", Model) ~ "HSLV",
+      grepl("MRI-CGCM3", Model) ~ "LSHV",
+      grepl("CCSM4", Model) ~ "LSLV",
+      TRUE ~ Model)) %>%
+  left_join(strTreesAllDf, by = c("Time", "Run", "RCP", "Model")) %>%
+  rename(Structure_H = H) %>%
+  left_join(diversityAllDf, by = c("Time", "Run", "RCP", "Model", "Prescription")) %>%
+  right_join(Total_CDfAll, by = c("Time", "Run", "RCP", "Model", "Prescription")) %>%
+  left_join(harvestDf, by = c("Time", "Run", "RCP", "Model", "Prescription")) %>%
+  left_join(fruitDf, by = c("Time", "Run", "RCP", "Model")) %>%
+  left_join(AWBAllDf, by = c("Time", "Run", "RCP", "Model", "Prescription")) %>%
+  right_join(cultureDf, by = c("Time", "Run", "RCP", "Model")) %>%
+  filter(Time > 0) %>%
+  mutate(ANPP = AG_NPPC * 2,
+         Benefit_NEEC = (NEEC - max(.$NEEC)) / (min(.$NEEC) - max(.$NEEC)),  # Inverted because lower NEEC values are better
+         Benefit_SOMTC = (SOMTC - min(.$SOMTC)) / (max(.$SOMTC) - min(.$SOMTC)),
+         Benefit_ANPP = (ANPP - min(ANPP)) / (max(ANPP) - min(ANPP)),
+         Benefit_Structure = (Structure_H - min(.$Structure_H)) / (max(.$Structure_H) - min(.$Structure_H)),
+         Benefit_H = (H - min(.$H)) / (max(.$H) - min(.$H)),
+         Benefit_AGB = (AGB - min(.$AGB)) / (max(.$AGB) - min(.$AGB)),
+         Benefit_FruitTrees = (Fruit_Trees - min(.$Fruit_Trees)) / (max(.$Fruit_Trees) - min(.$Fruit_Trees)),
+         Benefit_CultureTrees = (Culture_Trees - min(.$Culture_Trees)) / (max(.$Culture_Trees) - min(.$Culture_Trees)),
+         Benefit_TotalC = (Total_C - min(.$Total_C)) / (max(.$Total_C) - min(.$Total_C)),
+         Benefit_TotalHarvest = (Total_Harvest - min(.$Total_Harvest)) / (max(.$Total_Harvest) - min(.$Total_Harvest)),
+         Benefit_AWB = (AWB - min(.$AWB)) / (max(.$AWB) - min(.$AWB)),
+         Tradeoff_AWB_NEEC = abs(Benefit_AWB - Benefit_NEEC) * (1 / sqrt(2)),
+         Tradeoff_NEEC_AWB = Tradeoff_AWB_NEEC,
+         Tradeoff_AWB_SOMTC = abs(Benefit_AWB - Benefit_SOMTC) * (1 / sqrt(2)),
+         Tradeoff_SOMTC_AWB = Tradeoff_AWB_SOMTC,
+         Tradeoff_AWB_ANPP = abs(Benefit_AWB - Benefit_ANPP) * (1 / sqrt(2)),
+         Tradeoff_ANPP_AWB = Tradeoff_AWB_ANPP,
+         Tradeoff_AWB_Structure = abs(Benefit_AWB - Benefit_Structure) * (1 / sqrt(2)),
+         Tradeoff_Structure_AWB = Tradeoff_AWB_Structure,
+         Tradeoff_AWB_H = abs(Benefit_AWB - Benefit_H) * (1 / sqrt(2)),
+         Tradeoff_H_AWB = Tradeoff_AWB_H,
+         Tradeoff_AWB_AGB = abs(Benefit_AWB - Benefit_AGB) * (1 / sqrt(2)),
+         Tradeoff_AGB_AWB = Tradeoff_AWB_AGB,
+         Tradeoff_AWB_FruitTrees = abs(Benefit_AWB - Benefit_FruitTrees) * (1 / sqrt(2)),
+         Tradeoff_FruitTrees_AWB = Tradeoff_AWB_FruitTrees,
+         Tradeoff_AWB_CultureTrees = abs(Benefit_AWB - Benefit_CultureTrees) * (1 / sqrt(2)),
+         Tradeoff_CultureTrees_AWB = Tradeoff_AWB_CultureTrees,
+         Tradeoff_AWB_TotalC = abs(Benefit_AWB - Benefit_TotalC) * (1 / sqrt(2)),
+         Tradeoff_TotalC_AWB = Tradeoff_AWB_TotalC,
+         Tradeoff_AWB_TotalHarvest = abs(Benefit_AWB - Benefit_TotalHarvest) * (1 / sqrt(2)),
+         Tradeoff_TotalHarvest_AWB = Tradeoff_AWB_TotalHarvest,
+         
+         Tradeoff_NEEC_SOMTC = abs(Benefit_NEEC - Benefit_SOMTC) * (1 / sqrt(2)),
+         Tradeoff_SOMTC_NEEC = Tradeoff_NEEC_SOMTC,
+         Tradeoff_NEEC_ANPP = abs(Benefit_NEEC - Benefit_ANPP) * (1 / sqrt(2)),
+         Tradeoff_ANPP_NEEC = Tradeoff_NEEC_ANPP,
+         Tradeoff_NEEC_Structure = abs(Benefit_NEEC - Benefit_Structure) * (1 / sqrt(2)),
+         Tradeoff_Structure_NEEC = Tradeoff_NEEC_Structure,
+         Tradeoff_NEEC_H = abs(Benefit_NEEC - Benefit_H) * (1 / sqrt(2)),
+         Tradeoff_H_NEEC = Tradeoff_NEEC_H,
+         Tradeoff_NEEC_AGB = abs(Benefit_NEEC - Benefit_AGB) * (1 / sqrt(2)),
+         Tradeoff_AGB_NEEC = Tradeoff_NEEC_AGB,
+         Tradeoff_NEEC_FruitTrees = abs(Benefit_NEEC - Benefit_FruitTrees) * (1 / sqrt(2)),
+         Tradeoff_FruitTrees_NEEC = Tradeoff_NEEC_FruitTrees,
+         Tradeoff_NEEC_CultureTrees = abs(Benefit_NEEC - Benefit_CultureTrees) * (1 / sqrt(2)),
+         Tradeoff_CultureTrees_NEEC = Tradeoff_NEEC_CultureTrees,
+         Tradeoff_NEEC_TotalC = abs(Benefit_NEEC - Benefit_TotalC) * (1 / sqrt(2)),
+         Tradeoff_TotalC_NEEC = Tradeoff_NEEC_TotalC,
+         Tradeoff_NEEC_TotalHarvest = abs(Benefit_NEEC - Benefit_TotalHarvest) * (1 / sqrt(2)),
+         Tradeoff_TotalHarvest_NEEC = Tradeoff_NEEC_TotalHarvest,
+         
+         Tradeoff_SOMTC_ANPP = abs(Benefit_SOMTC - Benefit_ANPP) * (1 / sqrt(2)),
+         Tradeoff_ANPP_SOMTC = Tradeoff_SOMTC_ANPP,
+         Tradeoff_SOMTC_Structure = abs(Benefit_SOMTC - Benefit_Structure) * (1 / sqrt(2)),
+         Tradeoff_Structure_SOMTC = Tradeoff_SOMTC_Structure,
+         Tradeoff_SOMTC_H = abs(Benefit_SOMTC - Benefit_H) * (1 / sqrt(2)),
+         Tradeoff_H_SOMTC = Tradeoff_SOMTC_H,
+         Tradeoff_SOMTC_AGB = abs(Benefit_SOMTC - Benefit_AGB) * (1 / sqrt(2)),
+         Tradeoff_AGB_SOMTC = Tradeoff_SOMTC_AGB,
+         Tradeoff_SOMTC_FruitTrees = abs(Benefit_SOMTC - Benefit_FruitTrees) * (1 / sqrt(2)),
+         Tradeoff_FruitTrees_SOMTC = Tradeoff_SOMTC_FruitTrees,
+         Tradeoff_SOMTC_CultureTrees = abs(Benefit_SOMTC - Benefit_CultureTrees) * (1 / sqrt(2)),
+         Tradeoff_CultureTrees_SOMTC = Tradeoff_SOMTC_CultureTrees,
+         Tradeoff_SOMTC_TotalC = abs(Benefit_SOMTC - Benefit_TotalC) * (1 / sqrt(2)),
+         Tradeoff_TotalC_SOMTC = Tradeoff_SOMTC_TotalC,
+         Tradeoff_SOMTC_TotalHarvest = abs(Benefit_SOMTC - Benefit_TotalHarvest) * (1 / sqrt(2)),
+         Tradeoff_TotalHarvest_SOMTC = Tradeoff_SOMTC_TotalHarvest,
+         
+         Tradeoff_ANPP_Structure = abs(Benefit_ANPP - Benefit_Structure) * (1 / sqrt(2)),
+         Tradeoff_Structure_ANPP = Tradeoff_ANPP_Structure,
+         Tradeoff_ANPP_H = abs(Benefit_ANPP - Benefit_H) * (1 / sqrt(2)),
+         Tradeoff_H_ANPP = Tradeoff_ANPP_H,
+         Tradeoff_ANPP_AGB = abs(Benefit_ANPP - Benefit_AGB) * (1 / sqrt(2)),
+         Tradeoff_AGB_ANPP = Tradeoff_ANPP_AGB,
+         Tradeoff_ANPP_FruitTrees = abs(Benefit_ANPP - Benefit_FruitTrees) * (1 / sqrt(2)),
+         Tradeoff_FruitTrees_ANPP = Tradeoff_ANPP_FruitTrees,
+         Tradeoff_ANPP_CultureTrees = abs(Benefit_ANPP - Benefit_CultureTrees) * (1 / sqrt(2)),
+         Tradeoff_CultureTrees_ANPP = Tradeoff_ANPP_CultureTrees,
+         Tradeoff_ANPP_TotalC = abs(Benefit_ANPP - Benefit_TotalC) * (1 / sqrt(2)),
+         Tradeoff_TotalC_ANPP = Tradeoff_ANPP_TotalC,
+         Tradeoff_ANPP_TotalHarvest = abs(Benefit_ANPP - Benefit_TotalHarvest) * (1 / sqrt(2)),
+         Tradeoff_TotalHarvest_ANPP = Tradeoff_ANPP_TotalHarvest,
+         
+         Tradeoff_Structure_H = abs(Benefit_Structure - Benefit_H) * (1 / sqrt(2)),
+         Tradeoff_H_Structure = Tradeoff_Structure_H,
+         Tradeoff_Structure_AGB = abs(Benefit_Structure - Benefit_AGB) * (1 / sqrt(2)),
+         Tradeoff_AGB_Structure = Tradeoff_Structure_AGB,
+         Tradeoff_Structure_FruitTrees = abs(Benefit_Structure - Benefit_FruitTrees) * (1 / sqrt(2)),
+         Tradeoff_FruitTrees_Structure = Tradeoff_Structure_FruitTrees,
+         Tradeoff_Structure_CultureTrees = abs(Benefit_Structure - Benefit_CultureTrees) * (1 / sqrt(2)),
+         Tradeoff_CultureTrees_Structure = Tradeoff_Structure_CultureTrees,
+         Tradeoff_Structure_TotalC = abs(Benefit_Structure - Benefit_TotalC) * (1 / sqrt(2)),
+         Tradeoff_TotalC_Structure = Tradeoff_Structure_TotalC,
+         Tradeoff_Structure_TotalHarvest = abs(Benefit_Structure - Benefit_TotalHarvest) * (1 / sqrt(2)),
+         Tradeoff_TotalHarvest_Structure = Tradeoff_Structure_TotalHarvest,
+         
+         Tradeoff_H_AGB = abs(Benefit_H - Benefit_AGB) * (1 / sqrt(2)),
+         Tradeoff_AGB_H = Tradeoff_H_AGB,
+         Tradeoff_H_FruitTrees = abs(Benefit_H - Benefit_FruitTrees) * (1 / sqrt(2)),
+         Tradeoff_FruitTrees_H = Tradeoff_H_FruitTrees,
+         Tradeoff_H_CultureTrees = abs(Benefit_H - Benefit_CultureTrees) * (1 / sqrt(2)),
+         Tradeoff_CultureTrees_H = Tradeoff_H_CultureTrees,
+         Tradeoff_H_TotalC = abs(Benefit_H - Benefit_TotalC) * (1 / sqrt(2)),
+         Tradeoff_TotalC_H = Tradeoff_H_TotalC,
+         Tradeoff_H_TotalHarvest = abs(Benefit_H - Benefit_TotalHarvest) * (1 / sqrt(2)),
+         Tradeoff_TotalHarvest_H = Tradeoff_H_TotalHarvest,
+         
+         Tradeoff_AGB_FruitTrees = abs(Benefit_AGB - Benefit_FruitTrees) * (1 / sqrt(2)),
+         Tradeoff_FruitTrees_AGB = Tradeoff_AGB_FruitTrees,
+         Tradeoff_AGB_CultureTrees = abs(Benefit_AGB - Benefit_CultureTrees) * (1 / sqrt(2)),
+         Tradeoff_CultureTrees_AGB = Tradeoff_AGB_CultureTrees,
+         Tradeoff_AGB_TotalC = abs(Benefit_AGB - Benefit_TotalC) * (1 / sqrt(2)),
+         Tradeoff_TotalC_AGB = Tradeoff_AGB_TotalC,
+         Tradeoff_AGB_TotalHarvest = abs(Benefit_AGB - Benefit_TotalHarvest) * (1 / sqrt(2)),
+         Tradeoff_TotalHarvest_AGB = Tradeoff_AGB_TotalHarvest,
+         
+         Tradeoff_FruitTrees_CultureTrees = abs(Benefit_FruitTrees - Benefit_CultureTrees) * (1 / sqrt(2)),
+         Tradeoff_CultureTrees_FruitTrees = Tradeoff_FruitTrees_CultureTrees,
+         Tradeoff_FruitTrees_TotalC = abs(Benefit_FruitTrees - Benefit_TotalC) * (1 / sqrt(2)),
+         Tradeoff_TotalC_FruitTrees = Tradeoff_FruitTrees_TotalC,
+         Tradeoff_FruitTrees_TotalHarvest = abs(Benefit_FruitTrees - Benefit_TotalHarvest) * (1 / sqrt(2)),
+         Tradeoff_TotalHarvest_FruitTrees = Tradeoff_FruitTrees_TotalHarvest,
+         
+         Tradeoff_CultureTrees_TotalC = abs(Benefit_CultureTrees - Benefit_TotalC) * (1 / sqrt(2)),
+         Tradeoff_TotalC_CultureTrees = Tradeoff_CultureTrees_TotalC,
+         Tradeoff_CultureTrees_TotalHarvest = abs(Benefit_CultureTrees - Benefit_TotalHarvest) * (1 / sqrt(2)),
+         Tradeoff_TotalHarvest_CultureTrees = Tradeoff_CultureTrees_TotalHarvest,
+         
+         Tradeoff_TotalC_TotalHarvest = abs(Benefit_TotalC - Benefit_TotalHarvest) * (1 / sqrt(2)),
+         Tradeoff_TotalHarvest_TotalC = Tradeoff_TotalC_TotalHarvest) %>%
+  select(Time, Run, RCP, Model,
+Tradeoff_NEEC_AWB,
+Tradeoff_AWB_NEEC,
+Tradeoff_AWB_SOMTC,
+Tradeoff_SOMTC_AWB,
+Tradeoff_AWB_ANPP,
+Tradeoff_ANPP_AWB,
+Tradeoff_AWB_Structure,
+Tradeoff_Structure_AWB,
+Tradeoff_AWB_H,
+Tradeoff_H_AWB,
+Tradeoff_AWB_AGB,
+Tradeoff_AGB_AWB,
+Tradeoff_AWB_FruitTrees,
+Tradeoff_FruitTrees_AWB,
+Tradeoff_AWB_CultureTrees,
+Tradeoff_CultureTrees_AWB,
+Tradeoff_AWB_TotalC, 
+Tradeoff_TotalC_AWB,
+Tradeoff_AWB_TotalHarvest,
+Tradeoff_TotalHarvest_AWB,
+Tradeoff_NEEC_SOMTC,
+Tradeoff_SOMTC_NEEC,
+Tradeoff_NEEC_ANPP,
+Tradeoff_ANPP_NEEC,
+Tradeoff_NEEC_Structure,
+Tradeoff_Structure_NEEC,
+Tradeoff_NEEC_H,
+Tradeoff_H_NEEC,
+Tradeoff_NEEC_AGB,
+Tradeoff_AGB_NEEC,
+Tradeoff_NEEC_FruitTrees,
+Tradeoff_FruitTrees_NEEC,
+Tradeoff_NEEC_CultureTrees,
+Tradeoff_CultureTrees_NEEC,
+Tradeoff_NEEC_TotalC, 
+Tradeoff_TotalC_NEEC,
+Tradeoff_NEEC_TotalHarvest,
+Tradeoff_TotalHarvest_NEEC,
+Tradeoff_SOMTC_ANPP,
+Tradeoff_ANPP_SOMTC,
+Tradeoff_SOMTC_Structure,
+Tradeoff_Structure_SOMTC,
+Tradeoff_SOMTC_H,
+Tradeoff_H_SOMTC,
+Tradeoff_SOMTC_AGB,
+Tradeoff_AGB_SOMTC,
+Tradeoff_SOMTC_FruitTrees,
+Tradeoff_FruitTrees_SOMTC,
+Tradeoff_SOMTC_CultureTrees,
+Tradeoff_CultureTrees_SOMTC,
+Tradeoff_SOMTC_TotalC,
+Tradeoff_TotalC_SOMTC,
+Tradeoff_SOMTC_TotalHarvest,
+Tradeoff_TotalHarvest_SOMTC,
+Tradeoff_ANPP_Structure,
+Tradeoff_Structure_ANPP,
+Tradeoff_ANPP_H,
+Tradeoff_H_ANPP,
+Tradeoff_ANPP_AGB,
+Tradeoff_AGB_ANPP,
+Tradeoff_ANPP_FruitTrees,
+Tradeoff_FruitTrees_ANPP,
+Tradeoff_ANPP_CultureTrees,
+Tradeoff_CultureTrees_ANPP,
+Tradeoff_ANPP_TotalC,
+Tradeoff_TotalC_ANPP,
+Tradeoff_ANPP_TotalHarvest,
+Tradeoff_TotalHarvest_ANPP,
+Tradeoff_Structure_H,
+Tradeoff_H_Structure,
+Tradeoff_Structure_AGB,
+Tradeoff_AGB_Structure,
+Tradeoff_Structure_FruitTrees,
+Tradeoff_FruitTrees_Structure,
+Tradeoff_Structure_CultureTrees,
+Tradeoff_CultureTrees_Structure,
+Tradeoff_Structure_TotalC,
+Tradeoff_TotalC_Structure,
+Tradeoff_Structure_TotalHarvest,
+Tradeoff_TotalHarvest_Structure,
+Tradeoff_H_AGB,
+Tradeoff_AGB_H,
+Tradeoff_H_FruitTrees, 
+Tradeoff_FruitTrees_H,
+Tradeoff_H_CultureTrees, 
+Tradeoff_CultureTrees_H,
+Tradeoff_H_TotalC,
+Tradeoff_TotalC_H,
+Tradeoff_H_TotalHarvest, 
+Tradeoff_TotalHarvest_H,
+Tradeoff_AGB_FruitTrees,
+Tradeoff_FruitTrees_AGB,
+Tradeoff_AGB_CultureTrees,
+Tradeoff_CultureTrees_AGB,
+Tradeoff_AGB_TotalC, 
+Tradeoff_TotalC_AGB,
+Tradeoff_AGB_TotalHarvest,
+Tradeoff_TotalHarvest_AGB,
+Tradeoff_FruitTrees_CultureTrees,
+Tradeoff_CultureTrees_FruitTrees,
+Tradeoff_FruitTrees_TotalC,
+Tradeoff_TotalC_FruitTrees,
+Tradeoff_FruitTrees_TotalHarvest,
+Tradeoff_TotalHarvest_FruitTrees,
+Tradeoff_CultureTrees_TotalC,
+Tradeoff_TotalC_CultureTrees,
+Tradeoff_CultureTrees_TotalHarvest,
+Tradeoff_TotalHarvest_CultureTrees,
+Tradeoff_TotalC_TotalHarvest,
+Tradeoff_TotalHarvest_TotalC) %>%
+  ungroup()
+
+bottom40 <- tradeOffDf %>% slice(1:40)
+bottom40 <- bottom40 %>% mutate(RCP = "RCP85")
+
+
+tradeOffDf <- tradeOffDf %>%
+  mutate(RCP = ifelse(RCP == "Historical", "RCP45", RCP)) %>%
+  rbind(., bottom40)
+
+```
+
+# Plots
+
+```{r}
+# modelColours <- c(
+#   "BNU-ESM" = "#E31A1C",
+#   "MIROC-ESM-CHEM" = "#FDAE61",
+#   "MRI-CGCM3" = "#246394",
+#   "CCSM4" = "#3EA8CC",
+#   "Historical" = "grey50"
+# )
+
+modelColours <- c(
+  "HSHV" = "#E31A1C",
+  "HSLV" = "#FDAE61",
+  "LSHV" = "#246394",
+  "LSLV" = "#3EA8CC",
+  "Historical" = "grey50"
+)
+```
+
+
+
+## Aridity
+
+```{r}
+allClimateDf <- rbind(climateDf %>%
+    filter(Model %in% c("BNU-ESM", "MIROC-ESM-CHEM", "MRI-CGCM3", "CCSM4")) %>%
+    mutate(RCP = "RCP85"),
+  climateDf2 %>%
+    mutate(RCP = "RCP45"))
+
+
+aridDf <- allClimateDf %>%
+  mutate(Aridity = factor(case_when(
+    thornRatio < 1 & thornRatio >= 0.65 ~ "Humid",
+    thornRatio < 0.65 & thornRatio >= 0.5 ~ "Dry sub-humid",
+    thornRatio < 0.5 & thornRatio >= 0.2 ~ "Semi-arid",
+    thornRatio < 0.2 & thornRatio >= 0.03 ~ "Arid",
+    thornRatio < 0.03 ~ "Hyper-arid",
+    TRUE ~ NA
+  ), levels = c("Humid", "Dry sub-humid", "Semi-arid", "Arid", "Hyper-arid")),
+  Model = factor(Model, levels = c("BNU-ESM", "MIROC-ESM-CHEM", "MRI-CGCM3", "CCSM4"))) %>%
+  filter(!is.na(Aridity)) %>%
+  group_by(Model, RCP, Aridity) %>%
+  summarise(n = n(), .groups = "drop") %>%
+  mutate(Aridity = factor(Aridity))
+
+
+aridDf %>%
+  mutate(Model = case_when(
+    Model == "BNU-ESM" ~ "HSHV",
+    Model == "MIROC-ESM-CHEM" ~ "HSLV",
+    Model == "MRI-CGCM3" ~ "LSHV",
+    Model == "CCSM4" ~ "LSLV",
+    TRUE ~ "Historical"
+  )) %>%
+  ggplot(., aes(x = Aridity, y = n, fill = Model)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  theme_classic() +
+  facet_grid(~ RCP) +
+  labs(x = "Aridity Classification", y = "Months of Aridity") +
+  scale_fill_manual(values = modelColours)
+
+ggsave(width = 10, height = 6, dpi = 600,
+      filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/Images/Final/Aridity_Months.png")
+
+# Change in months of aridity from RCP45 to RCP85
+aridDf %>%
+  pivot_wider(
+    id_cols = c(Model, Aridity),
+    names_from = RCP,
+    values_from = n,
+    values_fill = 0
+  ) %>%
+  mutate(Diff = RCP85 - RCP45) %>%
+  ggplot(., aes(x = Aridity, y = Diff, fill = Model)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  theme_classic() +
+  labs(x = "Aridity Classification", y = "Months of Aridity") +
+  scale_fill_manual(values = modelColours)
+
+# Extreme aridity
+aridDf %>%
+  mutate(Model = case_when(
+    Model == "BNU-ESM" ~ "HSHV",
+    Model == "MIROC-ESM-CHEM" ~ "HSLV",
+    Model == "MRI-CGCM3" ~ "LSHV",
+    Model == "CCSM4" ~ "LSLV",
+    TRUE ~ "Historical"
+  )) %>%
+  filter(Aridity %in% c("Arid", "Hyper-arid")) %>%
+  group_by(Model, RCP) %>%
+  summarise(n = sum(n)) %>%
+  ggplot(., aes(x = Model, y = n, fill = Model)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  theme_classic() +
+  facet_grid(~ RCP) +
+  labs(x = "Model", y = "Months of Aridity") +
+  scale_fill_manual(values = modelColours) +
+  theme(
+    # axis.text.x = element_text(angle = 45, hjust = 1, size = 14),
+    axis.text.x = element_text(size = 15),
+    axis.text.y = element_text(size = 15),
+    axis.title.y = element_text(size = 25),
+    strip.text = element_text(size = 25),
+    legend.text = element_text(size = 15),
+    legend.title = element_text(size = 15)
+  )
+
+ggsave(width = 10, height = 6, dpi = 600,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/Images/Final/Extreme_Aridity_Months.png")
+```
+
+## Ecosystem Services
+### Aboveground Biomass
+
+```{r}
+#----ABOVEGROUND BIOMASS----#
+# Line Chart
+rbind(propBiomass_Resistance_AllRuns,
+      propBiomass_BNU_ESM_RCP45_Resistance_AllRuns,
+      propBiomass_BNU_ESM_RCP85_Resistance_AllRuns,
+      propBiomass_CCSM4_RCP45_Resistance_AllRuns,
+      propBiomass_CCSM4_RCP85_Resistance_AllRuns,
+      propBiomass_MIROC_ESM_CHEM_RCP45_Resistance_AllRuns,
+      propBiomass_MIROC_ESM_CHEM_RCP85_Resistance_AllRuns,
+      propBiomass_MRI_CGCM3_RCP45_Resistance_AllRuns,
+      propBiomass_MRI_CGCM3_RCP85_Resistance_AllRuns) %>%
+  mutate(RCP = ifelse(is.na(RCP), "Historical", RCP),
+         Model = case_when(
+           Model == "BNU-ESM" ~ "HSHV",
+           Model == "MIROC-ESM-CHEM" ~ "HSLV",
+           Model == "MRI-CGCM3" ~ "LSHV",
+           Model == "CCSM4" ~ "LSLV",
+           TRUE ~ Model
+         )) %>%
+  group_by(Time, RCP, Model, Species) %>%
+  summarise(Biomass_MG = mean(Biomass_MG), .groups = "drop") %>%
+  group_by(Time, RCP, Model) %>%
+  summarise(Biomass_MG = sum(Biomass_MG)) %>%
+  mutate(Model = sub("_[^_]+$", "", Model)) %>%
+  ggplot(., aes(x = Time + 2020, y = Biomass_MG, col = Model)) +
+  geom_line(size = 1.2) +
+  # geom_smooth(se = FALSE, method = "lm", size = 1.2) +
+  theme_classic() +
+  facet_grid(~ RCP) +
+  labs(x = "Year", y = "Biomass (Mg/ha)") +
+  scale_color_manual(values = modelColours)
+
+ggsave(width = 10, height = 6, dpi = 600,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/Images/Final/AGB_TimeSeries.png")
+
+statsAGB <- rbind(
+  propBiomass_Resistance_AllRuns,
+  propBiomass_BNU_ESM_RCP45_Resistance_AllRuns,
+  propBiomass_BNU_ESM_RCP85_Resistance_AllRuns,
+  propBiomass_CCSM4_RCP45_Resistance_AllRuns,
+  propBiomass_CCSM4_RCP85_Resistance_AllRuns,
+  propBiomass_MIROC_ESM_CHEM_RCP45_Resistance_AllRuns,
+  propBiomass_MIROC_ESM_CHEM_RCP85_Resistance_AllRuns,
+  propBiomass_MRI_CGCM3_RCP45_Resistance_AllRuns,
+  propBiomass_MRI_CGCM3_RCP85_Resistance_AllRuns
+) %>%
+  # Create a single factor that combines Model and Scenario (RCP or Historical)
+  mutate(
+    ModelxScenario = ifelse(is.na(RCP), paste("Historical"), 
+                             paste(Model, RCP, sep = "_")),
+    ModelxScenario = factor(ModelxScenario, levels = c(
+      "Historical",
+      "BNU-ESM_RCP45", "BNU-ESM_RCP85",
+      "CCSM4_RCP45", "CCSM4_RCP85",
+      "MIROC-ESM-CHEM_RCP45", "MIROC-ESM-CHEM_RCP85",
+      "MRI-CGCM3_RCP45", "MRI-CGCM3_RCP85"
+    ))
+  ) %>%
+  group_by(Time, ModelxScenario, Species) %>%
+  summarise(Biomass_MG = mean(Biomass_MG), .groups = "drop") %>%
+  group_by(Time, ModelxScenario) %>%
+  summarise(Biomass_MG = sum(Biomass_MG), .groups = "drop") %>%
+  ungroup() %>%
+  lm(Biomass_MG ~ Time * ModelxScenario, data = .) %>%
+  summary(.) %>%
+  tidy(.) %>%
+  filter(p.value < 0.05) %>%
+  mutate(Response = "AGB") %>%
+  select(Response, term, estimate, std.error, statistic, p.value)
+
+# Bar chart
+rbind(propBiomass_Resistance_AllRuns,
+      propBiomass_BNU_ESM_RCP45_Resistance_AllRuns,
+      propBiomass_BNU_ESM_RCP85_Resistance_AllRuns,
+      propBiomass_CCSM4_RCP45_Resistance_AllRuns,
+      propBiomass_CCSM4_RCP85_Resistance_AllRuns,
+      propBiomass_MIROC_ESM_CHEM_RCP45_Resistance_AllRuns,
+      propBiomass_MIROC_ESM_CHEM_RCP85_Resistance_AllRuns,
+      propBiomass_MRI_CGCM3_RCP45_Resistance_AllRuns,
+      propBiomass_MRI_CGCM3_RCP85_Resistance_AllRuns) %>%
+  mutate(Model = sub("_[^_]+$", "", Model)) %>%
+  mutate(RCP = ifelse(is.na(RCP), "RCP45", RCP)) %>%
+  rbind(., propBiomass_Resistance_AllRuns %>% mutate(RCP = "RCP85")) %>%
+  group_by(Time, Species, RCP, Model) %>%
+  summarise(Biomass_MG = mean(Biomass_MG)) %>%
+  mutate(Model = factor(Model, levels = c("Historical", "BNU-ESM", "MIROC-ESM-CHEM", "MRI-CGCM3", "CCSM4"))) %>%
+  ggplot(., aes(x = Time + 2020, y = Biomass_MG, fill = Species)) +
+  geom_bar(stat = "identity", col = "black") +
+  theme_classic() +
+  facet_grid(RCP ~ Model)
+
+# Proportion bar chart
+rbind(propBiomass_Resistance_AllRuns,
+      propBiomass_BNU_ESM_RCP45_Resistance_AllRuns,
+      propBiomass_BNU_ESM_RCP85_Resistance_AllRuns,
+      propBiomass_CCSM4_RCP45_Resistance_AllRuns,
+      propBiomass_CCSM4_RCP85_Resistance_AllRuns,
+      propBiomass_MIROC_ESM_CHEM_RCP45_Resistance_AllRuns,
+      propBiomass_MIROC_ESM_CHEM_RCP85_Resistance_AllRuns,
+      propBiomass_MRI_CGCM3_RCP45_Resistance_AllRuns,
+      propBiomass_MRI_CGCM3_RCP85_Resistance_AllRuns) %>%
+  mutate(Model = sub("_[^_]+$", "", Model)) %>%
+  mutate(RCP = ifelse(is.na(RCP), "RCP45", RCP)) %>%
+  rbind(., propBiomass_Resistance_AllRuns %>% mutate(RCP = "RCP85")) %>%
+  group_by(Time, Species, RCP, Model) %>%
+  summarise(Biomass_MG = mean(Biomass_MG), .groups = "drop") %>%
+  group_by(Time, RCP, Model) %>%
+  mutate(Percent_Biomass = 100 * Biomass_MG / sum(Biomass_MG)) %>%
+  mutate(Model = factor(Model, levels = c("Historical", "BNU-ESM", "MIROC-ESM-CHEM", "MRI-CGCM3", "CCSM4"))) %>%
+  ggplot(., aes(x = Time, y = Percent_Biomass, fill = Species)) +
+  geom_bar(stat = "identity", col = "black") +
+  theme_classic() +
+  facet_grid(RCP ~ Model)
+
+rbind(propBiomass_Resistance_AllRuns,
+      propBiomass_BNU_ESM_RCP45_Resistance_AllRuns,
+      propBiomass_BNU_ESM_RCP85_Resistance_AllRuns,
+      propBiomass_CCSM4_RCP45_Resistance_AllRuns,
+      propBiomass_CCSM4_RCP85_Resistance_AllRuns,
+      propBiomass_MIROC_ESM_CHEM_RCP45_Resistance_AllRuns,
+      propBiomass_MIROC_ESM_CHEM_RCP85_Resistance_AllRuns,
+      propBiomass_MRI_CGCM3_RCP45_Resistance_AllRuns,
+      propBiomass_MRI_CGCM3_RCP85_Resistance_AllRuns) %>%
+  mutate(Model = sub("_[^_]+$", "", Model)) %>%
+  mutate(RCP = ifelse(is.na(RCP), "RCP45", RCP)) %>%
+  rbind(., propBiomass_Resistance_AllRuns %>% mutate(RCP = "RCP85")) %>%
+  group_by(Time, Species, RCP, Model) %>%
+  summarise(Biomass_MG = mean(Biomass_MG), .groups = "drop") %>%
+  group_by(Time, RCP, Model) %>%
+  mutate(Percent_Biomass = 100 * Biomass_MG / sum(Biomass_MG)) %>%
+  filter(Time %in% c(0,80)) %>%
+  select(-Biomass_MG) %>%
+  pivot_wider(names_from = Time, values_from = Percent_Biomass, names_prefix = "T") %>%
+  mutate(Change = T80 - T0) %>%
+  mutate(Status = case_when(
+    Change > 0  ~ "Increased",
+    Change < 0  ~ "Decreased",
+    TRUE        ~ "No Change"
+  )) %>%
+  ggplot(., aes(x = Species, y = abs(Change), fill = Status)) +
+  geom_col(color = "black") +
+  facet_grid(RCP ~ Model, scales = "free_y") +
+  scale_fill_manual(values = c("Increased" = "forestgreen",
+                               "Decreased" = "firebrick",
+                               "No Change" = "gray70")) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Magnitude of biomass change from Time 0 to 80",
+       y = "Absolute Change in % Biomass",
+       x = "Species")
+
+rbind(propBiomass_Resistance_AllRuns,
+      propBiomass_BNU_ESM_RCP45_Resistance_AllRuns,
+      propBiomass_BNU_ESM_RCP85_Resistance_AllRuns,
+      propBiomass_CCSM4_RCP45_Resistance_AllRuns,
+      propBiomass_CCSM4_RCP85_Resistance_AllRuns,
+      propBiomass_MIROC_ESM_CHEM_RCP45_Resistance_AllRuns,
+      propBiomass_MIROC_ESM_CHEM_RCP85_Resistance_AllRuns,
+      propBiomass_MRI_CGCM3_RCP45_Resistance_AllRuns,
+      propBiomass_MRI_CGCM3_RCP85_Resistance_AllRuns) %>%
+  mutate(Model = sub("_[^_]+$", "", Model)) %>%
+  mutate(RCP = ifelse(is.na(RCP), "RCP45", RCP)) %>%
+  rbind(., propBiomass_Resistance_AllRuns %>% mutate(RCP = "RCP85")) %>%
+  group_by(Time, Species, RCP, Model) %>%
+  summarise(Biomass_MG = mean(Biomass_MG), .groups = "drop") %>%
+  group_by(Time, RCP, Model) %>%
+  mutate(Percent_Biomass = 100 * Biomass_MG / sum(Biomass_MG)) %>%
+  filter(Time %in% c(0,80)) %>%
+  select(-Biomass_MG) %>%
+  pivot_wider(names_from = Time, values_from = Percent_Biomass, names_prefix = "T") %>%
+  mutate(Change = T80 - T0) %>%
+  mutate(Status = case_when(
+    Change > 0  ~ "Increased",
+    Change < 0  ~ "Decreased",
+    TRUE        ~ "No Change"
+  )) %>%
+  filter(Status == "Decreased") %>%
+  arrange(Change)
+
+# Absolute change in biomass (Mg) from 2020 to 2100 by functional group
+rbind(propBiomass_Resistance_AllRuns,
+      propBiomass_BNU_ESM_RCP45_Resistance_AllRuns,
+      propBiomass_BNU_ESM_RCP85_Resistance_AllRuns,
+      propBiomass_CCSM4_RCP45_Resistance_AllRuns,
+      propBiomass_CCSM4_RCP85_Resistance_AllRuns,
+      propBiomass_MIROC_ESM_CHEM_RCP45_Resistance_AllRuns,
+      propBiomass_MIROC_ESM_CHEM_RCP85_Resistance_AllRuns,
+      propBiomass_MRI_CGCM3_RCP45_Resistance_AllRuns,
+      propBiomass_MRI_CGCM3_RCP85_Resistance_AllRuns) %>%
+  mutate(Model = sub("_[^_]+$", "", Model)) %>%
+  mutate(RCP = ifelse(is.na(RCP), "RCP45", RCP)) %>%
+  rbind(., propBiomass_Resistance_AllRuns %>% mutate(RCP = "RCP85")) %>%
+  mutate(FunctionalGroup = case_when(
+           Species %in% softwoods ~ "Softwoods",
+           Species %in% hardwoods ~ "Hardwoods",
+           Species %in% oaks ~ "Oaks"
+         )) %>%
+  group_by(Time, FunctionalGroup, RCP, Model) %>%
+  summarise(Biomass_MG = mean(Biomass_MG), .groups = "drop") %>%
+  filter(Time %in% c(0,80)) %>%
+  pivot_wider(names_from = Time, values_from = Biomass_MG, names_prefix = "T") %>%
+  mutate(Change = T80 - T0) %>%
+  mutate(Status = case_when(
+    Change > 0  ~ "Increased",
+    Change < 0  ~ "Decreased",
+    TRUE        ~ "No Change"
+  ),
+  Model = factor(Model, levels = c("Historical", "BNU-ESM", "MIROC-ESM-CHEM", "MRI-CGCM3", "CCSM4"))) %>%
+  ggplot(., aes(x = FunctionalGroup, y = abs(Change), fill = Status)) +
+  geom_col(color = "black") +
+  facet_grid(RCP ~ Model, scales = "free_y") +
+  scale_fill_manual(values = c("Increased" = "forestgreen",
+                               "Decreased" = "firebrick",
+                               "No Change" = "gray70")) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Magnitude of absolute biomass change from Time 0 to 80",
+       y = "Absolute Change in Biomass (MG)",
+       x = "Species")
+
+# Percent change in biomass (Mg) from 2020 to 2100 by functional group
+rbind(propBiomass_Resistance_AllRuns,
+      propBiomass_BNU_ESM_RCP45_Resistance_AllRuns,
+      propBiomass_BNU_ESM_RCP85_Resistance_AllRuns,
+      propBiomass_CCSM4_RCP45_Resistance_AllRuns,
+      propBiomass_CCSM4_RCP85_Resistance_AllRuns,
+      propBiomass_MIROC_ESM_CHEM_RCP45_Resistance_AllRuns,
+      propBiomass_MIROC_ESM_CHEM_RCP85_Resistance_AllRuns,
+      propBiomass_MRI_CGCM3_RCP45_Resistance_AllRuns,
+      propBiomass_MRI_CGCM3_RCP85_Resistance_AllRuns) %>%
+  mutate(Model = sub("_[^_]+$", "", Model)) %>%
+  mutate(RCP = ifelse(is.na(RCP), "RCP45", RCP)) %>%
+  rbind(., propBiomass_Resistance_AllRuns %>% mutate(RCP = "RCP85")) %>%
+  mutate(FunctionalGroup = case_when(
+           Species %in% softwoods ~ "Softwoods",
+           Species %in% hardwoods ~ "Hardwoods",
+           Species %in% oaks ~ "Oaks"
+         )) %>%
+  group_by(Time, FunctionalGroup, RCP, Model) %>%
+  summarise(Biomass_MG = mean(Biomass_MG), .groups = "drop") %>%
+  filter(Time %in% c(0,80)) %>%
+  pivot_wider(names_from = Time, values_from = Biomass_MG, names_prefix = "T") %>%
+  mutate(Change = (T80 - T0) / T0 * 100) %>%   # percent change
+  mutate(Status = case_when(
+    Change > 0  ~ "Increased",
+    Change < 0  ~ "Decreased",
+    TRUE        ~ "No Change"
+  ),
+  Model = factor(Model, levels = c("Historical", "BNU-ESM", "MIROC-ESM-CHEM", "MRI-CGCM3", "CCSM4"))) %>%
+  ggplot(., aes(x = FunctionalGroup, y = abs(Change), fill = Status)) +
+  geom_col(color = "black") +
+  facet_grid(RCP ~ Model) +
+  scale_fill_manual(values = c("Increased" = "forestgreen",
+                               "Decreased" = "firebrick",
+                               "No Change" = "gray70")) +
+  scale_y_continuous(breaks = c(0,25,50), labels = c(0,25,50)) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(y = "Percent Change in Biomass (%)",
+       x = "Functional Group")
+
+ggsave(width = 10, height = 6, dpi = 300,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/Images/Final/FunctionalGroup_Biomass_Change.png")
+
+```
+
+### ANPP
+
+```{r}
+plot_data <- successionLogAllDf %>%
+  mutate(
+    ANPP = AG_NPPC * 2,
+    ModelBase = case_when(
+      grepl("BNU-ESM", Model) ~ "HSHV",
+      grepl("MIROC-ESM-CHEM", Model) ~ "HSLV",
+      grepl("MRI-CGCM3", Model) ~ "LSHV",
+      grepl("CCSM4", Model) ~ "LSLV",
+      grepl("Historical", Model) ~ "Historical",
+      TRUE ~ "Other")) %>%
+  group_by(Time, ModelBase, RCP, Prescription) %>%
+  summarise(ANPP = mean(ANPP), .groups = "drop") %>%
+  filter(Time > 0)
+
+ggplot(plot_data, aes(x = Time, y = ANPP * 0.01, color = ModelBase)) +
+  geom_line(alpha = 1, size = 1.2) +
+  theme_classic() +
+  labs(y = "ANPP (Mg/ha)", color = "Model") +
+  scale_x_continuous(name = "Year", breaks = seq(0, 80, 20), labels = seq(2020, 2100, 20)) +
+  facet_grid(~ RCP) +
+  scale_color_manual(values = modelColours)
+
+ggsave(width = 10, height = 6, dpi = 600,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/Images/Final/ANPP.png")
+
+# successionLogAllDf %>%
+#   filter(Time > 0) %>%
+#   mutate(ANPP = AG_NPPC * 2) %>%
+#   group_by(Time, Model, RCP, Prescription) %>%
+#   summarise(ANPP = mean(ANPP), .groups = "drop") %>%
+#   group_by(Model, RCP, Prescription) %>%
+#   mutate(PercentChange = 100 * (ANPP - ANPP[Time == min(Time)]) / ANPP[Time == min(Time)]) %>%
+#   ungroup() %>%
+#   ggplot(., aes(x = Time, y = PercentChange, color = Model)) +
+#   geom_line(size = 1) +
+#   # facet_wrap(~Model) +
+#   labs(
+#     title = "Percent Change in ANPP over Time",
+#     x = "Time (years)",
+#     y = "Percent Change (%)"
+#   ) +
+#   theme_minimal() +
+#   theme(
+#     plot.title = element_text(hjust = 0.5),
+#     legend.position = "bottom"
+#   ) +
+#   geom_hline(yintercept = 0, linetype = "dashed")
+
+statsANPP <- successionLogAllDf %>%
+  mutate(ANPP = (AG_NPPC * 2) * 0.01)  %>%
+  mutate(Model = factor(Model, levels = c("Historical", "BNU-ESM_RCP45", "BNU-ESM_RCP85",
+                                          "CCSM4_RCP45", "CCSM4_RCP85", "MIROC-ESM-CHEM_RCP45",
+                                          "MIROC-ESM-CHEM_RCP85", "MRI-CGCM3_RCP45", "MRI-CGCM3_RCP85"))) %>%
+  group_by(Time, Model) %>%
+  summarise(ANPP = mean(ANPP), .groups = "drop") %>%
+  lm(ANPP ~ Time * Model, data = .) %>%
+  summary(.) %>%
+  tidy(.) %>%
+  filter(p.value < 0.05) %>%
+  mutate(Response = "ANPP") %>%
+  select(Response, term, estimate, std.error, statistic, p.value)
+
+```
+
+### Annual Water Budget (AWB)
+
+```{r}
+#----ANNUAL WATER BUDGET----#
+AWBAllDf <- rbind(AWB_ResistanceDf,
+                  AWB_BNU_ESM_RCP45_ResistanceDf,
+                  AWB_BNU_ESM_RCP85_ResistanceDf,
+                  AWB_CCSM4_RCP45_ResistanceDf,
+                  AWB_CCSM4_RCP85_ResistanceDf,
+                  AWB_MIROC_ESM_CHEM_RCP45_ResistanceDf,
+                  AWB_MIROC_ESM_CHEM_RCP85_ResistanceDf,
+                  AWB_MRI_CGCM3_RCP45_ResistanceDf,
+                  AWB_MRI_CGCM3_RCP85_ResistanceDf) %>%
+  group_by(Time, Run, Prescription, Model, RCP) %>%
+  summarise(AWB = mean(AWB)) %>%
+  mutate(RCP = ifelse(is.na(RCP), "Historical", RCP))
+
+
+AWBDf <- AWBAllDf %>%
+  group_by(Time, Prescription, Model, RCP) %>%
+  summarise(AWB = mean(AWB)) %>%
+  ungroup()
+
+plot_data <- AWBDf %>%
+  mutate(
+    ModelBase = case_when(
+      grepl("BNU-ESM", Model) ~ "HSHV",
+      grepl("MIROC-ESM-CHEM", Model) ~ "HSLV",
+      grepl("MRI-CGCM3", Model) ~ "LSHV",
+      grepl("CCSM4", Model) ~ "LSLV",
+      grepl("Historical", Model) ~ "Historical",
+      TRUE ~ "Other"))
+
+ggplot(plot_data, aes(x = Time, y = AWB, color = ModelBase)) +
+  geom_line(alpha = 1, size = 1.2) +
+  theme_classic() +
+  labs(y = "Annual Water Budget (cm)", color = "Model") +
+  scale_x_continuous(
+    name = "Year",
+    breaks = seq(0, 80, 20),
+    labels = seq(2020, 2100, 20)
+  ) +
+  facet_grid(~ RCP) +
+  scale_color_manual(values = modelColours)
+
+ggsave(width = 10, height = 6, dpi = 600,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/Images/Final/AWB.png")
+
+
+statsAWB <- AWBDf %>%
+  mutate(Model = factor(Model, levels = c("Historical", "BNU-ESM_RCP45", "BNU-ESM_RCP85",
+                                          "CCSM4_RCP45", "CCSM4_RCP85", "MIROC-ESM-CHEM_RCP45",
+                                          "MIROC-ESM-CHEM_RCP85", "MRI-CGCM3_RCP45", "MRI-CGCM3_RCP85"))) %>%
+  group_by(Time, Model) %>%
+  summarise(AWB = mean(AWB), .groups = "drop") %>%
+  lm(AWB ~ Time * Model, data = .) %>%
+  summary(.) %>%
+  tidy(.) %>%
+  filter(p.value < 0.05) %>%
+  mutate(Response = "AWB") %>%
+  select(Response, term, estimate, std.error, statistic, p.value)
+
+```
+
+### Culturally important trees
+
+```{r}
+plot_data <- cultureTreesDf %>%
+  filter(Time > 0) %>%
+  mutate(modelBase = paste(Model, RCP, sep = "_"))
+
+ggplot(plot_data, aes(x = Time, y = Culture_Tree, color = Model)) +
+  geom_line(alpha = 1, size = 1.2) +
+  theme_classic() +
+  labs(color = "Model") +
+  scale_x_continuous(name = "Year", breaks = seq(0, 80, 20), labels = seq(2020, 2100, 20)) +
+  scale_y_continuous(name = "Biomass of Culturally Important Trees (Mg/ha)") +
+  facet_grid(~ RCP) +
+  scale_color_manual(values = modelColours)
+
+ggsave(width = 10, height = 6, dpi = 300,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/Images/Final/Cultural_Trees.png")
+
+statsCulture <- cultureTreesDf %>%
+  mutate(Scenario = paste(Model, RCP, sep = "_")) %>%
+  mutate(Scenario = factor(Scenario, levels = c("Historical_Historical", "HSHV_RCP45", "HSHV_RCP85",
+                                          "LSLV_RCP45", "LSLV_RCP85", "HSLV_RCP45",
+                                          "HSLV_RCP85", "LSHV_RCP45", "LSHV_RCP85"))) %>%
+  lm(Culture_Tree ~ Time * Model, data = .) %>%
+  summary(.) %>%
+  tidy(.) %>%
+  filter(p.value < 0.05) %>%
+  mutate(Response = "Culture") %>%
+  select(Response, term, estimate, std.error, statistic, p.value)
+
+```
+
+### Fruit bearing trees
+
+```{r}
+plot_data <- fruitTreesDf %>%
+  filter(Time > 0)
+
+ggplot(plot_data, aes(x = Time, y = Fruit_Tree * 0.01, color = Model)) +
+  geom_line(alpha = 1, size = 1.2) +
+  theme_classic() +
+  labs(color = "Model") +
+  scale_x_continuous(name = "Year", breaks = seq(0, 80, 20), labels = seq(2020, 2100, 20)) +
+  scale_y_continuous(name = "Biomass of Fruit Bearing Trees (Mg/ha)") +
+  facet_grid(~ RCP) +
+  scale_color_manual(values = modelColours)
+
+ggsave(width = 10, height = 6, dpi = 600,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/Images/Final/Fruit_Trees.png")
+
+statsFruitNut <- fruitTreesDf %>%
+  mutate(Scenario = paste(Model, RCP, sep = "_")) %>%
+  mutate(Scenario = factor(Scenario, levels = c("Historical_Historical", "HSHV_RCP45", "HSHV_RCP85",
+                                          "LSLV_RCP45", "LSLV_RCP85", "HSLV_RCP45",
+                                          "HSLV_RCP85", "LSHV_RCP45", "LSHV_RCP85"))) %>%
+  lm(Fruit_Tree ~ Time * Model, data = .) %>%
+  summary(.) %>%
+  tidy(.) %>%
+  filter(p.value < 0.05) %>%
+  mutate(Response = "FruitNut") %>%
+  select(Response, term, estimate, std.error, statistic, p.value)
+
+```
+
+### Diversity (H)
+
+```{r}
+plot_data <- diversityAllDf %>%
+  group_by(Time, Prescription, Model, RCP) %>%
+  summarise(H = mean(H)) %>%
+  filter(Time > 0)
+
+
+ggplot(plot_data, aes(x = Time, y = H, color = Model)) +
+  geom_line(alpha = 1, size = 1.2) +
+  theme_classic() +
+  labs(color = "Model") +
+  scale_x_continuous(name = "Year", breaks = seq(0, 80, 20), labels = seq(2020, 2100, 20)) +
+  scale_y_continuous(name = "Shannon-Weiner Diversity Index (H)") +
+  facet_grid(~ RCP) +
+  scale_color_manual(values = modelColours)
+
+ggsave(width = 10, height = 6, dpi = 300,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/Images/Final/H_Diversity.png")
+
+statsDiversity <- diversityAllDf %>%
+  mutate(Scenario = paste(Model, RCP, sep = "_")) %>%
+  group_by(Time, Scenario) %>%
+  summarise(H = mean(H * 0.01)) %>%
+  mutate(Scenario = factor(Scenario, levels = c("Historical_Historical", "HSHV_RCP45", "HSHV_RCP85",
+                                          "LSLV_RCP45", "LSLV_RCP85", "HSLV_RCP45",
+                                          "HSLV_RCP85", "LSHV_RCP45", "LSHV_RCP85"))) %>%
+  lm(H ~ Time * Scenario, data = .) %>%
+  summary(.) %>%
+  tidy(.) %>%
+  filter(p.value < 0.05) %>%
+  mutate(Response = "H") %>%
+  select(Response, term, estimate, std.error, statistic, p.value)
+```
+
+### Net ecosystem exchange of carbon
+
+```{r}
+plot_data <- successionLogAllDf %>%
+  filter(Time > 0) %>%
+  group_by(Time, Model, RCP, Prescription) %>%
+  summarise(NEEC = mean(NEEC * 0.01), .groups = "drop") %>%
+  mutate(
+    ModelBase = case_when(
+      grepl("BNU-ESM", Model) ~ "HSHV",
+      grepl("MIROC-ESM-CHEM", Model) ~ "HSLV",
+      grepl("MRI-CGCM3", Model) ~ "LSHV",
+      grepl("CCSM4", Model) ~ "LSLV",
+      grepl("Historical", Model) ~ "Historical",
+      TRUE ~ "Other"
+    )
+  )
+
+ggplot(plot_data, aes(x = Time, y = NEEC, color = ModelBase)) +
+  geom_line(alpha = 1, size = 1.2) +
+  theme_classic() +
+  labs(color = "Model") +
+  scale_x_continuous(
+    name = "Year",
+    breaks = seq(0, 80, 20),
+    labels = seq(2020, 2100, 20)
+  ) +
+  scale_y_continuous(
+    name = "Net ecosystem exchange of carbon (Mg/ha)") +
+  geom_hline(yintercept = 0, linetype = "dashed", alpha = 0.7) +
+  facet_grid(~ RCP) +
+  scale_color_manual(values = modelColours)
+
+ggsave(width = 10, height = 6, dpi = 600,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/Images/Final/NEEC.png")
+
+statsNEEC <- successionLogAllDf %>%
+  mutate(Scenario = paste(Model, RCP, sep = "_")) %>%
+  group_by(Time, Model, Scenario) %>%
+  summarise(NEEC = mean(NEEC * 0.01)) %>%
+  mutate(Model = factor(Model, levels = c("Historical", "BNU-ESM_RCP45", "BNU-ESM_RCP85",
+                                          "CCSM4_RCP45", "CCSM4_RCP85", "MIROC-ESM-CHEM_RCP45",
+                                          "MIROC-ESM-CHEM_RCP85", "MRI-CGCM3_RCP45", "MRI-CGCM3_RCP85"))) %>%
+  group_by(Time, Model) %>%
+  summarise(NEEC = mean(NEEC), .groups = "drop") %>%
+  lm(NEEC ~ Time * Model, data = .) %>%
+  summary(.) %>%
+  tidy(.) %>%
+  filter(p.value < 0.05) %>%
+  mutate(Response = "NEEC") %>%
+  select(Response, term, estimate, std.error, statistic, p.value)
+
+```
+
+### SOMTC
+
+```{r}
+plot_data <- successionLogAllDf %>%
+  filter(Time > 0) %>%
+  group_by(Time, Model, RCP, Prescription) %>%
+  summarise(SOMTC = mean(SOMTC * 0.01), .groups = "drop") %>%
+  mutate(
+    ModelBase = case_when(
+      grepl("BNU-ESM", Model) ~ "HSHV",
+      grepl("MIROC-ESM-CHEM", Model) ~ "HSLV",
+      grepl("MRI-CGCM3", Model) ~ "LSHV",
+      grepl("CCSM4", Model) ~ "LSLV",
+      grepl("Historical", Model) ~ "Historical",
+      TRUE ~ "Other"
+    )
+  )
+
+ggplot(plot_data, aes(x = Time, y = SOMTC, color = ModelBase)) +
+  geom_line(alpha = 1, size = 1.2) +
+  theme_classic() +
+  labs(color = "Model") +
+  scale_x_continuous(name = "Year", breaks = seq(0, 80, 20), labels = seq(2020, 2100, 20)) +
+  scale_y_continuous(name = "Soil organic matter total carbon (Mg/ha)") +
+  facet_grid(~ RCP) +
+  scale_color_manual(values = modelColours)
+
+ggsave(width = 10, height = 6, dpi = 600,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/Images/Final/SOMTC.png")
+
+statsSOMTC <- successionLogAllDf %>%
+  mutate(Scenario = paste(Model, RCP, sep = "_")) %>%
+  group_by(Time, Model, Scenario) %>%
+  summarise(SOMTC = mean(SOMTC * 0.01)) %>%
+  mutate(Model = factor(Model, levels = c("Historical", "BNU-ESM_RCP45", "BNU-ESM_RCP85",
+                                          "CCSM4_RCP45", "CCSM4_RCP85", "MIROC-ESM-CHEM_RCP45",
+                                          "MIROC-ESM-CHEM_RCP85", "MRI-CGCM3_RCP45", "MRI-CGCM3_RCP85"))) %>%
+  lm(SOMTC ~ Time * Scenario, data = .) %>%
+  summary(.) %>%
+  tidy(.) %>%
+  filter(p.value < 0.05) %>%
+  mutate(Response = "SOMTC") %>%
+  select(Response, term, estimate, std.error, statistic, p.value)
+```
+
+### Structural Diversity
+
+```{r}
+plot_data <- strDivDf %>%
+  filter(Time > 0)
+
+ggplot(plot_data, aes(x = Time, y = H, color = Model)) +
+  geom_line(alpha = 1, size = 1.2) +
+  theme_classic() +
+  labs(color = "Model") +
+  scale_x_continuous(
+    name = "Year",
+    breaks = seq(0, 80, 20),
+    labels = seq(2020, 2100, 20)
+  ) +
+  scale_y_continuous(
+    name = "Strucutral Diversity (H)") +
+  facet_grid(~ RCP) +
+  scale_color_manual(values = modelColours)
+
+ggsave(width = 10, height = 6, dpi = 600,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/Images/Final/Strucutral_Diversity_H.png")
+
+statsStructure <- strDivDf %>%
+  mutate(Scenario = paste(Model, RCP, sep = "_")) %>%
+  mutate(Scenario = factor(Model, levels = c("Historical", "HSHV_RCP45", "HSHV_RCP85",
+                                          "LSLV_RCP45", "LSLV_RCP85", "HSLV_RCP45",
+                                          "HSLV_RCP85", "LSHV_RCP45", "LSHV_RCP85"))) %>%
+  group_by(Time, Model) %>%
+  summarise(H = mean(H), .groups = "drop") %>%
+  lm(H ~ Time * Model, data = .) %>%
+  summary(.) %>%
+  tidy(.) %>%
+  filter(p.value < 0.05) %>%
+  mutate(Response = "Structure_H") %>%
+  select(Response, term, estimate, std.error, statistic, p.value)
+
+```
+
+### Total Carbon
+
+```{r}
+plot_data <- Total_CDfAll %>%
+  filter(Time > 0) %>%
+  group_by(Time, Model, RCP, Prescription) %>%
+  summarise(Total_C = mean(Total_C * 0.01), .groups = "drop")
+
+ggplot(plot_data, aes(x = Time, y = Total_C, color = Model)) +
+  geom_line(alpha = 1, size = 1.2) +
+  theme_classic() +
+  labs(color = "Model") +
+  scale_x_continuous(
+    name = "Year",
+    breaks = seq(0, 80, 20),
+    labels = seq(2020, 2100, 20)
+  ) +
+  scale_y_continuous(
+    name = "Total Carbon (Mg/ha)") +
+  facet_grid(~ RCP) +
+  scale_color_manual(values = modelColours)
+
+ggsave(width = 10, height = 6, dpi = 600,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/Images/Final/Total_Carbon.png")
+
+
+statsTotalC <- Total_CDfAll %>%
+  mutate(Scenario = paste(Model, RCP, sep = "_")) %>%
+  mutate(Scenario = factor(Model, levels = c("Historical", "HSHV_RCP45", "HSHV_RCP85",
+                                          "LSLV_RCP45", "LSLV_RCP85", "HSLV_RCP45",
+                                          "HSLV_RCP85", "LSHV_RCP45", "LSHV_RCP85"))) %>%
+  group_by(Time, Model) %>%
+  summarise(Total_C = mean(Total_C * 0.01), .groups = "drop") %>%
+  lm(Total_C ~ Time * Model, data = .) %>%
+  summary(.) %>%
+  tidy(.) %>%
+  filter(p.value < 0.05) %>%
+  mutate(Response = "TotalC") %>%
+  select(Response, term, estimate, std.error, statistic, p.value)
+
+```
+
+### Total Harvest
+
+```{r}
+plot_data <- harvestDfAll %>%
+  group_by(Time, RCP, Model, Run) %>%
+  summarise(Total_Harvest_Mg = sum(Total_Harvest), .groups = "drop") %>%
+  group_by(Time, RCP, Model) %>%
+  summarise(Total_Harvest_Mg = mean(Total_Harvest_Mg), .groups = "drop") %>%
+  mutate(Total_Harvest_Tg = Total_Harvest_Mg / 1e6) %>%
+  mutate(
+    ModelBase = case_when(
+      grepl("BNU-ESM", Model) ~ "HSHV",
+      grepl("MIROC-ESM-CHEM", Model) ~ "HSLV",
+      grepl("MRI-CGCM3", Model) ~ "LSHV",
+      grepl("CCSM4", Model) ~ "LSLV",
+      grepl("Historical", Model) ~ "Historical",
+      TRUE ~ "Other"
+    )
+  )
+
+ggplot(plot_data, aes(x = Time, y = Total_Harvest_Tg, color = ModelBase)) +
+  geom_line(alpha = 1, size = 1.2) +
+  theme_classic() +
+  labs(color = "Model") +
+  scale_x_continuous(name = "Year", breaks = seq(0, 80, 20), labels = seq(2020, 2100, 20)) +
+  scale_y_continuous(name = "Biomass removed (Tg)") +
+  facet_grid(~ RCP) +
+  scale_color_manual(values = modelColours)
+
+ggsave(width = 10, height = 6, dpi = 600,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/Images/Final/Total_Harvest_Timeseries.png")
+
+plot_data %>%
+  group_by(RCP, Model) %>%
+  summarise(total = sum(Total_Harvest_Tg)) %>%
+  arrange(desc(total))
+
+statsHarvest <- harvestDfAll %>%
+  group_by(Time, RCP, Model, Run) %>%
+  summarise(Total_Harvest_Mg = sum(Total_Harvest), .groups = "drop") %>%
+  group_by(Time, RCP, Model) %>%
+  summarise(Total_Harvest_Mg = mean(Total_Harvest_Mg), .groups = "drop") %>%
+  mutate(Total_Harvest_Tg = Total_Harvest_Mg / 1e6) %>%
+  mutate(Model = factor(Model, levels = c("Historical", "BNU-ESM_RCP45", "BNU-ESM_RCP85",
+                                          "CCSM4_RCP45", "CCSM4_RCP85", "MIROC-ESM-CHEM_RCP45",
+                                          "MIROC-ESM-CHEM_RCP85", "MRI-CGCM3_RCP45", "MRI-CGCM3_RCP85"))) %>%
+  lm(Total_Harvest_Tg ~ Time * Model, data = .) %>%
+  summary(.) %>%
+  tidy(.) %>%
+  filter(p.value < 0.05) %>%
+  mutate(Response = "TotalHarvest") %>%
+  select(Response, term, estimate, std.error, statistic, p.value)
+  
+harvestDfAll %>%
+  group_by(RCP, Model) %>%
+  summarise(Total_Harvest = sum(Total_Harvest)) %>%
+  arrange(desc(Total_Harvest))
+
+```
+
+# Stats
+
+```{r}
+bind_rows(statsAGB, statsANPP, statsAWB, statsCulture, statsDiversity, statsFruitNut, statsHarvest, statsNEEC, statsSOMTC, statsStructure, statsTotalC) %>%
+  arrange(Response, p.value) %>%
+  mutate(
+    estimate = round(estimate, 3),
+    std.error = round(std.error, 3),
+    statistic = round(statistic, 2),
+    p.value = scales::pvalue(p.value)
+  ) %>%
+  gt() %>%
+  tab_header(title = "Significant Model Terms Across Variables") %>%
+  cols_label(
+    Response = "Response Variable",
+    term = "Model Term",
+    estimate = "Estimate",
+    std.error = "Std. Error",
+    statistic = "t-value",
+    p.value = "p-value"
+  )
+
+```
+
+
+## Climate
+
+```{r}
+# Total Precipitation
+plot_data <- rbind(climateAllDf %>%
+  separate(Model, into = c("Model", "RCP"), sep = "_") %>%
+  mutate(RCP = ifelse(Model == "Historical", "RCP85", RCP)),
+climateAllDf %>%
+  separate(Model, into = c("Model", "RCP"), sep = "_") %>%
+  filter(Model == "Historical") %>%
+  mutate(RCP = "RCP45"))  %>%
+  mutate(
+    ModelBase = case_when(
+      grepl("BNU-ESM", Model) ~ "HSHV",
+      grepl("MIROC-ESM-CHEM", Model) ~ "HSLV",
+      grepl("MRI-CGCM3", Model) ~ "LSHV",
+      grepl("CCSM4", Model) ~ "LSLV",
+      grepl("Historical", Model) ~ "Historical",
+      TRUE ~ "Other"
+    )
+  )
+
+ggplot(plot_data, aes(x = Year, y = sumppt, color = ModelBase)) +
+  geom_line(alpha = 1, size = 1) +
+  theme_classic() +
+  labs(color = "Model") +
+  scale_x_continuous(name = "Year") +
+  scale_y_continuous(name = "Total Precipitation (mm)") +
+  facet_grid(~ RCP) +
+  scale_color_manual(values = modelColours)
+
+ggsave(width = 10, height = 6, dpi = 600,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/Images/Final/Total_Precipitation.png")
+
+climateAllDf %>%
+  filter(Model == "Historical") %>%
+  select(Year, sumppt, Model) %>%
+  pivot_wider(names_from = "Year", values_from = sumppt, names_prefix = "T") %>%
+  select(Model, T1979, T2020) %>%
+  mutate(Diff = T2020 - T1979)
+
+climateAllDf %>%
+  group_by(Model) %>%
+  # filter(Model == "Historical") %>%
+  summarise(meanSumppt = mean(sumppt),
+            sdSumppt = sd(sumppt),
+            meanTemp = mean(airtemp),
+            sdTemp = sd(airtemp)) %>%
+  arrange(desc(sdTemp))
+
+
+rbind(propBiomass_Resistance_AllRuns,
+      propBiomass_BNU_ESM_RCP45_Resistance_AllRuns,
+      propBiomass_BNU_ESM_RCP85_Resistance_AllRuns,
+      propBiomass_CCSM4_RCP45_Resistance_AllRuns,
+      propBiomass_CCSM4_RCP85_Resistance_AllRuns,
+      propBiomass_MIROC_ESM_CHEM_RCP45_Resistance_AllRuns,
+      propBiomass_MIROC_ESM_CHEM_RCP85_Resistance_AllRuns,
+      propBiomass_MRI_CGCM3_RCP45_Resistance_AllRuns,
+      propBiomass_MRI_CGCM3_RCP85_Resistance_AllRuns) %>%
+  mutate(RCP = ifelse(is.na(RCP), "Historical", RCP)) %>%
+  group_by(Time, RCP, Model, Species) %>%
+  summarise(Biomass_MG = mean(Biomass_MG), .groups = "drop") %>%
+  group_by(Time, RCP, Model) %>%
+  summarise(Biomass_MG = sum(Biomass_MG)) %>%
+  filter(Time > 0) %>%
+  group_by(Model, RCP) %>%
+  summarise(mean = mean(Biomass_MG),
+            sd = sd(Biomass_MG)) %>%
+  arrange(desc(sd))
+
+# Average Temperature
+plot_data <- rbind(climateAllDf %>%
+  separate(Model, into = c("Model", "RCP"), sep = "_") %>%
+  mutate(RCP = ifelse(Model == "Historical", "RCP85", RCP)),
+climateAllDf %>%
+  separate(Model, into = c("Model", "RCP"), sep = "_") %>%
+  filter(Model == "Historical") %>%
+  mutate(RCP = "RCP45"))  %>%
+  mutate(
+    ModelBase = case_when(
+      grepl("BNU-ESM", Model) ~ "HSHV",
+      grepl("MIROC-ESM-CHEM", Model) ~ "HSLV",
+      grepl("MRI-CGCM3", Model) ~ "LSHV",
+      grepl("CCSM4", Model) ~ "LSLV",
+      grepl("Historical", Model) ~ "Historical",
+      TRUE ~ "Other"
+    )
+  )
+
+ggplot(plot_data, aes(x = Year, y = airtemp, color = ModelBase)) +
+  geom_line(alpha = 1, size = 1) +
+  theme_classic() +
+  labs(color = "Model") +
+  scale_x_continuous(name = "Year") +
+  scale_y_continuous(name = "Averager Temperature (C)") +
+  facet_grid(~ RCP) +
+  scale_color_manual(values = modelColours)
+
+ggsave(width = 10, height = 6, dpi = 600,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/Images/Final/Average_Temperature.png")
+```
+
+
+# Cumulative Tradeoffs
+
+
+```{r}
+df <- tradeOffDf %>%
+  # mutate(Model = sub("_[^_]+$", "", Model)) %>%
+  pivot_longer(cols = starts_with("Tradeoff"), names_to = "Tradeoff_Type", values_to = "Value") %>%
+  separate(Tradeoff_Type, into = c("prefix", "Var1", "Var2"), sep = "_") %>%
+  group_by(Time, Run, RCP, Model, Var1, Var2) %>%
+  summarise(Value = mean(Value)) %>%
+  mutate(x = factor(Var1, levels = c("AGB","ANPP","AWB","CultureTrees","FruitTrees","H","NEEC","SOMTC","Structure","TotalC","TotalHarvest")),
+         y = factor(Var2, levels = c("AGB","ANPP","AWB","CultureTrees","FruitTrees","H","NEEC","SOMTC","Structure","TotalC","TotalHarvest")),
+         Model = factor(Model, levels = c("Historical", "HSHV", "HSLV", "LSHV", "LSLV"))) %>%
+  group_by(Run, RCP, Model) %>%
+  summarise(total = sum(Value) / 2, .groups = "drop") %>%
+  mutate(Model_RCP = case_when(
+    Model == "Historical" ~ "Historical",
+    TRUE ~ paste(Model, RCP, sep = "_")
+  ))
+
+# Run the model to check significance and get post-hoc letters
+model <- aov(total ~ Model_RCP, data = df)
+tukey <- agricolae::HSD.test(model, "Model_RCP")
+tukey_letters <- tukey$groups %>%
+  rownames_to_column("Model_RCP") %>%
+  select(Model_RCP, groups)
+
+# # Merge letters with summary data
+plot_data <- df %>%
+  left_join(tukey_letters, by = "Model_RCP") %>%
+  mutate(ModelBase = Model)  # for coloring
+plot_data <- plot_data %>%
+  group_by(Model, RCP, Model_RCP, groups) %>%
+  summarise(total = mean(total))
+
+
+df %>%
+  left_join(tukey_letters, by = "Model_RCP") %>%
+  # keep Run until we summarise across replicates
+  group_by(Run, Model, RCP, Model_RCP, groups) %>%
+  summarise(total = mean(total), .groups = "drop") %>%
+  # now summarise across runs
+  group_by(Model, RCP, Model_RCP, groups) %>%
+  summarise(
+    n = n(),
+    mean_total = mean(total, na.rm = TRUE),
+    sd_total = sd(total, na.rm = TRUE),
+    se_total = sd_total / sqrt(n),
+    .groups = "drop"
+  ) %>%
+  mutate(Model = factor(Model, levels = c("Historical", "HSHV", "HSLV", "LSHV", "LSLV"))) %>%
+  ggplot(., aes(x = Model, y = mean_total, fill = Model)) +
+  geom_bar(stat = "identity") +
+  geom_errorbar(aes(ymin = mean_total - se_total, ymax = mean_total + se_total),
+                width = 0.2, linewidth = 0.6) +
+  geom_text(aes(label = groups), vjust = 1.5, color = "black", fontface = "bold") +
+  geom_text(aes(label = round(mean_total, 1)), vjust = -1, color = "black") +
+  facet_grid(~ RCP) +
+  scale_fill_manual(values = modelColours) +
+  theme_classic() +
+  labs(fill = "Future Scenario", 
+       x = "Model",
+       y = "Cumulative Tradeoff Score") +
+  scale_y_continuous(limits = c(0, 100), expand = expansion(mult = c(0, 0.1))) +
+  theme(
+    # axis.text.x = element_text(angle = 45, hjust = 1, size = 14),
+    axis.text.x = element_text(size = 13),
+    axis.text.y = element_text(size = 13),
+    axis.title.y = element_text(size = 25),
+    strip.text = element_text(size = 25),
+    legend.text = element_text(size = 15),
+    legend.title = element_text(size = 15)
+  )
+
+
+ggsave(width = 10, height = 6, dpi = 600,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/Images/Final/Cumulative_Tradeoffs.png")
+
+summary(model)
+```
+
+
+```{r}
+tradeOffDf_long <- tradeOffDf %>%
+  pivot_longer(
+    cols = starts_with("Tradeoff"),
+    names_to = "Tradeoff_Type",
+    values_to = "Value"
+  ) %>%
+  separate(Tradeoff_Type, into = c("Prefix", "Var1", "Var2"), sep = "_") %>%
+  filter(!(RCP == "RCP85" & Model == "Historical")) %>%   # 👈 this line does it
+  group_by(Time, RCP, Model, Var1, Var2) %>%
+  summarise(Value = mean(Value), .groups = "drop") %>%
+  mutate(RCP = ifelse(Model == "Historical", "Historical", RCP))
+
+# ES averaged Across RCP
+tradeOffDf_long %>%
+  group_by(RCP, Model, Var1) %>%
+  summarise(total = sum(Value), .groups = "drop") %>%
+  group_by(RCP, Var1) %>%
+  summarise(total = mean(total), .groups = "drop") %>%
+  mutate(RCP = factor(RCP, levels = c("Historical", "RCP45", "RCP85"))) %>%
+  ggplot(aes(x = Var1, y = total, fill = Var1)) +
+  geom_bar(stat = "identity", col = "black") +
+  facet_grid(~ RCP) +
+  theme_classic() +
+  scale_y_continuous(name = "Cumulative Tradeoff Score") +
+  labs(fill = "ES", x = "") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggsave(width = 25, height = 10, dpi = 600,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/Images/Final/ES_Cumulative_Tradeoffs_RCP.png")
+
+# df <- tradeOffDf %>%
+#   # mutate(Model = sub("_[^_]+$", "", Model)) %>%
+#   pivot_longer(cols = starts_with("Tradeoff"), names_to = "Tradeoff_Type", values_to = "Value") %>%
+#   separate(Tradeoff_Type, into = c("prefix", "Var1", "Var2"), sep = "_") %>%
+#   group_by(Time, Run, RCP, Model, Var1, Var2) %>%
+#   summarise(Value = mean(Value)) %>%
+#   mutate(x = factor(Var1, levels = c("AGB","ANPP","AWB","CultureTrees","FruitTrees","H","NEEC","SOMTC","Structure","TotalC","TotalHarvest")),
+#          y = factor(Var2, levels = c("AGB","ANPP","AWB","CultureTrees","FruitTrees","H","NEEC","SOMTC","Structure","TotalC","TotalHarvest")),
+#          Model = factor(Model, levels = c("Historical", "HSHV", "HSLV", "LSHV", "LSLV"))) %>%
+#   group_by(Run, RCP, Model) %>%
+#   summarise(total = sum(Value) / 2, .groups = "drop") %>%
+#   mutate(Model_RCP = case_when(
+#     Model == "Historical" ~ "Historical",
+#     TRUE ~ paste(Model, RCP, sep = "_")
+#   ))
+
+
+
+# ES averaged across Model
+tradeOffDf_long %>%
+  group_by(RCP, Model, Var1) %>%
+  summarise(total = sum(Value), .groups = "drop") %>%
+  group_by(Model, Var1) %>%
+  summarise(total = mean(total), .groups = "drop") %>%
+  mutate(Model = factor(Model, levels = c("Historical", "HSHV", "HSLV", "LSHV", "LSLV"))) %>%
+  ggplot(aes(x = Var1, y = total, fill = Var1)) +
+  geom_bar(stat = "identity", col = "black") +
+  facet_grid(~ Model) +
+  theme_classic() +
+  scale_y_continuous(name = "Cumulative Tradeoff Score") +
+  labs(fill = "ES", x = "") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggsave(width = 25, height = 10, dpi = 600,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/Images/Final/ES_Cumulative_Tradeoffs_Model.png")
+
+
+tradeOffDf_long %>%
+  group_by(RCP, Model, Var1) %>%
+  summarise(total = sum(Value), .groups = "drop") %>%
+  group_by(Model, Var1) %>%
+  summarise(total = mean(total), .groups = "drop") %>%
+  mutate(Model = factor(Model, levels = c("Historical", "HSHV", "HSLV", "LSHV", "LSLV"))) %>%
+  ggplot(aes(x = Var1, y = total, fill = Var1)) +
+  geom_bar(stat = "identity", col = "black") +
+  facet_grid(~ Model) +
+  theme_classic() +
+  scale_y_continuous(name = "Cumulative Tradeoff Score") +
+  labs(fill = "ES", x = "") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+tradeOffDf_long %>%
+  group_by(RCP, Model, Var1) %>%
+  summarise(total = sum(Value), .groups = "drop") %>%
+  mutate(Scenario = paste(Model, RCP, sep = "-")) %>%
+  filter(Scenario == "LSHV-RCP45") %>%
+  ggplot(., aes(x = Var1, y = total, fill = Var1)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  scale_y_continuous(name = "Cumulative Tradeoff Score") +
+  labs(fill = "ES", x = "") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  facet_grid(~ Scenario)
+
+
+
+tradeOffDf_long %>%
+  group_by(RCP, Model, Var1) %>%
+  summarise(total = sum(Value), .groups = "drop") %>%
+  mutate(Scenario = paste(Model, RCP, sep = "-")) %>%
+  filter(Scenario == "LSHV-RCP45") %>%
+  ggplot(aes(x = Var1, y = total, fill = Var1)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  scale_y_continuous(name = "Cumulative Tradeoff Score") +
+  labs(fill = "ES", x = "") +
+  facet_grid(~ Scenario) +
+  theme(
+    # axis.text.x = element_text(angle = 45, hjust = 1, size = 14),
+    axis.text.x = element_blank(),
+    axis.text.y = element_text(size = 25),
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank(),
+    strip.text = element_text(size = 35),
+    legend.position = "none"
+  )
+
+ggsave(width = 10, height = 10, dpi = 600,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/Images/Final/LSHV-RCP45.png")
+
+tradeOffDf_long %>%
+  group_by(RCP, Model, Var1) %>%
+  summarise(total = sum(Value), .groups = "drop") %>%
+  mutate(Scenario = paste(Model, RCP, sep = "-")) %>%
+  filter(Scenario == "Historical-Historical") %>%
+  ggplot(aes(x = Var1, y = total, fill = Var1)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  scale_y_continuous(name = "Cumulative Tradeoff Score") +
+  labs(fill = "ES", x = "") +
+  facet_grid(~ Scenario) +
+  theme(
+    # axis.text.x = element_text(angle = 45, hjust = 1, size = 14),
+    axis.text.x = element_blank(),
+    axis.text.y = element_text(size = 25),
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank(),
+    strip.text = element_text(size = 35),
+    legend.position = "none"
+  )
+
+ggsave(width = 10, height = 10, dpi = 600,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/Images/Final/Historical-Historical.png")
+
+tradeOffDf_long %>%
+  group_by(RCP, Model, Var1) %>%
+  summarise(total = sum(Value), .groups = "drop") %>%
+  mutate(Scenario = paste(Model, RCP, sep = "-")) %>%
+  filter(Scenario == "HSLV-RCP85") %>%
+  ggplot(aes(x = Var1, y = total, fill = Var1)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  scale_y_continuous(name = "Cumulative Tradeoff Score") +
+  labs(fill = "ES", x = "") +
+  facet_grid(~ Scenario) +
+  theme(
+    # axis.text.x = element_text(angle = 45, hjust = 1, size = 14),
+    axis.text.x = element_blank(),
+    axis.text.y = element_text(size = 25),
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank(),
+    strip.text = element_text(size = 35),
+    legend.position = "none"
+  )
+
+ggsave(width = 10, height = 10, dpi = 600,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/Images/Final/HSLV-RCP85.png")
+
+
+p <- tradeOffDf_long %>%
+  group_by(RCP, Model, Var1) %>%
+  summarise(total = sum(Value), .groups = "drop") %>%
+  mutate(Scenario = paste(Model, RCP, sep = "-")) %>%
+  filter(Scenario == "HSLV-RCP85") %>%
+  ggplot(aes(x = Var1, y = total, fill = Var1)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  scale_y_continuous(name = "Cumulative Tradeoff Score") +
+  labs(fill = "ES", x = "") +
+  facet_grid(~ Scenario) +
+  guides(fill = guide_legend(nrow = 1, byrow = TRUE)) +
+  theme(
+    legend.position = "bottom",
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12)
+  )
+
+# Extract only the legend
+legend_only <- cowplot::get_legend(
+  p + guides(fill = guide_legend(nrow = 1, byrow = TRUE))
+)
+
+cowplot::ggdraw(legend_only)
+
+
+ggsave(width = 15, height = 10, dpi = 600,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/Images/Final/Legend.png")
+
+# Tradeoff Heatmap All
+tradeOffDf_long %>%
+  group_by(RCP, Model, Var1, Var2) %>%
+  summarise(Value = sum(Value, na.rm = TRUE), .groups = "drop")%>%
+  mutate(Model = case_when(
+    Model == "BNU-ESM" ~ "HSHV",
+    Model == "MIROC-ESM-CHEM" ~ "HSLV",
+    Model == "MRI-CGCM3" ~ "LSHV",
+    Model == "CCSM4" ~ "LSLV",
+    TRUE ~ Model
+  )) %>%
+  ggplot(., aes(x = Var1, y = Var2, fill = Value)) +
+  geom_tile() +
+  geom_text(aes(label = round(Value, 2)), color = "white", size = 4, na.rm = TRUE) +
+  scale_fill_gradient(low = "#ade8f4", high = "#03045e", name = "Tradeoff Value") +
+  facet_grid(RCP ~ Model) +
+  theme_classic() +
+  scale_y_discrete(limits = rev(levels(tradeOffDf_long$Var2)))
+
+# Tradeoff Heatmap Model
+tradeOffDf_long %>%
+  filter(!(Model == "Historical" & RCP == "RCP85")) %>%
+  group_by(RCP, Model, Var1, Var2) %>%
+  summarise(Value = sum(Value, na.rm = TRUE), .groups = "drop") %>%
+  mutate(Model = case_when(
+    Model == "BNU-ESM" ~ "HSHV",
+    Model == "MIROC-ESM-CHEM" ~ "HSLV",
+    Model == "MRI-CGCM3" ~ "LSHV",
+    Model == "CCSM4" ~ "LSLV",
+    TRUE ~ Model
+  )) %>%
+  group_by(Model, Var1, Var2) %>%
+  summarise(Value = mean(Value)) %>%
+  ggplot(., aes(x = Var1, y = Var2, fill = Value)) +
+  geom_tile() +
+  geom_text(aes(label = round(Value, 2)), color = "white", size = 4, na.rm = TRUE) +
+  scale_fill_gradient(low = "#ade8f4", high = "#03045e", name = "Tradeoff Value") +
+  facet_grid(~ Model) +
+  theme_classic() +
+  scale_y_discrete(limits = rev(levels(tradeOffDf_long$Var2)))
+
+# Tradeoff Heatmap RCP
+tradeOffDf_long %>%
+  filter(!(Model == "Historical" & RCP == "RCP85")) %>%
+  mutate(RCP = ifelse(Model == "Historical", "Historical", RCP)) %>%
+  group_by(RCP, Model, Var1, Var2) %>%
+  summarise(Value = sum(Value, na.rm = TRUE), .groups = "drop") %>%
+  group_by(RCP, Var1, Var2) %>%
+  summarise(Value = mean(Value), .groups = "drop") %>%
+  ggplot(aes(x = Var1, y = Var2, fill = Value)) +
+  geom_tile() +
+  geom_text(aes(label = round(Value, 2)), color = "white", size = 4, na.rm = TRUE) +
+  scale_fill_gradient(low = "#ade8f4", high = "#03045e", name = "Tradeoff Value") +
+  facet_grid(~ RCP) +
+  theme_classic() +
+  scale_y_discrete(limits = rev(levels(tradeOffDf_long$Var2)))
+
+
+
+
+```
+
+
+
+
+
+```{r}
+tradeOffDf_long <- tradeOffDf %>%
+  mutate(Model = sub("_[^_]+$", "", Model)) %>%
+  pivot_longer(
+    cols = starts_with("Tradeoff"),
+    names_to = "Tradeoff_Type",
+    values_to = "Value"
+  ) %>%
+  separate(Tradeoff_Type, into = c("Prefix", "Var1", "Var2"), sep = "_") %>%
+  group_by(Time, RCP, Model, Prescription, Var1, Var2) %>%
+  summarise(Value = mean(Value), .groups = "drop")
+
+#----------------------------------------
+# 2️⃣ Sum tradeoff values across all timesteps
+#----------------------------------------
+tradeoff_sum <- tradeOffDf_long %>%
+  group_by(Model, RCP, Prescription, Var1, Var2) %>%
+  summarise(Value = sum(Value, na.rm = TRUE), .groups = "drop")
+
+#----------------------------------------
+# 3️⃣ Compute correlations per Model/Prescription/RCP
+#----------------------------------------
+cor_data <- tradeoff_sum %>%
+  group_by(Model, RCP, Prescription) %>%
+  group_split() %>%
+  map_df(function(df) {
+    model <- unique(df$Model)
+    prescription <- unique(df$Prescription)
+    rcp <- unique(df$RCP)
+    
+    # Pivot wide for correlation
+    df_wide <- df %>%
+      pivot_wider(names_from = Var2, values_from = Value) %>%
+      select(-Var1) %>%
+      select(where(is.numeric))
+    
+    if (ncol(df_wide) > 1) {
+      cor_matrix <- cor(df_wide, use = "pairwise.complete.obs")
+      cor_long <- as.data.frame(as.table(cor_matrix)) %>%
+        rename(Var1 = Var1, Var2 = Var2, Correlation = Freq) %>%
+        mutate(Model = model, Prescription = prescription, RCP = rcp)
+    } else {
+      cor_long <- tibble(
+        Var1 = NA, Var2 = NA, Correlation = NA,
+        Model = model, Prescription = prescription, RCP = rcp
+      )
+    }
+    
+    cor_long
+  })
+
+
+plot_data <- tradeoff_sum %>%
+  left_join(cor_data, by = c("Model", "RCP", "Prescription", "Var1", "Var2")) %>%
+  mutate(x = factor(Var1, levels = c("AGB","ANPP","AWB","CultureTrees","FruitTrees","H","NEEC","SOMTC","Structure","TotalC","TotalHarvest")),
+         y = factor(Var2, levels = c("AGB","ANPP","AWB","CultureTrees","FruitTrees","H","NEEC","SOMTC","Structure","TotalC","TotalHarvest")),
+         Model = factor(Model, levels = c("Historical", "BNU-ESM", "MIROC-ESM-CHEM", "MRI-CGCM3", "CCSM4"))) %>%
+  mutate(Model = case_when(
+    Model == "BNU-ESM" ~ "HSHV",
+    Model == "MIROC-ESM-CHEM" ~ "HSLV",
+    Model == "MRI-CGCM3" ~ "LSHV",
+    Model == "CCSM4" ~ "LSLV",
+    TRUE ~ "Historical"
+  ))
+
+# # Step 2: Remove all variable pairs with |Correlation| >= 0.9
+# high_cor_pairs <- plot_data %>%
+#   filter(abs(Correlation) >= 0.9) %>%
+#   select(Model, RCP, Prescription, Var1, Var2)
+# 
+# # Also remove the flipped pairs (Var1 <-> Var2)
+# high_cor_pairs_flipped <- high_cor_pairs %>%
+#   rename(Var1_temp = Var2, Var2 = Var1) %>%
+#   rename(Var1 = Var1_temp)
+# 
+# all_high_cor <- bind_rows(high_cor_pairs, high_cor_pairs_flipped)
+# 
+# # Apply filtering to create final dataset for plotting
+# plot_data_filtered <- plot_data %>%
+#   anti_join(all_high_cor, by = c("Model", "RCP", "Prescription", "Var1", "Var2"))
+# 
+# plot_data_filtered <- plot_data_filtered %>%
+#   mutate(
+#     Var1 = factor(Var1, levels = c("AGB","ANPP","AWB","CultureTrees","FruitTrees","H","NEEC","SOMTC","Structure","TotalC","TotalHarvest")),
+#     Var2 = factor(Var2, levels = c("AGB","ANPP","AWB","CultureTrees","FruitTrees","H","NEEC","SOMTC","Structure","TotalC","TotalHarvest")),
+#     Model = factor(Model, levels = c("Historical", "BNU-ESM", "MIROC-ESM-CHEM", "MRI-CGCM3", "CCSM4"))
+#   )
+
+
+ggplot(plot_data, aes(x = Var1, y = Var2, fill = Value)) +
+  geom_tile() +
+  geom_text(aes(label = round(Value, 2)), color = "white", size = 4, na.rm = TRUE) +
+  scale_fill_gradient(low = "#ade8f4", high = "#03045e", name = "Tradeoff Value") +
+  facet_grid(RCP ~ Model) +
+  theme_classic() +
+  scale_y_discrete(limits = rev(levels(plot_data_filtered$Var2)))
+
+ggsave(width = 25, height = 10, dpi = 1200,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/Images/Final/Tradeoff_Heatmap.png")
+
+
+tradeoff_sum %>%
+  filter(Model == "MRI-CGCM3" & RCP == "RCP45") %>%
+  ggplot(., aes(x = Var1, y = Var2, fill = Value)) +
+  geom_tile() +
+  geom_text(aes(label = round(Value, 2)), color = "white", size = 4, na.rm = TRUE) +
+  scale_fill_gradient(low = "#ade8f4", high = "#03045e", name = "Tradeoff Value", limits = c(0,3.2)) +
+  facet_grid(RCP ~ Model) +
+  theme_classic() +
+  scale_y_discrete(limits = rev(levels(plot_data_filtered$Var2))) +
+  theme(strip.text = element_text(size = 25))
+
+ggsave(width = 12, height = 8, dpi = 300,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/Images/Final/Heatmap_HMRI-CGCM3_RCP45.png")
+
+
+# 
+# # Correlation heatmap
+# ggplot(plot_data_filtered, aes(x = Var1, y = Var2, fill = Correlation)) +
+#   geom_tile() +
+#   geom_text(aes(label = round(Correlation, 2)), color = "white", size = 4, na.rm = TRUE) +
+#   scale_fill_gradient2(low = "#d73027", mid = "#ffffbf", high = "#1a9850", midpoint = 0, name = "Correlation") +
+#   facet_grid(RCP ~ Model) +
+#   theme_classic() +
+#   theme(legend.position = "bottom", legend.key.size = unit(3, "line")) +
+#   scale_y_discrete(limits = rev(levels(plot_data_filtered$Var2)))
+# 
+# ggsave(width = 25, height = 10, dpi = 300,
+#        filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/Images/Final/Correlation_Heatmap_Filtered.png")
+```
+
+# Cumulative Tradeoffs
+
+```{r}
+# Final Cumulative Tradeoffs
+df_filtered <- plot_data_filtered %>%
+  group_by(RCP, Model, Prescription) %>%
+  summarise(total = sum(Value) / 2, .groups = "drop") %>%
+  mutate(Model_RCP = case_when(
+    Model == "Historical" ~ "Historical",
+    TRUE ~ paste(Model, RCP, sep = "_")
+  ))
+
+model <- aov(total ~ Model_RCP, data = df_filtered)
+summary(model)
+tukey <- agricolae::HSD.test(model, "Model_RCP")
+
+# Extract the letters
+tukey_letters <- tukey$groups %>%
+  rownames_to_column("Model_RCP") %>%
+  select(Model_RCP, groups)
+
+plot_data_for_bar <- df_filtered %>%
+  left_join(tukey_letters, by = "Model_RCP") %>%
+  mutate(ModelBase = Model)
+
+ggplot(plot_data_for_bar, aes(x = Model, y = total, fill = Model)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = groups), vjust = 1.5, color = "black", fontface = "bold") +
+  geom_text(aes(label = round(total, 1)), vjust = -1, color = "black") +
+  facet_grid(RCP ~ Prescription) +
+  scale_fill_manual(values = modelColours,
+                    labels = c("BNU-ESM"="HSHV", "MIROC-ESM-CHEM"="HSLV", "MRI-CGCM3"="LSHV", "CCSM4"="LSLV", "Historical"="Historical")) +
+  theme_classic() +
+  labs(fill = "Future Scenario", x = "Model", y = "Cumulative Tradeoff Score") +
+  ylim(0, 100)
+
+ggsave(width = 10, height = 6, dpi = 300,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/Images/Final/Filtered_Cumulative_Tradeoffs.png")
+
+# Tradeoffs by RCP
+plot_data_filtered %>%
+  group_by(RCP, Prescription, Var1) %>%
+  summarise(total = sum(Value) / 2, .groups = "drop") %>%
+  mutate(Model_RCP = case_when(
+    Model == "Historical" ~ "Historical",
+    TRUE ~ paste(Model, RCP, sep = "_")
+  )) %>%
+  ggplot(., aes(x = Var1, y = total, fill = Var1)) +
+  geom_bar(stat = "identity", col = "black") +
+  theme_classic() +
+  facet_grid(RCP ~ Model)
+
+plot_data_filtered %>%
+  group_by(RCP, Model, Prescription, Var1) %>%
+  summarise(total = sum(Value) / 2, .groups = "drop") %>%
+  mutate(Model_RCP = case_when(
+    Model == "Historical" ~ "Historical",
+    TRUE ~ paste(Model, RCP, sep = "_")
+  )) %>%
+  ggplot(., aes(x = Var1, y = total, fill = Var1)) +
+  geom_bar(stat = "identity", col = "black") +
+  theme_classic() +
+  facet_grid(RCP ~ Model)
+
+ggsave(width = 25, height = 10, dpi = 300,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/Images/Final/Filtered_Variable_Tradeoffs.png")
+
+plot_data %>%
+  mutate(
+    Var1 = factor(Var1, levels = c("AGB","ANPP","AWB","CultureTrees","FruitTrees","H","NEEC","SOMTC","Structure","TotalC","TotalHarvest")),
+    Var2 = factor(Var2, levels = c("AGB","ANPP","AWB","CultureTrees","FruitTrees","H","NEEC","SOMTC","Structure","TotalC","TotalHarvest")),
+    Model = factor(Model, levels = c("Historical", "BNU-ESM", "MIROC-ESM-CHEM", "MRI-CGCM3", "CCSM4"))
+  ) %>%
+  group_by(RCP, Model, Prescription, Var1) %>%
+  summarise(total = sum(Value) / 2, .groups = "drop") %>%
+  mutate(Model_RCP = case_when(
+    Model == "Historical" ~ "Historical",
+    TRUE ~ paste(Model, RCP, sep = "_")
+  )) %>%
+  ggplot(., aes(x = Var1, y = total, fill = Var1)) +
+  geom_bar(stat = "identity", col = "black") +
+  theme_classic() +
+  facet_grid(RCP ~ Model)
+
+
+
+plot_data %>%
+  filter(RCP == "RCP45" & Model == "LSHV") %>%
+  group_by(Var1) %>%
+  summarise(total = sum(Value) / 2) %>%
+  ggplot(., aes(x = Var1, y = total, fill = Var1)) +
+  geom_bar(stat = "identity", col = "black") +
+  theme_classic() +
+  xlab("Ecosystem Service") +
+  ylab("Cumulative Tradeoff Score") +
+  ylim(0,12)
+
+ggsave(width = 15, height = 12, dpi = 600,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/Images/Final/MRI-CGCM3_RCP45_Tradeoffs.png")
+
+
+ggsave(width = 25, height = 10, dpi = 300,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/Images/Final/ES_Cumulative_Tradeoff.png")
+
+```
+
+
+
+```{r}
+x <- successionLogAllDf[, c(1,2,5,6,7,8,9,62:64)] %>%
+  filter(Time < 81, Time > 0) %>%
+  left_join(strTreesAllDf, by = c("Time", "Run", "RCP", "Model", "Prescription")) %>%
+  rename(Structure_H = H) %>%
+  left_join(diversityAllDf %>% mutate(Model = ifelse(Model == "Historical", Model, paste0(Model, "_", RCP))), by = c("Time", "Run", "RCP", "Model", "Prescription")) %>%
+  right_join(Total_CDfAll, by = c("Time", "Run", "RCP", "Model", "Prescription")) %>%
+  left_join(harvestDf, by = c("Time", "Run", "RCP", "Model", "Prescription")) %>%
+  left_join(fruitTreesDf, by = c("Time", "Run", "RCP", "Model" = "Climate", "Prescription" = "Scenario")) %>%
+  left_join(AWBAllDf, by = c("Time", "Run", "RCP", "Model", "Prescription")) %>%
+  right_join(cultureTreesDf, by = c("Time", "Run", "RCP", "Model" = "Climate", "Prescription" = "Scenario")) %>%
+  filter(Time > 0) %>%
+  mutate(ANPP = AG_NPPC * 2) %>%
+  select(Time, Run, AGB, ANPP, AWB, Culture_Trees, Fruit_Trees, H, NEEC, SOMTC, Structure_H, Total_C, Total_Harvest, Model, RCP, Prescription)
+
+rcp45 <- x %>%
+  filter(RCP == "Historical") %>%
+  mutate(RCP = "RCP45")
+
+x <- x %>%
+  mutate(RCP = ifelse(Model == "Historical", "RCP85", RCP)) %>%
+  rbind(rcp45)
+
+norm <- x %>%
+  group_by(Model, RCP, Prescription) %>%
+  mutate(Model = sub("_[^_]+$", "", Model)) %>%
+  mutate(across(
+    where(is.numeric) & !any_of(c("Time", "Run")),  # only numeric ecosystem vars
+    ~ (.-min(., na.rm = TRUE)) / (max(., na.rm = TRUE) - min(., na.rm = TRUE)),  # min-max scaling
+    .names = "{.col}_norm"
+  )) %>%
+  ungroup()
+
+norm <- norm %>%
+  select(Model, RCP, Prescription, ends_with("_norm"))
+
+cor_data <- norm %>%
+  group_by(Model, RCP, Prescription) %>%
+  group_split() %>%
+  map_df(function(df) {
+    model <- unique(df$Model)
+    rcp <- unique(df$RCP)
+    pres <- unique(df$Prescription)
+    
+    # Drop grouping columns
+    df_vars <- df %>% select(-Model, -RCP, -Prescription)
+    
+    # Compute correlation matrix
+    cor_mat <- cor(df_vars, use = "pairwise.complete.obs")
+    
+    # Convert to long format
+    cor_long <- as.data.frame(as.table(cor_mat)) %>%
+      rename(Var1 = Var1, Var2 = Var2, Correlation = Freq) %>%
+      mutate(Model = model, RCP = rcp, Prescription = pres)
+    
+    return(cor_long)
+  })
+
+cor_data <- cor_data %>%
+  mutate(
+    Var1 = sub("_norm$", "", Var1),
+    Var2 = sub("_norm$", "", Var2)
+  )
+
+# Optional: remove redundant upper/lower triangle pairs or self-correlations
+cor_data_clean <- cor_data %>%
+  filter(Var1 != Var2) %>%
+  mutate(
+    Var1 = factor(Var1, levels = c("AGB","ANPP","AWB","Culture_Trees","Fruit_Trees",
+                                   "H","NEEC","SOMTC","Structure_H","Total_C","Total_Harvest")),
+    Var2 = factor(Var2, levels = c("AGB","ANPP","AWB","Culture_Trees","Fruit_Trees",
+                                   "H","NEEC","SOMTC","Structure_H","Total_C","Total_Harvest")),
+     Model = factor(Model, levels = c("Historical", "BNU-ESM", "MIROC-ESM-CHEM", "MRI-CGCM3", "CCSM4")) 
+  )
+
+ggplot(cor_data_clean, aes(x = Var1, y = Var2, fill = Correlation)) +
+  geom_tile() +
+  geom_text(aes(label = round(Correlation, 2)), 
+            color = "white", size = 4, na.rm = TRUE) +
+  scale_fill_gradient2(
+    low = "#d73027", mid = "#ffffbf", high = "#1a9850",
+    midpoint = 0, name = "Correlation"
+  ) +
+  facet_grid(RCP ~ Model) +
+  theme_classic()
+  # theme(
+  #   legend.position = "bottom",
+  #   legend.key.size = unit(3, "line"),
+  #   axis.text.x = element_text(angle = 45, hjust = 1)
+  # ) +
+  # scale_y_discrete(limits = rev(levels(plot_data_filtered$Var2))) +
+  # labs(
+  #   title = "Correlations among Ecosystem Variables (|r| ≤ 0.9)",
+  #   x = "Variable 1",
+  #   y = "Variable 2"
+  # )
+
+ggsave(width = 25, height = 10, dpi = 300,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/Images/Final/TEST_1.png")
+
+cor_data_clean <- cor_data %>%
+  filter(Var1 != Var2) %>%
+  mutate(
+    Var1 = factor(Var1, levels = c("AGB","ANPP","AWB","Culture_Trees","Fruit_Trees",
+                                   "H","NEEC","SOMTC","Structure_H","Total_C","Total_Harvest")),
+    Var2 = factor(Var2, levels = c("AGB","ANPP","AWB","Culture_Trees","Fruit_Trees",
+                                   "H","NEEC","SOMTC","Structure_H","Total_C","Total_Harvest")),
+     Model = factor(Model, levels = c("Historical", "BNU-ESM", "MIROC-ESM-CHEM", "MRI-CGCM3", "CCSM4")) 
+  ) %>%
+  filter(abs(Correlation) <= 0.9)
+
+ggplot(cor_data_clean, aes(x = Var1, y = Var2, fill = Correlation)) +
+  geom_tile() +
+  geom_text(aes(label = round(Correlation, 2)), 
+            color = "white", size = 4, na.rm = TRUE) +
+  scale_fill_gradient2(
+    low = "#d73027", mid = "#ffffbf", high = "#1a9850",
+    midpoint = 0, name = "Correlation"
+  ) +
+  facet_grid(RCP ~ Model) +
+  theme_classic()
+
+ggsave(width = 25, height = 10, dpi = 300,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/Images/Final/TEST_2.png")
+
+```
+
+
+
+
+```{r}
+#----TOTAL HARVEST----#
+bottom <- harvestDfAll %>%
+  group_by(Time, Prescription, RCP, Model, Species) %>%
+  summarise(Total_Harvest = mean(Total_Harvest)) %>%
+  filter(RCP == "Historical") %>%
+  mutate(RCP = "RCP45")
+  
+harvestDfAll %>%
+  group_by(Time, Prescription, RCP, Model, Species) %>%
+  summarise(Total_Harvest = mean(Total_Harvest)) %>%
+  mutate(RCP = ifelse(RCP == "Historical", "RCP85", RCP)) %>%
+  rbind(., bottom) %>%
+  mutate(Model = sub("_[^_]+$", "", Model),
+         Model = factor(Model, levels = c("Historical","BNU-ESM","MIROC-ESM-CHEM","MRI-CGCM3","CCSM4"))) %>%
+  ggplot(., aes(x = Time, y = Total_Harvest, fill = Species)) +
+    geom_bar(stat = "identity", col = "black") +
+    theme_classic() +
+  facet_grid(RCP ~ Model)
+
+harvestDfAll %>%
+  group_by(Prescription, RCP, Model) %>%
+  summarise(Total_Harvest = sum(Total_Harvest)) %>%
+  arrange(desc(Total_Harvest))
+
+harvestDfAll %>%
+  group_by(Time, Prescription, RCP, Model) %>%
+  summarise(Total_Harvest = mean(Total_Harvest)) %>%
+  ggplot(., aes(x = Time, y = Total_Harvest, col = Model)) +
+  geom_line(size = 1.2) +
+  theme_classic() +
+  facet_grid(~RCP)
+
+
+#----STRUCTURAL DIVERSITY----#
+plot_data %>%
+  mutate(Model = factor(Model, 
+                        levels = c("Historical", "BNU-ESM", "MIROC-ESM-CHEM", "MRI-CGCM3", "CCSM4"))) %>%
+  filter(Correlation <= 1 & Correlation >= -1) %>%
+  ggplot(aes(x = Var1, y = Var2, fill = Correlation)) +
+  geom_tile() +
+  geom_text(aes(label = round(Correlation, 2)), 
+            color = "white", size = 4, na.rm = TRUE) +
+  scale_fill_gradient2(low = "#d73027", mid = "#ffffbf", high = "#1a9850", 
+                       midpoint = 0, name = "Correlation") +  
+  labs(title = "Least Tradeoffs", x = "X", y = "Y") +
+  theme_classic() +
+  facet_grid(RCP ~ Model) +
+  theme(
+    legend.position = "bottom", 
+    legend.key.size = unit(3, "line")
+  )
+
+
+#----ESTABLISHMENT & REPRODUCTION----#
+# Historical
+directory <- "D:/Historical_LANDIS/Resistance"
+runs <- paste0("run", 1:5)
+
+establishList <- list()
+for (run in runs) {
+  runDir <- file.path(directory, run)
+  establish <- read_csv(paste0(runDir, "/NECN-prob-establish-log.csv"))
+  establish$run <- run
+  establish$Model <- "Historical"
+  establish$RCP <- "Historical"
+  establish <- establish %>% select(-`...15`)
+  establish <- establish %>% mutate(FunctionalGroup = case_when(
+    SpeciesName %in% softwoods ~ "Softwoods",
+    SpeciesName %in% oaks ~ "Oaks",
+    TRUE ~ "Hardwoods"))
+  establishList[[run]] <- establish
+}
+
+establishmentDfAll1 <- do.call(rbind, establishList)
+
+establishmentDfAll1 <- establishmentDfAll1 %>%
+  group_by(Time, SpeciesName, ClimateRegion, Model, RCP, FunctionalGroup) %>%
+  summarise(AvgProbEst = mean(AvgProbEst), .groups = "drop") %>%
+  group_by(Time, Model, RCP, FunctionalGroup) %>%
+  summarise(AvgProbEst = weighted.mean(x = AvgProbEst, w = rep(c(528897,24948), length.out = n())))
+
+
+ggplot(establishmentDfAll1, aes(x = Time, y = AvgProbEst, colour = FunctionalGroup)) +
+  geom_line(size = 1) +
+  theme_classic() +
+  facet_grid(RCP ~ Model)
+
+# Future
+mainDir <- "D:/Landis Outputs"
+scenarios <- c("Resistance")
+rcps <- c("RCP45", "RCP85")
+climates <- c("HSHV", "HSLV", "LSHV", "LSLV")
+runs <- paste0("run", 1:5)
+
+combinedData <- list()
+for (scenario in scenarios) {
+  for (rcp in rcps) {
+    for (climate in climates) {
+      for (run in runs) {
+        filePath <- file.path(mainDir, scenario, rcp, climate, run, paste0("NECN-prob-establish-log.csv"))
+        data <- fread(filePath)
+        data$Run <- run
+        data <- data %>% select(-V15)
+        data <- data  %>% mutate(FunctionalGroup = case_when(
+    SpeciesName %in% softwoods ~ "Softwoods",
+    SpeciesName %in% oaks ~ "Oaks",
+    TRUE ~ "Hardwoods"))
+        name <- paste(scenario, rcp, climate, run, sep = "_")
+        combinedData[[name]] <- data
+        for (name in names(combinedData)) {
+          parts <- unlist(strsplit(name, "_"))
+          combinedData[[name]]$RCP <- parts[2]
+          combinedData[[name]]$Model <- parts[3]
+        }
+      }
+    }
+  }
+}
+
+establishmentDfAll2 <- do.call(rbind, combinedData)
+
+
+establishmentDfAll2<- establishmentDfAll2 %>%
+  group_by(Time, SpeciesName, ClimateRegion, Model, RCP, FunctionalGroup) %>%
+  summarise(AvgProbEst = mean(AvgProbEst), .groups = "drop") %>%
+  group_by(Time, Model, RCP, FunctionalGroup) %>%
+  summarise(AvgProbEst = weighted.mean(x = AvgProbEst, w = rep(c(528897,24948), length.out = n())))
+
+rbind(establishmentDfAll1, establishmentDfAll2) %>%
+  select(Time, Model, RCP, FunctionalGroup, AvgProbEst) %>%
+  ggplot(., aes(x = Time, y = AvgProbEst, col = FunctionalGroup)) +
+  geom_line(size = 1.2) +
+  theme_classic() +
+  facet_grid(RCP ~ Model)
+
+rbind(establishmentDfAll1, establishmentDfAll2) %>%
+  select(Time, Model, RCP, FunctionalGroup, AvgProbEst) %>%
+  pivot_wider(names_from = Time, values_from = AvgProbEst, names_prefix = "T") %>%
+  select(Model, RCP, FunctionalGroup, T10, T80) %>%
+  mutate(T10 = round(T10, 2),
+         T80 = round(T80, 2),
+         Diff = round(T80 - T10, 2))
+
+
+ggplot(establishmentDfAll2, aes(x = Time, y = AvgProbEst, colour = FunctionalGroup)) +
+  geom_line(size = 1) +
+  theme_classic() +
+  facet_grid(RCP ~ Model)
+```
+
+
+
+```{r}
+set.seed(123)  # for reproducibility
+
+# 1. High positive correlation
+x1 <- rnorm(100, mean = 50, sd = 10)
+y1 <- x1 * 0.9 + rnorm(100, mean = 0, sd = 3)
+data1 <- data.frame(x = x1, y = y1, type = "High Positive")
+
+# 2. Low positive correlation
+x2 <- rnorm(100, mean = 50, sd = 10)
+y2 <- x2 * 0.3 + rnorm(100, mean = 0, sd = 10)
+data2 <- data.frame(x = x2, y = y2, type = "Low Positive")
+
+# 3. High negative correlation
+x3 <- rnorm(100, mean = 50, sd = 10)
+y3 <- -x3 * 0.9 + rnorm(100, mean = 0, sd = 3)
+data3 <- data.frame(x = x3, y = y3, type = "High Negative")
+
+# 4. Low negative correlation
+x4 <- rnorm(100, mean = 50, sd = 10)
+y4 <- -x4 * 0.3 + rnorm(100, mean = 0, sd = 10)
+data4 <- data.frame(x = x4, y = y4, type = "Low Negative")
+
+# Combine into one data frame
+all_data <- rbind(data1, data2, data3, data4)
+
+# Plot
+ggplot(all_data, aes(x = x, y = y)) +
+  geom_point(alpha = 0.7, color = "steelblue") +
+  geom_smooth(method = "lm") +
+  facet_wrap(~type, scales = "free") +
+  theme_minimal() +
+  labs(title = "Scatterplots with Different Correlation Strengths and Directions",
+       x = "X Values", y = "Y Values")
+
+
+
+set.seed(123)
+
+generate_clustered_data <- function(x_mean, y_slope, y_intercept, y_noise, n_per_group = 30, groups = c("A","B","C")) {
+  data_list <- list()
+  for (g in groups) {
+    x <- rnorm(n_per_group, mean = x_mean + runif(1, -5, 5), sd = 5)
+    y <- y_intercept + y_slope * x + rnorm(n_per_group, 0, y_noise)
+    data_list[[g]] <- data.frame(x = x, y = y, group = g)
+  }
+  do.call(rbind, data_list)
+}
+
+# 1. High positive correlation with clusters
+data1 <- generate_clustered_data(x_mean = 50, y_slope = 0.9, y_intercept = 0, y_noise = 3)
+data1$type <- "High Positive"
+
+# 2. Low positive correlation with clusters
+data2 <- generate_clustered_data(x_mean = 50, y_slope = 0.3, y_intercept = 0, y_noise = 10)
+data2$type <- "Low Positive"
+
+# 3. High negative correlation with clusters
+data3 <- generate_clustered_data(x_mean = 50, y_slope = -0.9, y_intercept = 100, y_noise = 3)
+data3$type <- "High Negative"
+
+# 4. Low negative correlation with clusters
+data4 <- generate_clustered_data(x_mean = 50, y_slope = -0.3, y_intercept = 100, y_noise = 10)
+data4$type <- "Low Negative"
+
+# Combine all
+all_data <- rbind(data1, data2, data3, data4)
+
+# Plot with clusters
+ggplot(all_data, aes(x = x, y = y, color = group)) +
+  geom_point(size = 2, alpha = 0.7) +
+  geom_smooth(method = "lm", se = F) +
+  facet_wrap(~type, scales = "free") +
+  theme_minimal() +
+  labs(title = "Scatterplots with Clusters and Different Correlations",
+       x = "X Values", y = "Y Values", color = "Climate Type") +
+  scale_color_brewer(palette = "Set1")
+
+ggsave(width = 10, height = 6, dpi = 300,
+       filename = "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/Images/Final/FAKE.png")
+
+```
+
+
+
+```{r}
+soilGrid <- rast("C:/Users/lagoodal/Downloads/out (22).tif")
+MN.shp <- st_read("C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/MN_Shapefile/mn_county_boundaries.shp") %>%
+  st_transform(., crs = crs(soilGrid))
+
+soilGrid <- crop(soilGrid, MN.shp) %>% mask(., MN.shp)
+
+plot(soilGrid)
+
+x <- project(soilGrid, "epsg:4326", res = c(30,30), method = "near")
+
+plot(x)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
