@@ -1,0 +1,1414 @@
+---
+title: "Tradeoffs"
+output: pdf_document
+date: "2025-02-13"
+---
+
+```{r, message = FALSE, warning = FALSE}
+library(tidyverse)
+library(terra)
+library(sf)
+library(aplpack)
+library(GGally)
+library(data.table)
+library(grid)
+library(gridExtra)
+library(multcompView)
+templateRaster <- rast("D:/Landis Outputs/Raster Template/templateRaster.tif")
+```
+
+
+# Trade-offs
+
+```{r}
+#----TOTAL CARBON----#
+mainDir <- "D:/Landis Outputs"
+scenarios <- c("Resistance", "Resilience", "Transition")
+rcps <- c("RCP45", "RCP85")
+climates <- c("HSHV", "HSLV", "LSHV", "LSLV")
+runs <- paste0("run",1:5)
+timesteps <- seq(10,80,10)
+
+rasterList <- list()
+for (scenario in scenarios) {
+  for (rcp in rcps) {
+    for (climate in climates) {
+      for (run in runs) {
+        for (timestep in timesteps) {
+          img_file <- file.path(mainDir, scenario, rcp, climate, run, paste0("TotalC-", timestep, ".img"))
+          raster <- rast(img_file)
+          crs(raster) <- "epsg:26917"
+          raster <- flip(raster)
+          ext(raster) <- ext(templateRaster)
+          name <- paste(scenario, rcp, climate, run, timestep, sep = "_")
+          rasterList[[name]] <- raster
+        }
+      }
+    }
+  }
+}
+
+carbonMeans <- list()
+
+for (name in names(rasterList)) {
+  raster <- rasterList[[name]]
+  raster[raster == 0] <- NA
+  meanValue <- as.numeric(global(raster, fun = "mean", na.rm = TRUE)[1, 1])
+  carbonMeans[[name]] <- meanValue
+}
+
+
+Total_CDfAll <- carbonMeans %>%
+  as.data.frame() %>%
+  t() %>%
+  as.data.frame() %>%
+  rownames_to_column() %>%
+  separate(rowname, into = c("Prescription", "RCP", "Model", "Run", "Time"), sep = "_") %>%
+  rename(Total_C = V1) %>%
+  mutate(Model = ifelse(Model == "HSHV" & RCP == "RCP45", "BNU-ESM_RCP45",
+                        ifelse(Model == "HSHV" & RCP == "RCP85", "BNU-ESM_RCP85",
+                               ifelse(Model == "HSLV" & RCP == "RCP45", "MIROC-ESM-CHEM_RCP45",
+                                      ifelse(Model == "HSLV" & RCP == "RCP85", "MIROC-ESM-CHEM_RCP85",
+                                             ifelse(Model == "LSHV" & RCP == "RCP45", "MRI-CGCM3_RCP45",
+                                                    ifelse(Model == "LSHV" & RCP == "RCP85", "MRI-CGCM3_RCP85",
+                                                           ifelse(Model == "LSLV" & RCP == "RCP45", "CCSM4_RCP45", "CCSM4_RCP85"))))))))
+Total_CDfAll$Time <- as.numeric(Total_CDfAll$Time)
+
+```
+
+
+
+```{r}
+#----STRUCTURAL DIVERISTY----#
+filepath <- "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/Structural Diversity/"
+files = list.files(path = filepath, pattern = "*.csv", full.names = TRUE)
+
+strDivAllDf <- do.call(rbind, lapply(files, function(x) fread(x)))
+
+strDivDf <- strDivAllDf %>%
+  group_by(Time, RCP, Model, Prescription) %>%
+  summarise(H = mean(H))
+
+strDivDf %>%
+  mutate(Model = sub("_[^_]+$", "", Model)) %>%
+  filter(Time != 0 & Time < 81) %>%
+  ggplot(., aes(x = Time, y = H, col = Model)) +
+  geom_line(size = 2) +
+  theme_classic() +
+  facet_wrap(RCP ~ Prescription)
+
+strDivDf %>%
+  mutate(Model = sub("_[^_]+$", "", Model)) %>%
+  filter(Time != 0 & Time < 81) %>%
+  ggplot(., aes(x = Time, y = H, col = Prescription)) +
+  geom_line(size = 2) +
+  theme_classic() +
+  facet_grid(RCP ~ Model)
+
+strDivDf %>%
+  mutate(Model = sub("_[^_]+$", "", Model)) %>%
+  filter(Time != 0 & Time < 81) %>%
+  ggplot(., aes(x = Time, y = H, col = RCP)) +
+  geom_line(size = 2) +
+  theme_classic() +
+  facet_grid(Model ~ Prescription)
+
+aov.1 <- aov(H ~ Prescription * RCP * Model, data = strDivDf)
+summary(aov.1)
+TukeyHSD(aov.1)
+
+
+harvestDfAll <- harvestDf[,c(1,2,70,38:67,69,3,71,72)] %>%
+  pivot_longer(cols = c("BiomassHarvestedMg_ACRU":"BiomassHarvestedMg_TADI2"), names_to = "Species", values_to = "Harvested_Biomass") %>%
+  group_by(Time, Run, Prescription, RCP, Model) %>%
+  summarise(Total_Harvest = sum(Harvested_Biomass))
+
+
+diversityAllDf <- rbind(
+      propBiomass_BNU_ESM_RCP45_Resilience_AllRuns,
+      propBiomass_BNU_ESM_RCP45_Resistance_AllRuns,
+      propBiomass_BNU_ESM_RCP45_Transition_AllRuns,
+      propBiomass_BNU_ESM_RCP85_Resilience_AllRuns,
+      propBiomass_BNU_ESM_RCP85_Resistance_AllRuns,
+      propBiomass_BNU_ESM_RCP85_Transition_AllRuns,
+      propBiomass_MIROC_ESM_CHEM_RCP45_Resilience_AllRuns,
+      propBiomass_MIROC_ESM_CHEM_RCP45_Resistance_AllRuns,
+      propBiomass_MIROC_ESM_CHEM_RCP45_Transition_AllRuns,
+      propBiomass_MIROC_ESM_CHEM_RCP85_Resilience_AllRuns,
+      propBiomass_MIROC_ESM_CHEM_RCP85_Resistance_AllRuns,
+      propBiomass_MIROC_ESM_CHEM_RCP85_Transition_AllRuns,
+      propBiomass_MRI_CGCM3_RCP45_Resilience_AllRuns,
+      propBiomass_MRI_CGCM3_RCP45_Resistance_AllRuns,
+      propBiomass_MRI_CGCM3_RCP45_Transition_AllRuns,
+      propBiomass_MRI_CGCM3_RCP85_Resilience_AllRuns,
+      propBiomass_MRI_CGCM3_RCP85_Resistance_AllRuns,
+      propBiomass_MRI_CGCM3_RCP85_Transition_AllRuns,
+      propBiomass_CCSM4_RCP45_Resilience_AllRuns,
+      propBiomass_CCSM4_RCP45_Resistance_AllRuns,
+      propBiomass_CCSM4_RCP45_Transition_AllRuns,
+      propBiomass_CCSM4_RCP85_Resilience_AllRuns,
+      propBiomass_CCSM4_RCP85_Resistance_AllRuns,
+      propBiomass_CCSM4_RCP85_Transition_AllRuns) %>%
+  group_by(Time, Run, RCP, Model, Prescription) %>%
+  mutate(Pi = Percent_Biomass / 100,
+         lnPi = log(Pi),
+         PixlnPi = Pi * lnPi) %>%
+  summarise(H = -sum(PixlnPi, na.rm = TRUE))
+
+
+successionLogAllDf <- rbind(successionLog_BNU_ESM_RCP45_Resilience_All,
+                       successionLog_BNU_ESM_RCP45_Resistance_All,
+                       successionLog_BNU_ESM_RCP45_Transition_All,
+                       successionLog_BNU_ESM_RCP85_Resilience_All,
+                       successionLog_BNU_ESM_RCP85_Resistance_All,
+                       successionLog_BNU_ESM_RCP85_Transition_All,
+                       successionLog_CCSM4_RCP45_Resilience_All,
+                       successionLog_CCSM4_RCP45_Resistance_All,
+                       successionLog_CCSM4_RCP45_Transition_All,
+                       successionLog_CCSM4_RCP85_Resilience_All,
+                       successionLog_CCSM4_RCP85_Resistance_All,
+                       successionLog_CCSM4_RCP85_Transition_All,
+                       successionLog_MIROC_ESM_CHEM_RCP45_Resilience_All,
+                       successionLog_MIROC_ESM_CHEM_RCP45_Resistance_All,
+                       successionLog_MIROC_ESM_CHEM_RCP45_Transition_All,
+                       successionLog_MIROC_ESM_CHEM_RCP85_Resilience_All,
+                       successionLog_MIROC_ESM_CHEM_RCP85_Resistance_All,
+                       successionLog_MIROC_ESM_CHEM_RCP85_Transition_All,
+                       successionLog_MRI_CGCM3_RCP45_Resilience_All,
+                       successionLog_MRI_CGCM3_RCP45_Resistance_All,
+                       successionLog_MRI_CGCM3_RCP45_Transition_All,
+                       successionLog_MRI_CGCM3_RCP85_Resilience_All,
+                       successionLog_MRI_CGCM3_RCP85_Resistance_All,
+                       successionLog_MRI_CGCM3_RCP85_Transition_All)
+
+
+
+#----AVAILABLE WATER----#
+AWBAllDf <- rbind(AWB_BNU_ESM_RCP45_ResilienceDf,
+                  AWB_BNU_ESM_RCP45_ResistanceDf,
+                  AWB_BNU_ESM_RCP45_TransitionDf,
+                  AWB_BNU_ESM_RCP85_ResilienceDf,
+                  AWB_BNU_ESM_RCP85_ResistanceDf,
+                  AWB_BNU_ESM_RCP85_TransitionDf,
+                  AWB_MIROC_ESM_CHEM_RCP45_ResilienceDf,
+                  AWB_MIROC_ESM_CHEM_RCP45_ResistanceDf,
+                  AWB_MIROC_ESM_CHEM_RCP45_TransitionDf,
+                  AWB_MIROC_ESM_CHEM_RCP85_ResilienceDf,
+                  AWB_MIROC_ESM_CHEM_RCP85_ResistanceDf,
+                  AWB_MIROC_ESM_CHEM_RCP85_TransitionDf,
+                  AWB_MRI_CGCM3_RCP45_ResilienceDf,
+                  AWB_MRI_CGCM3_RCP45_ResistanceDf,
+                  AWB_MRI_CGCM3_RCP45_TransitionDf,
+                  AWB_MRI_CGCM3_RCP85_ResilienceDf,
+                  AWB_MRI_CGCM3_RCP85_ResistanceDf,
+                  AWB_MRI_CGCM3_RCP85_TransitionDf,
+                  AWB_CCSM4_RCP45_ResilienceDf,
+                  AWB_CCSM4_RCP45_ResistanceDf,
+                  AWB_CCSM4_RCP45_TransitionDf,
+                  AWB_CCSM4_RCP85_ResilienceDf,
+                  AWB_CCSM4_RCP85_ResistanceDf,
+                  AWB_CCSM4_RCP85_TransitionDf)
+
+AWBDf <- AWBAllDf %>%
+  mutate(Model = sub("_[^_]+$", "", Model)) %>%
+  group_by(Time, Model, RCP, Prescription) %>%
+  summarise(AWB = mean(AWB))
+
+
+AWBDf %>%
+  ggplot(., aes(x = Time, y = AWB, col = Model)) +
+  geom_line(size = 2, alpha = 1) +
+  #geom_smooth(se = FALSE, method = "lm") +
+  theme_classic() +
+  facet_grid(RCP ~ Prescription)
+
+AWB_CCSM4_RCP85_ResilienceDf
+AWB_MRI_CGCM3_RCP85_ResilienceDf
+AWB_MIROC_ESM_CHEM_RCP85_ResilienceDf
+AWB_BNU_ESM_RCP85_ResilienceDf
+
+AWBDf %>%
+  ggplot(., aes(x = Time, y = AWB, col = Prescription)) +
+  geom_line(size = 2) +
+  theme_classic() +
+  facet_grid(RCP ~ Model)
+
+AWBDf %>%
+  ggplot(., aes(x = Time, y = AWB, col = RCP)) +
+  geom_line(size = 2) +
+  theme_classic() +
+  facet_grid(Prescription ~ Model)
+
+AWBDf %>%
+  arrange(desc(AWB))
+
+AWBDf %>%
+  aov(AWB ~ Prescription * RCP * Model, data = .) %>%
+  summary(.)
+
+ggplot(AWBDf, aes(x = AWB, fill = Model)) +
+  geom_density(alpha = 0.5) +
+  theme_classic() +
+  facet_grid(RCP ~ Model)
+
+AWBDf %>%
+  group_by(Prescription, Model, RCP) %>%
+  summarise(AWB_ = mean(AWB),
+            sd = sd(AWB, na.rm = TRUE),
+            n = n(),
+            se = sd / sqrt(n)) %>%
+  ggplot(., aes(x = Prescription, y = AWB_, fill = Prescription)) +
+  geom_bar(stat = "identity") +
+  geom_errorbar(aes(x = Prescription, ymin = AWB_-se, ymax = AWB_+se), width = 0.25) +
+  theme_classic() +
+  facet_grid(RCP ~ Model)
+
+
+# Fruit Trees
+filepath <- "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/Fruit Tree/"
+files <- list.files(path = filepath, pattern = "*.csv", full.names = TRUE)
+fruitTreeAllDf <- do.call(rbind, lapply(files, function(x) fread(x))) %>% filter(Time > 0)
+
+fruitTreeAllDf %>%
+  mutate(Model = sub("_[^_]+$", "", Model)) %>%
+  group_by(Time, RCP, Model, Prescription) %>%
+  summarise(Score = mean(Score)) %>%
+  ggplot(., aes(x = Time, y = Score, col = Model)) +
+  geom_line(size = 2) +
+  theme_classic() +
+  facet_grid(RCP ~ Prescription)
+
+fruitTreeAllDf %>%
+  mutate(Model = sub("_[^_]+$", "", Model)) %>%
+  group_by(Time, RCP, Model, Prescription) %>%
+  summarise(Score = mean(Score)) %>%
+  ggplot(., aes(x = Time, y = Score, col = Prescription)) +
+  geom_line(size = 2) +
+  theme_classic() +
+  facet_grid(RCP ~ Model)
+
+fruitTreeAllDf %>%
+  mutate(Model = sub("_[^_]+$", "", Model)) %>%
+  group_by(Time, RCP, Model, Prescription) %>%
+  summarise(Score = mean(Score)) %>%
+  ggplot(., aes(x = Time, y = Score, col = RCP)) +
+  geom_line(size = 2) +
+  theme_classic() +
+  facet_grid(Prescription ~ Model)
+
+fruitTreeAllDf %>%
+  mutate(Model = sub("_[^_]+$", "", Model)) %>%
+  group_by(Time, RCP, Model, Prescription) %>%
+  summarise(Score = mean(Score)) %>%
+  arrange(desc(Score))
+
+x <- fruitTreeAllDf %>%
+  mutate(Model = sub("_[^_]+$", "", Model)) %>%
+  group_by(Time, RCP, Model, Prescription) %>%
+  summarise(Score = mean(Score)) %>%
+  mutate(Score = as.numeric(Score))
+
+aov.1 <- aov(Score ~ RCP * Model * Prescription, data = x)
+summary(aov.1)
+
+# Cultural Trees
+filepath <- "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/Culturally Significant Trees/"
+files <- list.files(path = filepath, pattern = "*.csv", full.names = TRUE)
+cultureTreeAllDf <- do.call(rbind, lapply(files, function(x) fread(x)))%>% filter(Time > 0)
+
+cultureTreeAllDf %>%
+  mutate(Model = sub("_[^_]+$", "", Model)) %>%
+  group_by(Time, RCP, Model, Prescription) %>%
+  summarise(Score = mean(Score)) %>%
+  ggplot(., aes(x = Time, y = Score, col = Model)) +
+  geom_line(size = 2) +
+  theme_classic() +
+  facet_grid(RCP ~ Prescription)
+
+cultureTreeAllDf %>%
+  mutate(Model = sub("_[^_]+$", "", Model)) %>%
+  group_by(Time, RCP, Model, Prescription) %>%
+  summarise(Score = mean(Score)) %>%
+  ggplot(., aes(x = Time, y = Score, col = Prescription)) +
+  geom_line(size = 2) +
+  theme_classic() +
+  facet_grid(RCP ~ Model)
+
+cultureTreeAllDf %>%
+  mutate(Model = sub("_[^_]+$", "", Model)) %>%
+  group_by(Time, RCP, Model, Prescription) %>%
+  summarise(Score = mean(Score)) %>%
+  ggplot(., aes(x = Time, y = Score, col = RCP)) +
+  geom_line(size = 2) +
+  theme_classic() +
+  facet_grid(Prescription ~ Model)
+
+cultureTreeAllDf %>%
+  mutate(Model = sub("_[^_]+$", "", Model)) %>%
+  group_by(Time, RCP, Model, Prescription) %>%
+  summarise(Score = mean(Score)) %>%
+  arrange(desc(Score))
+
+x <- cultureTreeAllDf %>%
+  mutate(Model = sub("_[^_]+$", "", Model)) %>%
+  group_by(Time, RCP, Model, Prescription) %>%
+  summarise(Score = mean(Score)) %>%
+  mutate(Score = as.numeric(Score))
+
+aov.1 <- aov(Score ~ RCP * Model * Prescription, data = x)
+summary(aov.1)
+
+
+# Create the tradeoff dataframe and ensuring all combinations are present
+tradeoffDf <- successionLogAllDf[,c(1,2,5,6,7,8,9,62:64)] %>%
+  filter(Time < 81, Time > 0) %>%
+  inner_join(strDivAllDf, by = c("Time", "Run", "RCP", "Model", "Prescription")) %>%
+  rename(Structure_H = H) %>%
+  inner_join(diversityAllDf, by = c("Time", "Run", "RCP", "Model", "Prescription")) %>%
+  inner_join(Total_CDfAll, by = c("Time", "Run", "RCP", "Model", "Prescription")) %>%
+  inner_join(harvestDfAll, by = c("Time", "Run", "RCP", "Model", "Prescription")) %>%
+  inner_join(fruitTreeAllDf, by = c("Time", "Run", "RCP", "Model", "Prescription")) %>%
+  rename(Fruit_Trees = Score) %>%
+  inner_join(cultureTreeAllDf, by = c("Time", "Run", "RCP", "Model", "Prescription")) %>%
+  rename(Culture_Trees = Score) %>%
+  inner_join(AWBAllDf, by = c("Time", "Run", "RCP", "Model", "Prescription")) %>%
+  mutate(ANPP = AG_NPPC * 2,
+         Benefit_NEEC = (NEEC - min(.$NEEC)) / (max(.$NEEC) - min(.$NEEC)),
+         Benefit_SOMTC = (SOMTC - min(.$SOMTC)) / (max(.$SOMTC) - min(.$SOMTC)),
+         Benefit_ANPP = (ANPP - min(ANPP)) / (max(ANPP) - min(ANPP)),
+         Benefit_Structure = (Structure_H - min(.$Structure_H)) / (max(.$Structure_H) - min(.$Structure_H)),
+         Benefit_H = (H - min(.$H)) / (max(.$H) - min(.$H)),
+         Benefit_AGB = (AGB - min(.$AGB)) / (max(.$AGB) - min(.$AGB)),
+         Benefit_FruitTrees = (Fruit_Trees - min(.$Fruit_Trees)) / (max(.$Fruit_Trees) - min(.$Fruit_Trees)),
+         Benefit_CultureTrees = (Culture_Trees - min(.$Culture_Trees)) / (max(.$Culture_Trees) - min(.$Culture_Trees)),
+         Benefit_TotalC = (Total_C - min(.$Total_C)) / (max(.$Total_C) - min(.$Total_C)),
+         Benefit_TotalHarvest = (Total_Harvest - min(.$Total_Harvest)) / (max(.$Total_Harvest) - min(.$Total_Harvest)),
+         Benefit_AWB = (AWB - min(.$AWB)) / (max(.$AWB) - min(.$AWB)),
+         
+         Tradeoff_AWB_NEEC = abs(Benefit_AWB - Benefit_NEEC) * (1 / sqrt(2)),
+         Tradeoff_NEEC_AWB = Tradeoff_AWB_NEEC,
+         Tradeoff_AWB_SOMTC = abs(Benefit_AWB - Benefit_SOMTC) * (1 / sqrt(2)),
+         Tradeoff_SOMTC_AWB = Tradeoff_AWB_SOMTC,
+         Tradeoff_AWB_ANPP = abs(Benefit_AWB - Benefit_ANPP) * (1 / sqrt(2)),
+         Tradeoff_ANPP_AWB = Tradeoff_AWB_ANPP,
+         Tradeoff_AWB_Structure = abs(Benefit_AWB - Benefit_Structure) * (1 / sqrt(2)),
+         Tradeoff_Structure_AWB = Tradeoff_AWB_Structure,
+         Tradeoff_AWB_H = abs(Benefit_AWB - Benefit_H) * (1 / sqrt(2)),
+         Tradeoff_H_AWB = Tradeoff_AWB_H,
+         Tradeoff_AWB_AGB = abs(Benefit_AWB - Benefit_AGB) * (1 / sqrt(2)),
+         Tradeoff_AGB_AWB = Tradeoff_AWB_AGB,
+         Tradeoff_AWB_FruitTrees = abs(Benefit_AWB - Benefit_FruitTrees) * (1 / sqrt(2)),
+         Tradeoff_FruitTrees_AWB = Tradeoff_AWB_FruitTrees,
+         Tradeoff_AWB_CultureTrees = abs(Benefit_AWB - Benefit_CultureTrees) * (1 / sqrt(2)),
+         Tradeoff_CultureTrees_AWB = Tradeoff_AWB_CultureTrees,
+         Tradeoff_AWB_TotalC = abs(Benefit_AWB - Benefit_TotalC) * (1 / sqrt(2)),
+         Tradeoff_TotalC_AWB = Tradeoff_AWB_TotalC,
+         Tradeoff_AWB_TotalHarvest = abs(Benefit_AWB - Benefit_TotalHarvest) * (1 / sqrt(2)),
+         Tradeoff_TotalHarvest_AWB = Tradeoff_AWB_TotalHarvest,
+         
+         Tradeoff_NEEC_SOMTC = abs(Benefit_NEEC - Benefit_SOMTC) * (1 / sqrt(2)),
+         Tradeoff_SOMTC_NEEC = Tradeoff_NEEC_SOMTC,
+         Tradeoff_NEEC_ANPP = abs(Benefit_NEEC - Benefit_ANPP) * (1 / sqrt(2)),
+         Tradeoff_ANPP_NEEC = Tradeoff_NEEC_ANPP,
+         Tradeoff_NEEC_Structure = abs(Benefit_NEEC - Benefit_Structure) * (1 / sqrt(2)),
+         Tradeoff_Structure_NEEC = Tradeoff_NEEC_Structure,
+         Tradeoff_NEEC_H = abs(Benefit_NEEC - Benefit_H) * (1 / sqrt(2)),
+         Tradeoff_H_NEEC = Tradeoff_NEEC_H,
+         Tradeoff_NEEC_AGB = abs(Benefit_NEEC - Benefit_AGB) * (1 / sqrt(2)),
+         Tradeoff_AGB_NEEC = Tradeoff_NEEC_AGB,
+         Tradeoff_NEEC_FruitTrees = abs(Benefit_NEEC - Benefit_FruitTrees) * (1 / sqrt(2)),
+         Tradeoff_FruitTrees_NEEC = Tradeoff_NEEC_FruitTrees,
+         Tradeoff_NEEC_CultureTrees = abs(Benefit_NEEC - Benefit_CultureTrees) * (1 / sqrt(2)),
+         Tradeoff_CultureTrees_NEEC = Tradeoff_NEEC_CultureTrees,
+         Tradeoff_NEEC_TotalC = abs(Benefit_NEEC - Benefit_TotalC) * (1 / sqrt(2)),
+         Tradeoff_TotalC_NEEC = Tradeoff_NEEC_TotalC,
+         Tradeoff_NEEC_TotalHarvest = abs(Benefit_NEEC - Benefit_TotalHarvest) * (1 / sqrt(2)),
+         Tradeoff_TotalHarvest_NEEC = Tradeoff_NEEC_TotalHarvest,
+         
+         Tradeoff_SOMTC_ANPP = abs(Benefit_SOMTC - Benefit_ANPP) * (1 / sqrt(2)),
+         Tradeoff_ANPP_SOMTC = Tradeoff_SOMTC_ANPP,
+         Tradeoff_SOMTC_Structure = abs(Benefit_SOMTC - Benefit_Structure) * (1 / sqrt(2)),
+         Tradeoff_Structure_SOMTC = Tradeoff_SOMTC_Structure,
+         Tradeoff_SOMTC_H = abs(Benefit_SOMTC - Benefit_H) * (1 / sqrt(2)),
+         Tradeoff_H_SOMTC = Tradeoff_SOMTC_H,
+         Tradeoff_SOMTC_AGB = abs(Benefit_SOMTC - Benefit_AGB) * (1 / sqrt(2)),
+         Tradeoff_AGB_SOMTC = Tradeoff_SOMTC_AGB,
+         Tradeoff_SOMTC_FruitTrees = abs(Benefit_SOMTC - Benefit_FruitTrees) * (1 / sqrt(2)),
+         Tradeoff_FruitTrees_SOMTC = Tradeoff_SOMTC_FruitTrees,
+         Tradeoff_SOMTC_CultureTrees = abs(Benefit_SOMTC - Benefit_CultureTrees) * (1 / sqrt(2)),
+         Tradeoff_CultureTrees_SOMTC = Tradeoff_SOMTC_CultureTrees,
+         Tradeoff_SOMTC_TotalC = abs(Benefit_SOMTC - Benefit_TotalC) * (1 / sqrt(2)),
+         Tradeoff_TotalC_SOMTC = Tradeoff_SOMTC_TotalC,
+         Tradeoff_SOMTC_TotalHarvest = abs(Benefit_SOMTC - Benefit_TotalHarvest) * (1 / sqrt(2)),
+         Tradeoff_TotalHarvest_SOMTC = Tradeoff_SOMTC_TotalHarvest,
+         
+         Tradeoff_ANPP_Structure = abs(Benefit_ANPP - Benefit_Structure) * (1 / sqrt(2)),
+         Tradeoff_Structure_ANPP = Tradeoff_ANPP_Structure,
+         Tradeoff_ANPP_H = abs(Benefit_ANPP - Benefit_H) * (1 / sqrt(2)),
+         Tradeoff_H_ANPP = Tradeoff_ANPP_H,
+         Tradeoff_ANPP_AGB = abs(Benefit_ANPP - Benefit_AGB) * (1 / sqrt(2)),
+         Tradeoff_AGB_ANPP = Tradeoff_ANPP_AGB,
+         Tradeoff_ANPP_FruitTrees = abs(Benefit_ANPP - Benefit_FruitTrees) * (1 / sqrt(2)),
+         Tradeoff_FruitTrees_ANPP = Tradeoff_ANPP_FruitTrees,
+         Tradeoff_ANPP_CultureTrees = abs(Benefit_ANPP - Benefit_CultureTrees) * (1 / sqrt(2)),
+         Tradeoff_CultureTrees_ANPP = Tradeoff_ANPP_CultureTrees,
+         Tradeoff_ANPP_TotalC = abs(Benefit_ANPP - Benefit_TotalC) * (1 / sqrt(2)),
+         Tradeoff_TotalC_ANPP = Tradeoff_ANPP_TotalC,
+         Tradeoff_ANPP_TotalHarvest = abs(Benefit_ANPP - Benefit_TotalHarvest) * (1 / sqrt(2)),
+         Tradeoff_TotalHarvest_ANPP = Tradeoff_ANPP_TotalHarvest,
+         
+         Tradeoff_Structure_H = abs(Benefit_Structure - Benefit_H) * (1 / sqrt(2)),
+         Tradeoff_H_Structure = Tradeoff_Structure_H,
+         Tradeoff_Structure_AGB = abs(Benefit_Structure - Benefit_AGB) * (1 / sqrt(2)),
+         Tradeoff_AGB_Structure = Tradeoff_Structure_AGB,
+         Tradeoff_Structure_FruitTrees = abs(Benefit_Structure - Benefit_FruitTrees) * (1 / sqrt(2)),
+         Tradeoff_FruitTrees_Structure = Tradeoff_Structure_FruitTrees,
+         Tradeoff_Structure_CultureTrees = abs(Benefit_Structure - Benefit_CultureTrees) * (1 / sqrt(2)),
+         Tradeoff_CultureTrees_Structure = Tradeoff_Structure_CultureTrees,
+         Tradeoff_Structure_TotalC = abs(Benefit_Structure - Benefit_TotalC) * (1 / sqrt(2)),
+         Tradeoff_TotalC_Structure = Tradeoff_Structure_TotalC,
+         Tradeoff_Structure_TotalHarvest = abs(Benefit_Structure - Benefit_TotalHarvest) * (1 / sqrt(2)),
+         Tradeoff_TotalHarvest_Structure = Tradeoff_Structure_TotalHarvest,
+         
+         Tradeoff_H_AGB = abs(Benefit_H - Benefit_AGB) * (1 / sqrt(2)),
+         Tradeoff_AGB_H = Tradeoff_H_AGB,
+         Tradeoff_H_FruitTrees = abs(Benefit_H - Benefit_FruitTrees) * (1 / sqrt(2)),
+         Tradeoff_FruitTrees_H = Tradeoff_H_FruitTrees,
+         Tradeoff_H_CultureTrees = abs(Benefit_H - Benefit_CultureTrees) * (1 / sqrt(2)),
+         Tradeoff_CultureTrees_H = Tradeoff_H_CultureTrees,
+         Tradeoff_H_TotalC = abs(Benefit_H - Benefit_TotalC) * (1 / sqrt(2)),
+         Tradeoff_TotalC_H = Tradeoff_H_TotalC,
+         Tradeoff_H_TotalHarvest = abs(Benefit_H - Benefit_TotalHarvest) * (1 / sqrt(2)),
+         Tradeoff_TotalHarvest_H = Tradeoff_H_TotalHarvest,
+         
+         Tradeoff_AGB_FruitTrees = abs(Benefit_AGB - Benefit_FruitTrees) * (1 / sqrt(2)),
+         Tradeoff_FruitTrees_AGB = Tradeoff_AGB_FruitTrees,
+         Tradeoff_AGB_CultureTrees = abs(Benefit_AGB - Benefit_CultureTrees) * (1 / sqrt(2)),
+         Tradeoff_CultureTrees_AGB = Tradeoff_AGB_CultureTrees,
+         Tradeoff_AGB_TotalC = abs(Benefit_AGB - Benefit_TotalC) * (1 / sqrt(2)),
+         Tradeoff_TotalC_AGB = Tradeoff_AGB_TotalC,
+         Tradeoff_AGB_TotalHarvest = abs(Benefit_AGB - Benefit_TotalHarvest) * (1 / sqrt(2)),
+         Tradeoff_TotalHarvest_AGB = Tradeoff_AGB_TotalHarvest,
+         
+         Tradeoff_FruitTrees_CultureTrees = abs(Benefit_FruitTrees - Benefit_CultureTrees) * (1 / sqrt(2)),
+         Tradeoff_CultureTrees_FruitTrees = Tradeoff_FruitTrees_CultureTrees,
+         Tradeoff_FruitTrees_TotalC = abs(Benefit_FruitTrees - Benefit_TotalC) * (1 / sqrt(2)),
+         Tradeoff_TotalC_FruitTrees = Tradeoff_FruitTrees_TotalC,
+         Tradeoff_FruitTrees_TotalHarvest = abs(Benefit_FruitTrees - Benefit_TotalHarvest) * (1 / sqrt(2)),
+         Tradeoff_TotalHarvest_FruitTrees = Tradeoff_FruitTrees_TotalHarvest,
+         
+         Tradeoff_CultureTrees_TotalC = abs(Benefit_CultureTrees - Benefit_TotalC) * (1 / sqrt(2)),
+         Tradeoff_TotalC_CultureTrees = Tradeoff_CultureTrees_TotalC,
+         Tradeoff_CultureTrees_TotalHarvest = abs(Benefit_CultureTrees - Benefit_TotalHarvest) * (1 / sqrt(2)),
+         Tradeoff_TotalHarvest_CultureTrees = Tradeoff_CultureTrees_TotalHarvest,
+         
+         Tradeoff_TotalC_TotalHarvest = abs(Benefit_TotalC - Benefit_TotalHarvest) * (1 / sqrt(2)),
+         Tradeoff_TotalHarvest_TotalC = Tradeoff_TotalC_TotalHarvest) %>%
+  select(Time, Run, RCP, Model, Prescription,
+Tradeoff_NEEC_AWB,
+Tradeoff_AWB_NEEC,
+Tradeoff_AWB_SOMTC,
+Tradeoff_SOMTC_AWB,
+Tradeoff_AWB_ANPP,
+Tradeoff_ANPP_AWB,
+Tradeoff_AWB_Structure,
+Tradeoff_Structure_AWB,
+Tradeoff_AWB_H,
+Tradeoff_H_AWB,
+Tradeoff_AWB_AGB,
+Tradeoff_AGB_AWB,
+Tradeoff_AWB_FruitTrees,
+Tradeoff_FruitTrees_AWB,
+Tradeoff_AWB_CultureTrees,
+Tradeoff_CultureTrees_AWB,
+Tradeoff_AWB_TotalC, 
+Tradeoff_TotalC_AWB,
+Tradeoff_AWB_TotalHarvest,
+Tradeoff_TotalHarvest_AWB,
+Tradeoff_NEEC_SOMTC,
+Tradeoff_SOMTC_NEEC,
+Tradeoff_NEEC_ANPP,
+Tradeoff_ANPP_NEEC,
+Tradeoff_NEEC_Structure,
+Tradeoff_Structure_NEEC,
+Tradeoff_NEEC_H,
+Tradeoff_H_NEEC,
+Tradeoff_NEEC_AGB,
+Tradeoff_AGB_NEEC,
+Tradeoff_NEEC_FruitTrees,
+Tradeoff_FruitTrees_NEEC,
+Tradeoff_NEEC_CultureTrees,
+Tradeoff_CultureTrees_NEEC,
+Tradeoff_NEEC_TotalC, 
+Tradeoff_TotalC_NEEC,
+Tradeoff_NEEC_TotalHarvest,
+Tradeoff_TotalHarvest_NEEC,
+Tradeoff_SOMTC_ANPP,
+Tradeoff_ANPP_SOMTC,
+Tradeoff_SOMTC_Structure,
+Tradeoff_Structure_SOMTC,
+Tradeoff_SOMTC_H,
+Tradeoff_H_SOMTC,
+Tradeoff_SOMTC_AGB,
+Tradeoff_AGB_SOMTC,
+Tradeoff_SOMTC_FruitTrees,
+Tradeoff_FruitTrees_SOMTC,
+Tradeoff_SOMTC_CultureTrees,
+Tradeoff_CultureTrees_SOMTC,
+Tradeoff_SOMTC_TotalC,
+Tradeoff_TotalC_SOMTC,
+Tradeoff_SOMTC_TotalHarvest,
+Tradeoff_TotalHarvest_SOMTC,
+Tradeoff_ANPP_Structure,
+Tradeoff_Structure_ANPP,
+Tradeoff_ANPP_H,
+Tradeoff_H_ANPP,
+Tradeoff_ANPP_AGB,
+Tradeoff_AGB_ANPP,
+Tradeoff_ANPP_FruitTrees,
+Tradeoff_FruitTrees_ANPP,
+Tradeoff_ANPP_CultureTrees,
+Tradeoff_CultureTrees_ANPP,
+Tradeoff_ANPP_TotalC,
+Tradeoff_TotalC_ANPP,
+Tradeoff_ANPP_TotalHarvest,
+Tradeoff_TotalHarvest_ANPP,
+Tradeoff_Structure_H,
+Tradeoff_H_Structure,
+Tradeoff_Structure_AGB,
+Tradeoff_AGB_Structure,
+Tradeoff_Structure_FruitTrees,
+Tradeoff_FruitTrees_Structure,
+Tradeoff_Structure_CultureTrees,
+Tradeoff_CultureTrees_Structure,
+Tradeoff_Structure_TotalC,
+Tradeoff_TotalC_Structure,
+Tradeoff_Structure_TotalHarvest,
+Tradeoff_TotalHarvest_Structure,
+Tradeoff_H_AGB,
+Tradeoff_AGB_H,
+Tradeoff_H_FruitTrees, 
+Tradeoff_FruitTrees_H,
+Tradeoff_H_CultureTrees, 
+Tradeoff_CultureTrees_H,
+Tradeoff_H_TotalC,
+Tradeoff_TotalC_H,
+Tradeoff_H_TotalHarvest, 
+Tradeoff_TotalHarvest_H,
+Tradeoff_AGB_FruitTrees,
+Tradeoff_FruitTrees_AGB,
+Tradeoff_AGB_CultureTrees,
+Tradeoff_CultureTrees_AGB,
+Tradeoff_AGB_TotalC, 
+Tradeoff_TotalC_AGB,
+Tradeoff_AGB_TotalHarvest,
+Tradeoff_TotalHarvest_AGB,
+Tradeoff_FruitTrees_CultureTrees,
+Tradeoff_CultureTrees_FruitTrees,
+Tradeoff_FruitTrees_TotalC,
+Tradeoff_TotalC_FruitTrees,
+Tradeoff_FruitTrees_TotalHarvest,
+Tradeoff_TotalHarvest_FruitTrees,
+Tradeoff_CultureTrees_TotalC,
+Tradeoff_TotalC_CultureTrees,
+Tradeoff_CultureTrees_TotalHarvest,
+Tradeoff_TotalHarvest_CultureTrees,
+Tradeoff_TotalC_TotalHarvest,
+Tradeoff_TotalHarvest_TotalC)
+
+
+  # select(-which(grepl("Harvest", names(.))))
+
+
+# Make the dataframe long for plotting
+tradeoffDf_long <- tradeoffDf %>%
+  mutate(Model = sub("_[^_]+$", "", Model)) %>%
+  pivot_longer(cols = starts_with("Tradeoff"),
+               names_to = "Tradeoff_Type",
+               values_to = "Value") %>%
+  separate(Tradeoff_Type, into = c("Prefix", "Var1", "Var2"), sep = "_") %>%
+  group_by(Time, RCP, Model, Prescription, Var1, Var2) %>%
+  summarise(Value = mean(Value)) %>%
+  mutate(x = factor(Var1, levels = c("AGB","ANPP","AWB","CultureTrees","FruitTrees","H","NEEC","SOMTC","Structure","TotalC","TotalHarvest")),
+         y = factor(Var2, levels = c("AGB","ANPP","AWB","CultureTrees","FruitTrees","H","NEEC","SOMTC","Structure","TotalC","TotalHarvest")))
+
+# Tradeoff cumulative totals by Prescription, Model and RCP
+tradeoffDf %>%
+  mutate(Model = sub("_[^_]+$", "", Model)) %>%
+  pivot_longer(cols = starts_with("Tradeoff"),
+               names_to = "Tradeoff_Type",
+               values_to = "Value") %>%
+  separate(Tradeoff_Type, into = c("Prefix", "Var1", "Var2"), sep = "_") %>%
+  group_by(RCP, Model, Prescription, Var1) %>%
+  summarise(Value = sum(Value)) %>%
+  # filter(RCP == "RCP45") %>%
+  ggplot(., aes(x = Var1, y = Value, fill = RCP)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  theme_classic() +
+  facet_grid(Prescription ~ Model)
+
+
+
+# tradeoffDf %>%
+#   mutate(Model = sub("_[^_]+$", "", Model)) %>%
+#   pivot_longer(cols = starts_with("Tradeoff"),
+#                names_to = "Tradeoff_Type",
+#                values_to = "Value") %>%
+#   separate(Tradeoff_Type, into = c("Prefix", "Var1", "Var2"), sep = "_") %>%
+#   group_by(RCP, Model, Prescription, Var1, Var2) %>%
+#   summarise(Value = sum(Value)) %>%
+#   filter(RCP == "RCP45") %>%
+#   ggplot(., aes(x = Var1, y = Var2, fill = Value)) +
+#   geom_tile() +
+#   scale_fill_gradient(low = "#a8dadc", high = "#1d3557", name = "Tradeoff Value") +
+#   labs(title = "Heatmap of Tradeoffs", x = "X", y = "Y") +
+#   theme_classic() +
+#   facet_grid(Prescription ~ Model)
+
+
+# tradeoffDf %>%
+#   mutate(Model = sub("_[^_]+$", "", Model)) %>%
+#   pivot_longer(cols = starts_with("Tradeoff"),
+#                names_to = "Tradeoff_Type",
+#                values_to = "Value") %>%
+#   separate(Tradeoff_Type, into = c("Prefix", "Var1", "Var2"), sep = "_") %>%
+#   group_by(RCP, Model, Prescription, Var1, Var2) %>%
+#   summarise(Value = sum(Value)) %>%
+#   filter(RCP == "RCP85") %>%
+#   ggplot(., aes(x = Var1, y = Var2, fill = Value)) +
+#   geom_tile() +
+#   scale_fill_gradient(low = "#a8dadc", high = "#1d3557", name = "Tradeoff Value") +
+#   labs(title = "Heatmap of Tradeoffs", x = "X", y = "Y") +
+#   theme_classic() +
+#   facet_grid(Prescription ~ Model)
+
+tradeoffDf %>%
+  mutate(Model = sub("_[^_]+$", "", Model)) %>%
+  pivot_longer(cols = starts_with("Tradeoff"),
+               names_to = "Tradeoff_Type",
+               values_to = "Value") %>%
+  separate(Tradeoff_Type, into = c("Prefix", "Var1", "Var2"), sep = "_") %>%
+  # filter(Var1 != "Structure" & Var2 != "Structure") %>%
+  group_by(RCP, Prescription, Var1, Var2) %>%
+  summarise(Value = sum(Value)) %>%
+  ggplot(., aes(x = Var1, y = Var2, fill = Value)) +
+  geom_tile() +
+  scale_fill_gradient(low = "#a8dadc", high = "#1d3557", name = "Tradeoff Value") +
+  labs(title = "Heatmap of Tradeoffs", x = "X", y = "Y") +
+  theme_classic() +
+  facet_grid(RCP ~ Prescription)
+
+
+# Totals Df and plot
+successionLogAllDf[,c(1,2,5,6,7,8,9,62:64)] %>%
+  filter(Time < 81, Time > 0) %>%
+  inner_join(strDivAllDf, by = c("Time", "Run", "RCP", "Model", "Prescription")) %>%
+  rename(Structure_H = H) %>%
+  inner_join(diversityAllDf, by = c("Time", "Run", "RCP", "Model", "Prescription")) %>%
+  inner_join(Total_CDfAll, by = c("Time", "Run", "RCP", "Model", "Prescription")) %>%
+  inner_join(harvestDfAll, by = c("Time", "Run", "RCP", "Model", "Prescription")) %>%
+  inner_join(fruitTreeAllDf, by = c("Time", "Run", "RCP", "Model", "Prescription")) %>%
+  rename(Fruit_Trees = Score) %>%
+  inner_join(cultureTreeAllDf, by = c("Time", "Run", "RCP", "Model", "Prescription")) %>%
+  rename(Culture_Trees = Score) %>%
+  inner_join(AWBAllDf, by = c("Time", "Run", "RCP", "Model", "Prescription")) %>%
+  mutate(ANPP = (AG_NPPC + BG_NPPC) * 2,
+         Model = sub("_[^_]+$", "", Model)) %>%
+  group_by(Prescription, RCP, Model) %>%
+  summarise(NEEC = mean(NEEC),SOMTC = mean(SOMTC),AGB = mean(AGB),Structure_H = mean(Structure_H),H = mean(H),Total_C = mean(Total_C),Total_Harvest = sum(Total_Harvest),Fruit_Trees = as.numeric(mean(Fruit_Trees)),Culture_Trees = mean(Culture_Trees),AWB = mean(AWB),ANPP = mean(ANPP)) %>%
+  pivot_longer(cols = "NEEC":"ANPP", names_to = "Variable", values_to = "Value") %>%
+  ggplot(., aes(x = Prescription, y = Value, fill = Model)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  theme_classic() +
+  facet_grid(Variable~RCP, scales = "free_y")
+
+
+successionLogAllDf[,c(1,2,5,6,7,8,9,62:64)] %>%
+  inner_join(AWBAllDf, by = c("Time", "Run", "RCP", "Model", "Prescription")) %>%
+  inner_join(diversityAllDf, by = c("Time", "Run", "RCP", "Model", "Prescription")) %>%
+  mutate(ANPP = (AG_NPPC + BG_NPPC) * 2,
+         Model = sub("_[^_]+$", "", Model)) %>%
+  filter(Time < 81, Time > 0) %>%
+  group_by(Prescription, RCP) %>%
+  summarise(H = mean(H)) %>%
+  ggplot(., aes(x = Prescription, y = H, fill = Prescription)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  facet_grid(~RCP)
+
+
+x <- successionLogAllDf[,c(1,2,5,6,7,8,9,62:64)] %>%
+  filter(Time < 81, Time > 0) %>%
+  inner_join(strDivAllDf, by = c("Time", "Run", "RCP", "Model", "Prescription")) %>%
+  rename(Structure_H = H) %>%
+  inner_join(diversityAllDf, by = c("Time", "Run", "RCP", "Model", "Prescription")) %>%
+  inner_join(Total_CDfAll, by = c("Time", "Run", "RCP", "Model", "Prescription")) %>%
+  inner_join(harvestDfAll, by = c("Time", "Run", "RCP", "Model", "Prescription")) %>%
+  inner_join(fruitTreeAllDf, by = c("Time", "Run", "RCP", "Model", "Prescription")) %>%
+  rename(Fruit_Trees = Score) %>%
+  inner_join(cultureTreeAllDf, by = c("Time", "Run", "RCP", "Model", "Prescription")) %>%
+  rename(Culture_Trees = Score) %>%
+  inner_join(AWBAllDf, by = c("Time", "Run", "RCP", "Model", "Prescription")) %>%
+  mutate(ANPP = (AG_NPPC + BG_NPPC) * 2,
+         Model = sub("_[^_]+$", "", Model))
+
+summary(aov(NEEC ~ Prescription * Model * RCP, data = x))
+names(x)
+
+# Plot the heatmap
+# ggplot(tradeoffDf_long %>% filter(RCP == "RCP45" & Time == 80), aes(x = x, y = y, fill = Value)) +
+#   geom_tile() +
+#   # geom_text(aes(label = round(Value, 2))) +
+#   scale_fill_gradient(low = "#a8dadc", high = "#1d3557", name = "Tradeoff Value") +
+#   labs(title = "Heatmap of Tradeoffs", x = "X", y = "Y") +
+#   theme_classic() +
+#   # coord_equal(expand = T) +
+#   scale_y_discrete(limits = rev(levels(factor(tradeoffDf_long$y)))) + 
+#   facet_grid(Prescription ~ Model)
+# 
+# ggplot(tradeoffDf_long %>% filter(RCP == "RCP85" & Time == 80), aes(x = x, y = y, fill = Value)) +
+#   geom_tile() +
+#   scale_fill_gradient(low = "#a8dadc", high = "#1d3557", name = "Tradeoff Value") +
+#   labs(title = "Heatmap of Tradeoffs", x = "X", y = "Y") +
+#   theme_classic() +
+#   # coord_equal(expand = T) +
+#   scale_y_discrete(limits = rev(levels(factor(tradeoffDf_long$y)))) + 
+#   facet_grid(Prescription ~ Model)
+
+# Lower values equate to a smaller tradeoff between the two. Check to see which
+# benefit is the higher one and the point will fall on that side of the line in the plot
+
+# Tradeoff Totals
+tradeoffDf_long %>%
+  group_by(Time, RCP, Model, Prescription) %>%
+  summarise(total = sum(Value) / 2) %>%
+  ggplot(., aes(x = Time, y = total, fill = RCP)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  theme_classic() +
+  facet_grid(Prescription ~ Model)
+
+# All Scenario tradeoff scores
+tradeoffDf_long %>%
+  select(Time, RCP, Model, Prescription, Value) %>%
+  group_by(RCP, Model, Prescription) %>%
+  summarise(total = sum(Value) / 2) %>%
+  arrange(total)
+
+# Cumulative tradeoff scores by Model, prescription and RCP
+tradeoffDf_long %>%
+  select(Time, RCP, Model, Prescription, Value) %>%
+  group_by(RCP, Model, Prescription) %>%
+  summarise(total = sum(Value) / 2) %>%
+  arrange(total) %>%
+  ggplot(., aes(x = Model, y = total, fill = Model)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = round(total, 1)), vjust = -0.3, color = "black") +
+  theme_classic() +
+  facet_grid(RCP ~ Prescription)
+
+
+tradeoffDf_long %>%
+  select(Time, RCP, Model, Prescription, Value) %>%
+  group_by(RCP, Model, Prescription) %>%
+  summarise(total = sum(Value) / 2) %>%
+  arrange(Prescription, RCP, Model)
+
+# Tradeoff scores by prescription type
+data <- tradeoffDf_long %>%
+  select(Time, RCP, Model, Prescription, Value) %>%
+  group_by(Prescription) %>%
+  summarise(total = sum(Value) / 2, mean = mean(Value), sd = sd(Value), n = n(), se = sd / sqrt(n)) %>%
+  arrange(total)
+
+ggplot(data, aes(x = Prescription, y = total, fill = Prescription)) +
+  geom_bar(stat = "identity") +
+  theme_classic()
+
+ggplot(data, aes(x = Prescription, y = mean, fill = Prescription)) +
+  geom_bar(stat = "identity", position = "dodge") +  
+  geom_errorbar(aes(x = Prescription, ymin = mean-se, ymax = mean+se), width = 0.25) +
+  theme_classic()
+
+# Tradeoff scores by prescription type
+data <- tradeoffDf_long %>%
+  select(Time, RCP, Model, Prescription, Value) %>%
+  group_by(Prescription, Model, RCP) %>%
+  summarise(total = sum(Value) / 2, mean = mean(Value), sd = sd(Value), n = n(), se = sd / sqrt(n)) %>%
+  arrange(total)
+
+ggplot(data, aes(x = Prescription, y = mean, fill = Model)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.9)) +
+  geom_errorbar(aes(ymin = mean - se, ymax = mean + se),
+                width = 0.5,
+                position = position_dodge(width = 0.9)) +
+  theme_classic() +
+  facet_wrap(~ RCP)
+
+aov.1 <- aov(Value ~ Prescription * Model * RCP, data = tradeoffDf_long)
+summary(aov.1)
+
+
+data <- tradeoffDf_long %>%
+  select(Time, RCP, Model, Prescription, Value, Var1, Var2) %>%
+  group_by(Prescription, Model, RCP, Var1, Var2) %>%
+  summarise(total = sum(Value) / 2, mean = mean(Value), sd = sd(Value), n = n(), se = sd / sqrt(n)) %>%
+  arrange(desc(total))
+
+ggplot(data, aes(x = Prescription, y = mean, fill = Model)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.9)) +
+  # geom_errorbar(aes(ymin = mean - se, ymax = mean + se), width = 0.5, position = position_dodge(width = 0.9)) +
+  theme_classic() +
+  facet_grid(RCP ~ Var1)
+
+
+ggplot(data, aes(x = Prescription, y = total, fill = Model)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.9)) +
+  # geom_errorbar(aes(ymin = mean - sd, ymax = mean + sd), width = 0.5, position = position_dodge(width = 0.9)) +
+  theme_classic() +
+  facet_grid(RCP ~ Var1)
+
+
+
+# Tradeoff scores by model type
+data <- tradeoffDf_long %>%
+  select(Time, RCP, Model, Prescription, Value) %>%
+  group_by(Model) %>%
+  summarise(total = sum(Value) / 2, mean = mean(Value), sd = sd(Value), n = n(), se = sd / sqrt(n)) %>%
+  arrange(total)
+
+ggplot(data, aes(x = Model, y = total, fill = Model)) +
+  geom_bar(stat = "identity") +
+  theme_classic()
+
+ggplot(data, aes(x = Model, y = mean, fill = Model)) +
+  geom_bar(stat = "identity") +  
+  geom_errorbar(aes(x = Model, ymin = mean-se, ymax = mean+se), width = 0.25) +
+  theme_classic()
+
+# Tradeoff scores by RCP type
+data <- tradeoffDf_long %>%
+  select(Time, RCP, Model, Prescription, Value) %>%
+  group_by(RCP) %>%
+  summarise(total = sum(Value) / 2, mean = mean(Value), sd = sd(Value), n = n(), se = sd / sqrt(n)) %>%
+  arrange(total)
+
+ggplot(data, aes(x = RCP, y = total, fill = RCP)) +
+  geom_bar(stat = "identity") +
+  theme_classic()
+
+ggplot(data, aes(x = RCP, y = mean, fill = RCP)) +
+  geom_bar(stat = "identity") +
+  geom_errorbar(aes(x = RCP, ymin = mean-se, ymax = mean+se), width = 0.25) +
+  theme_classic()
+
+aov.1 <- aov(Value ~ Prescription * RCP * Model, data = tradeoffDf_long)
+summary(aov.1)
+TukeyHSD(aov.1)
+
+ggplot(tradeoffDf_long %>% filter(RCP == "RCP45" & Time == 80,
+                                  Value >= 0.5), aes(x = x, y = y, fill = Value)) +
+  geom_tile() +
+  scale_fill_gradient(low = "#a8dadc", high = "#1d3557", name = "Tradeoff Value") +
+  labs(title = "Heatmap of Tradeoffs", x = "X", y = "Y") +
+  theme_classic() +
+  # coord_equal(expand = T) +
+  facet_grid(Prescription ~ Model)
+
+ggplot(tradeoffDf_long %>% filter(RCP == "RCP85" & Time == 80,
+                                  Value >= 0.5), aes(x = x, y = y, fill = Value)) +
+  geom_tile() +
+  scale_fill_gradient(low = "#a8dadc", high = "#1d3557", name = "Tradeoff Value") +
+  labs(title = "Heatmap of Tradeoffs", x = "X", y = "Y") +
+  theme_classic() +
+  # coord_equal(expand = T) +
+  facet_grid(Prescription ~ Model)
+
+
+for (i in unique(tradeoffDf_long$Time)) {
+  x <- ggplot(tradeoffDf_long %>% filter(RCP == "RCP85" & Time == i,
+                                  Value >= 0.5), aes(x = x, y = y, fill = Value)) +
+  geom_tile() +
+  scale_fill_gradient(low = "#a8dadc", high = "#1d3557", name = "Tradeoff Value") +
+  labs(title = "Heatmap of Tradeoffs", x = "X", y = "Y") +
+  theme_classic() +
+  # coord_equal(expand = T) +
+  facet_grid(Prescription ~ Model)
+  plot(x)
+}
+```
+
+
+
+```{r}
+# Step 1: Preprocess Data
+tradeoffCorr <- tradeoffDf %>%
+  mutate(Model = sub("_[^_]+$", "", Model)) %>%
+  pivot_longer(cols = starts_with("Tradeoff"),
+               names_to = "Tradeoff_Type",
+               values_to = "Value") %>%
+  separate(Tradeoff_Type, into = c("Prefix", "Var1", "Var2"), sep = "_") %>%
+  group_by(Model, RCP, Prescription, Var1, Var2) %>%
+  summarise(Value = sum(Value), .groups = "drop")
+
+
+# Step 2: Compute Correlation for Each Model ~ Prescription Combination
+cor_data <- tradeoffCorr %>%
+  group_by(Model, RCP, Prescription) %>%  
+  group_split() %>%  
+  map_df(function(df) {
+    model <- unique(df$Model)
+    prescription <- unique(df$Prescription)
+    rcp <- unique(df$RCP)
+    
+    # Convert to wide format
+    df_wide <- df %>%
+      pivot_wider(names_from = Var2, values_from = Value) %>%
+      select(-Var1)  # Drop Var1 as it's already in the column names
+    
+    # Ensure numeric columns only
+    df_wide <- df_wide %>%
+      select(where(is.numeric))  # Remove non-numeric columns
+    
+    # Check if we have more than one numeric column
+    if (ncol(df_wide) > 1) {  
+      cor_matrix <- cor(df_wide, use = "pairwise.complete.obs")  # Compute correlation
+      cor_long <- as.data.frame(as.table(cor_matrix)) %>%
+        rename(Var1 = Var1, Var2 = Var2, Correlation = Freq) %>%
+        mutate(Model = model, Prescription = prescription, RCP = rcp)  
+    } else {
+      cor_long <- tibble(Var1 = NA, Var2 = NA, Correlation = NA, Model = model, Prescription = prescription)
+    }
+    
+    return(cor_long)
+  })
+
+# Step 3: Merge Correlation Values with Tradeoff Data
+plot_data <- tradeoffCorr %>%
+  left_join(cor_data, by = c("Model", "RCP", "Prescription", "Var1", "Var2"))
+
+ggplot(plot_data %>%
+         filter(Model == "MIROC-ESM-CHEM" & RCP == "RCP85" & Prescription == "Resistance") %>%
+         filter(Correlation <= 0.9 & Correlation >= -0.9), aes(x = Var1, y = Var2, fill = Correlation)) +
+  geom_tile() +
+  geom_text(aes(label = round(Correlation, 2)), color = "white", size = 4, na.rm = TRUE) +  # Overlay correlation
+  scale_fill_gradient2(low = "#d73027", mid = "#ffffbf", high = "#1a9850", 
+                       midpoint = 0, name = "Correlation") +  
+  labs(title = "Least Tradeoffs", x = "X", y = "Y") +
+  theme_classic() +
+  facet_grid(Prescription~Model) +
+  theme(legend.position = "bottom", legend.key.size = unit(3, "line"))
+
+ggplot(plot_data %>%
+         filter(Model == "MRI-CGCM3" & RCP == "RCP45" & Prescription == "Transition") %>%
+         filter(Correlation <= 0.9 & Correlation >= -0.9), aes(x = Var1, y = Var2, fill = Correlation)) +
+  geom_tile() +
+  geom_text(aes(label = round(Correlation, 2)), color = "white", size = 4, na.rm = TRUE) +  # Overlay correlation
+  scale_fill_gradient2(low = "#d73027", mid = "#ffffbf", high = "#1a9850", 
+                       midpoint = 0, name = "Correlation") +  
+  labs(title = "Most Tradeoffs", x = "X", y = "Y") +
+  theme_classic() +
+  facet_grid(Prescription~Model) +
+  theme(legend.position = "bottom", legend.key.size = unit(3, "line"))
+
+
+
+plot_data_filtered <- plot_data %>%
+  filter(
+    (Model == "MIROC-ESM-CHEM" & RCP == "RCP85" & Prescription == "Resistance") |
+    (Model == "MRI-CGCM3" & RCP == "RCP45" & Prescription == "Transition")
+  ) %>%
+  filter(Correlation <= 0.9 & Correlation >= -0.9) %>%
+  mutate(Tradeoff = case_when(
+    Model == "MIROC-ESM-CHEM" ~ "Least Tradeoffs",
+    Model == "MRI-CGCM3" ~ "Most Tradeoffs"
+  ))
+
+ggplot(plot_data_filtered, aes(x = Var1, y = Var2, fill = Correlation)) +
+  geom_tile() +
+  geom_text(aes(label = round(Correlation, 2)), color = "white", size = 4, na.rm = TRUE) +
+  scale_fill_gradient2(
+    low = "#d73027", mid = "#ffffbf", high = "#1a9850",
+    midpoint = 0, name = "Correlation"
+  ) +
+  labs(x = "X", y = "Y") +
+  theme_classic() +
+  facet_wrap(~Tradeoff) +
+  theme(legend.position = "bottom", legend.key.size = unit(3, "line"))
+
+
+
+# Cumulative trade-off score by model, RCP and prescription
+plot_data %>%
+  filter(Correlation <= 0.9 & Correlation >= -0.9) %>%
+  select(-Value) %>%
+  left_join(tradeoffDf_long, by = c("Model", "RCP", "Prescription", "Var1", "Var2")) %>%
+  group_by(RCP, Model, Prescription) %>%
+  summarise(total = sum(Value) / 2) %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance", "Resilience", "Transition"))) %>%
+  # mutate(Model = case_when(
+  #  Model == "BNU-ESM" ~ "HSHV",
+  #  Model == "MIROC-ESM-CHEM" ~ "HSLV",
+  #  Model == "MRI-CGCM3" ~ "LSHV",
+  #  TRUE ~ "LSLV")) %>%
+  ggplot(., aes(x = Model, y = total, fill = Model)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = round(total, 1)), vjust = -0.2, color = "black") +
+  theme_classic() +
+  facet_grid(RCP ~ Prescription) +
+  scale_y_continuous(limits = c(0,105), name = "Cumulative Tradeoff Score") +
+  theme(axis.ticks.x = element_blank(), axis.text.x = element_blank()) +
+  scale_fill_manual(values = c(
+      "BNU-ESM" = "#984ea3",
+      "MIROC-ESM-CHEM" = "#ffd92f",
+      "MRI-CGCM3" = "#ffb74d",
+      "CCSM4" = "#377eb8"
+    ),
+    name = "Climatic Model")
+
+ggsave(filename = "HighLow_Trade_Offs.png",
+       path = "C:/Users/lagoodal/Pictures/",
+       width = 16,
+       height = 10,
+       dpi = 300)
+```
+
+# Cumulative trade-off score by model and RCP
+plot_data %>%
+  filter(Correlation <= 0.9 & Correlation >= -0.9) %>%
+  select(-Value) %>%
+  left_join(tradeoffDf_long, by = c("Model", "RCP", "Prescription", "Var1", "Var2")) %>%
+  group_by(RCP, Model) %>%
+  summarise(total = sum(Value) / 2) %>%
+  # mutate(Prescription = factor(Prescription, levels = c("Resistance", "Resilience", "Transition"))) %>%
+  ggplot(., aes(x = Model, y = total, fill = Model)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = round(total, 1)), vjust = -0.2, color = "black") +
+  theme_classic() +
+  facet_grid(~ RCP) +
+  # scale_y_continuous(limits = c(0,105), name = "Cumulative Tradeoff Score") +
+  theme(axis.ticks.x = element_blank(), axis.text.x = element_blank())
+
+# Cumulative trade-off score by RCP and prescription
+plot_data %>%
+  filter(Correlation <= 0.9 & Correlation >= -0.9) %>%
+  select(-Value) %>%
+  left_join(tradeoffDf_long, by = c("Model", "RCP", "Prescription", "Var1", "Var2")) %>%
+  group_by(RCP, Prescription) %>%
+  summarise(total = sum(Value) / 2) %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance", "Resilience", "Transition"))) %>%
+  ggplot(., aes(x = Prescription, y = total, fill = Prescription)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = round(total, 1)), vjust = -0.2, color = "black") +
+  theme_classic() +
+  facet_grid(~ RCP) +
+  # scale_y_continuous(limits = c(0,105), name = "Cumulative Tradeoff Score") +
+  theme(axis.ticks.x = element_blank(), axis.text.x = element_blank())
+
+# Cumulative trade-off score by model and prescription
+plot_data %>%
+  filter(Correlation <= 0.9 & Correlation >= -0.9) %>%
+  select(-Value) %>%
+  left_join(tradeoffDf_long, by = c("Model", "RCP", "Prescription", "Var1", "Var2")) %>%
+  group_by(Model, Prescription) %>%
+  summarise(total = sum(Value) / 2) %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance", "Resilience", "Transition"))) %>%
+  ggplot(., aes(x = Prescription, y = total, fill = Prescription)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = round(total, 1)), vjust = -0.2, color = "black") +
+  theme_classic() +
+  facet_grid(~ Model) +
+  # scale_y_continuous(limits = c(0,105), name = "Cumulative Tradeoff Score") +
+  theme(axis.ticks.x = element_blank(), axis.text.x = element_blank())
+
+plot_data %>%
+  filter(Correlation <= 0.9 & Correlation >= -0.9) %>%
+  select(-Value) %>%
+  left_join(tradeoffDf_long, by = c("Model", "RCP", "Prescription", "Var1", "Var2")) %>%
+  group_by(RCP, Model, Prescription) %>%
+  summarise(total = sum(Value) / 2) %>%
+  arrange(desc(total))
+
+```
+
+# Step 4: Generate the Heatmap with Correlation Values
+ggplot(plot_data, aes(x = Var1, y = Var2, fill = Correlation)) +
+  geom_tile() +
+  geom_text(aes(label = round(Correlation, 2)), color = "white", size = 4, na.rm = TRUE) +  # Overlay correlation
+  scale_fill_gradient2(low = "#d73027", mid = "#ffffbf", high = "#1a9850", 
+                       midpoint = 0, name = "Correlation") +  
+  labs(title = "Heatmap of Tradeoff Correlations (Per Model ~ Prescription)", x = "X", y = "Y") +
+  theme_classic() +
+  facet_grid(Prescription ~ Model)
+
+ggplot(plot_data %>% filter(Correlation < 0.8 & Correlation > 0.7), aes(x = Var1, y = Var2, fill = Correlation)) +
+  geom_tile() +
+  geom_text(aes(label = round(Correlation, 2)), color = "white", size = 4, na.rm = TRUE) +  # Overlay correlation
+  scale_fill_gradient2(low = "#d73027", mid = "#ffffbf", high = "#1a9850", 
+                       midpoint = 0, name = "Correlation") +  
+  labs(title = "Heatmap of Tradeoff Correlations (Per Model ~ Prescription)", x = "X", y = "Y") +
+  theme_classic() +
+  facet_grid(Prescription ~ Model)
+
+plot_data %>% filter(Correlation < 0.8 & Correlation > 0.7) %>%
+  group_by(Model, Prescription, Var1) %>%
+  summarise(n = n()) %>%
+  ggplot(., aes(x = Var1, y = n)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  facet_grid(~Prescription)
+
+ggplot(plot_data %>% filter(Correlation > -0.8 & Correlation < -0.7), aes(x = Var1, y = Var2, fill = Correlation)) +
+  geom_tile() +
+  geom_text(aes(label = round(Correlation, 2)), color = "white", size = 4, na.rm = TRUE) +  # Overlay correlation
+  scale_fill_gradient2(low = "#d73027", mid = "#ffffbf", high = "#1a9850", 
+                       midpoint = 0, name = "Correlation") +  
+  labs(title = "Heatmap of Tradeoff Correlations (Per Model ~ Prescription)", x = "X", y = "Y") +
+  theme_classic() +
+  facet_grid(Prescription ~ Model)
+
+plot_data %>% filter(Correlation > -0.8 & Correlation < -0.7) %>%
+  group_by(Model, Prescription, Var1) %>%
+  summarise(n = n()) %>%
+  ggplot(., aes(x = Var1, y = n)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  facet_grid(~Prescription)
+
+plot_data %>%
+  filter(Correlation > -0.8 & Correlation < -0.7) %>%
+  group_by(Prescription) %>%
+  summarise(n = n()) %>%
+  ggplot(., aes(x = Prescription, y = n)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  labs(title = "Negative Correlations")
+
+plot_data %>%
+  filter(Correlation < 0.8 & Correlation > 0.7) %>%
+  group_by(Prescription) %>%
+  summarise(n = n()) %>%
+  ggplot(., aes(x = Prescription, y = n)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  labs(title = "Positive Correlations")
+
+
+#############################################################
+
+plot_data %>%
+  group_by(Prescription) %>%
+  summarise(Correlation = mean(Correlation)) %>%
+  ggplot(., aes(x = Prescription, y = Correlation)) +
+  geom_bar(stat = "identity") +
+  theme_classic()
+
+aov.1 <- aov(Correlation ~ Prescription, data = plot_data)
+summary(aov.1)
+TukeyHSD(aov.1)
+
+
+
+plot(rast("C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/Clipped_Piedmont/finalTreeMap.tif"))
+```
+
+
+# Correlations
+
+```{r}
+corrDf <- successionLogAllDf[,c(1,2,5,6,7,8,9,62:64)] %>%
+  filter(Time < 81, Time > 0) %>%
+  inner_join(strDivAllDf, by = c("Time", "Run", "RCP", "Model", "Prescription")) %>%
+  rename(Structure_H = H) %>%
+  inner_join(diversityAllDf, by = c("Time", "Run", "RCP", "Model", "Prescription")) %>%
+  inner_join(Total_CDfAll, by = c("Time", "Run", "RCP", "Model", "Prescription")) %>%
+  inner_join(harvestDfAll, by = c("Time", "Run", "RCP", "Model", "Prescription")) %>%
+  inner_join(fruitTreeAllDf, by = c("Time", "Run", "RCP", "Model", "Prescription")) %>%
+  rename(Fruit_Trees = Score) %>%
+  inner_join(cultureTreeAllDf, by = c("Time", "Run", "RCP", "Model", "Prescription")) %>%
+  rename(Culture_Trees = Score) %>%
+  inner_join(AWBAllDf, by = c("Time", "Run", "RCP", "Model", "Prescription")) %>%
+  mutate(ANPP = AG_NPPC * 2,
+         NEEC = (NEEC - min(.$NEEC)) / (max(.$NEEC) - min(.$NEEC)),
+         SOMTC = (SOMTC - min(.$SOMTC)) / (max(.$SOMTC) - min(.$SOMTC)),
+         ANPP = (ANPP - min(ANPP)) / (max(ANPP) - min(ANPP)),
+         Structure = (Structure_H - min(.$Structure_H)) / (max(.$Structure_H) - min(.$Structure_H)),
+         H = (H - min(.$H)) / (max(.$H) - min(.$H)),
+         AGB = (AGB - min(.$AGB)) / (max(.$AGB) - min(.$AGB)),
+         FruitTrees = (Fruit_Trees - min(.$Fruit_Trees)) / (max(.$Fruit_Trees) - min(.$Fruit_Trees)),
+         CultureTrees = (Culture_Trees - min(.$Culture_Trees)) / (max(.$Culture_Trees) - min(.$Culture_Trees)),
+         TotalC = (Total_C - min(.$Total_C)) / (max(.$Total_C) - min(.$Total_C)),
+         TotalHarvest = (Total_Harvest - min(.$Total_Harvest)) / (max(.$Total_Harvest) - min(.$Total_Harvest)),
+         AWB = (AWB - min(.$AWB)) / (max(.$AWB) - min(.$AWB))) %>%
+  select(Time, Run, RCP, Prescription, Model, NEEC, SOMTC, ANPP, Structure, H, AGB, FruitTrees, CultureTrees, TotalC, TotalHarvest, AWB) %>%
+  group_by(Time, Prescription, Model, RCP, Run) %>%
+  summarise_all(mean) %>%
+  select(-Run)
+
+x <- corrDf %>%
+  ungroup() %>%
+  filter(Prescription == "Resistance", Model == "BNU-ESM_RCP45") %>%
+  select(-Time, -Prescription, -Model, -RCP)
+
+corrplot(cor(x),
+         method = "color",
+         order = "alphabet",
+         type = "lower",
+         number.digits = 1,
+         addCoef.col = "white",
+         tl.pos = "ld",
+         bg = "grey")
+
+
+
+```
+#################################################
+drop_cols <- seq(7, ncol(tradeoffDf), by = 2)
+tradeoffDf[, -drop_cols]
+  
+df <- successionLogAllDf[,c(1,2,5,6,7,8,9,62:64)] %>%
+  filter(Time < 81, Time > 0) %>%
+  inner_join(strDivAllDf, by = c("Time", "Run", "RCP", "Model", "Prescription")) %>%
+  rename(Structure_H = H) %>%
+  inner_join(diversityAllDf, by = c("Time", "Run", "RCP", "Model", "Prescription")) %>%
+  inner_join(Total_CDfAll, by = c("Time", "Run", "RCP", "Model", "Prescription")) %>%
+  inner_join(harvestDfAll, by = c("Time", "Run", "RCP", "Model", "Prescription")) %>%
+  inner_join(fruitTreeAllDf, by = c("Time", "Run", "RCP", "Model", "Prescription")) %>%
+  rename(Fruit_Trees = Score) %>%
+  inner_join(cultureTreeAllDf, by = c("Time", "Run", "RCP", "Model", "Prescription")) %>%
+  rename(Culture_Trees = Score) %>%
+  inner_join(AWBAllDf, by = c("Time", "Run", "RCP", "Model", "Prescription")) %>%
+  mutate(ANPP = AG_NPPC * 2,
+         Fruit_Trees = as.numeric(Fruit_Trees)) %>%
+  group_by(Time, Model, RCP, Prescription) %>%
+  summarise_all(mean) %>%
+  ungroup() %>%
+  select(-Time,-Run,-Model,-Prescription,-RCP,-BG_NPPC,-AG_NPPC) %>%
+  scale(.) %>%
+  as.data.frame()
+
+columnPairs <- combn(colnames(df), 2, simplify = FALSE)
+bagplots <- "C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/Bagplots"
+
+plot_files <- list()
+for (pair in columnPairs) {
+  x <- pair[1]
+  y <- pair[2]
+  filename <- paste0(bagplots, "/", x, "vs", y, ".png")
+  plot_files[[paste(x, y, sep = "_")]] <- filename
+  # png(filename, width = 1000, height = 1000)
+  bag <- bagplot(df[, c(x, y)],
+                 show.outlier = TRUE, 
+                 show.whiskers = FALSE, 
+                 col.loophull = "lightblue", 
+                 col.baghull = "dodgerblue",
+                 main = paste(x, "vs", y))
+  
+  x_median_plot <- bag$center[1]
+  y_median_plot <- bag$center[2]
+  
+  abline(v = x_median_plot, col = "black", lty = 2)
+  abline(h = y_median_plot, col = "black", lty = 2)
+}
+# dev.off()
+
+corDf
+
+col_names <- colnames(df)
+n <- length(col_names)
+plot_list <- vector("list", length = n * n)
+
+for (i in 1:n) {
+  for (j in 1:n) {
+    index <- (i-1) * n + j
+    if (i > j) {
+      img_path <- plot_files[[paste(col_names[j], col_names[i], sep = "_")]]
+      plot_list[[index]] <- rasterGrob(as.raster(png::readPNG(img_path)), interpolate = TRUE)
+    } else {
+      plot_list[[index]] <- nullGrob()
+    }
+  }
+}
+
+grid.arrange(grobs = plot_list, nrow = n, ncol = n)
+
+
+# Get correlation data across all timesteps
+corDf <- cor(df, use = "pairwise.complete.obs") %>%
+  as.data.frame()
+names <- sort(colnames(corDf))
+corDf <- corDf[names,names]
+corDf[upper.tri(corDf, diag = TRUE)] <- NA
+corDf[corDf == 1] <- NA
+# Get cumulative r scores to determine 
+corDf <- corDf %>%
+  summarise_all(sum, na.rm = TRUE) %>%
+  rbind(corDf, .)
+row.names(corDf)[12] <- "Total"
+
+
+corDfFiltered <- corDf
+corDfFiltered[corDfFiltered > 0.8 | corDfFiltered < -0.8] <- NA
+corDfFiltered <- corDfFiltered[-12,] %>%
+  summarise_all(sum, na.rm = TRUE) %>%
+  `row.names<-`("Total") %>%
+  rbind(corDfFiltered[-12,], .)
+
+
+test <- corDfFiltered[-12,]
+test[upper.tri(test, diag = TRUE)] <- NA
+
+test <- unlist(test) %>% as.data.frame()
+
+
+
+mean <- mean(test$., na.rm = TRUE)
+sd <- sd(test$., na.rm = TRUE)
+
+# Generate x values for normal distribution curve
+xVals <- seq(min(test$., na.rm = TRUE), max(test$., na.rm = TRUE), length.out = 100)
+
+# Compute density values
+densityVals <- dnorm(xVals, mean = mean, sd = sd)
+
+# Create data frame for the normal curve
+densityDf <- data.frame(x = xVals, y = densityVals)
+
+# Plot
+ggplot(test, aes(x = .)) +
+  geom_histogram(aes(y = ..density..), bins = 30, fill = "lightblue", color = "black", alpha = 0.5) +  # Histogram
+  geom_line(data = densityDf, aes(x = x, y = y), color = "red", size = 1) +  # Normal distribution curve
+  geom_vline(xintercept = mean, color = "blue", linetype = "dashed", size = 1) +  # Mean line
+  geom_vline(xintercept = mean + sd, color = "blue") +
+  geom_vline(xintercept = mean + sd + sd, color = "blue") +
+  geom_vline(xintercept = mean - sd, color = "blue") +
+  geom_vline(xintercept = mean - sd - sd, color = "blue") +
+  labs(title = "Distribution Curve with Mean and SD",
+       x = "Value",
+       y = "Density") +
+  theme_minimal()
+
+test[!is.na(test)] %>%
+  as.data.frame() %>%
+  filter(. < mean + sd & . > mean - sd)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

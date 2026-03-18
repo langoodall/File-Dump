@@ -1,0 +1,286 @@
+---
+title: "NMDS"
+output: pdf_document
+date: "2025-05-19"
+---
+
+```{r, message = FALSE, warning = FALSE}
+library(tidyverse)
+library(terra)
+library(sf)
+```
+
+
+
+```{r}
+mainDir <- "D:/Landis Outputs"
+scenarios <- c("Resistance", "Resilience", "Transition")
+rcps <- c("RCP45", "RCP85")
+climates <- c("HSHV", "HSLV", "LSHV", "LSLV")
+runs <- paste0("run", 1:5)
+years <- seq(10,80,10)
+
+normaliseRaster <- function(r) {
+  rMin <- global(r, fun = "min", na.rm = TRUE)[[1]]
+  rMax <- global(r, fun = "max", na.rm = TRUE)[[1]]
+  (r - rMin) / (rMax - rMin)
+}
+
+#----ABOVEGROUND BIOMASS----#
+rastersAGB <- list()
+for (scenario in scenarios) {
+  for (rcp in rcps) {
+    for (climate in climates) {
+      for (run in runs) {
+        for (year in years){
+        filePath <- file.path(mainDir, scenario, rcp, climate, run, paste0("output/biomass/bio-TotalBiomass-", year, ".img"))
+        filename <- paste0(scenario, "_", rcp, "_", climate, "_", run, "_", "Total-Biomass-", year)
+        raster <- rast(filePath) %>% flip()
+        crs(raster) <- "epsg:26917"
+        writeRaster(raster,
+                    filename = paste0("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/NMDS/AGB/", filename, ".tif"),
+                    datatype = "FLT4S",
+                    NAflag = 0,
+                    overwrite = TRUE)
+        }
+      }
+    }
+  }
+}
+gc()
+
+#----ANNUAL NET PRIMARY PRODUCTIVITY----#
+rastersANPP <- list()
+for (scenario in scenarios) {
+  for (rcp in rcps) {
+    for (climate in climates) {
+      for (run in runs) {
+        for (year in years){
+        filePath <- file.path(mainDir, scenario, rcp, climate, run, paste0("AG_NPP-", year, ".img"))
+        filename <- paste0(scenario, "_", rcp, "_", climate, "_", run, "_", "ANPP-", year)
+        raster <- rast(filePath) %>% flip()
+        crs(raster) <- "epsg:26917"
+        rastersANPP[[filename]] <- raster
+        writeRaster(raster,
+                    filename = paste0("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/NMDS/ANPP/", filename, ".tif"),
+                    datatype = "FLT4S",
+                    NAflag = 0,
+                    overwrite = TRUE)
+        }
+      }
+    }
+  }
+}
+gc()
+
+#----ANNUAL WATER BUDGET----#
+# Read in all the rasters to a list
+rastersAWB <- list()
+for (scenario in scenarios) {
+  for (rcp in rcps) {
+    for (climate in climates) {
+      for (run in runs) {
+        for (year in years){
+        filePath <- file.path(mainDir, scenario, rcp, climate, run, paste0("Annual-water-budget-", year, ".img"))
+        filename <- paste0(scenario, "_", rcp, "_", climate, "_", run, "_", "Annual-water-budget-", year)
+        raster <- rast(filePath) %>% flip()
+        crs(raster) <- "epsg:26917"
+        writeRaster(raster,
+                    filename = paste0("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/NMDS/AWB/", filename, ".tif"),
+                    datatype = "FLT4S",
+                    NAflag = 0,
+                    overwrite = TRUE)
+        }
+      }
+    }
+  }
+}
+gc()
+# rastersAWB_norm <- lapply(rastersAWB, normaliseRaster)
+
+#----ANNUAL NET ECOSYSTEM EXCHANGE----#
+# Read in all the rasters to a list
+rastersANEE <- list()
+for (scenario in scenarios) {
+  for (rcp in rcps) {
+    for (climate in climates) {
+      for (run in runs) {
+        for (year in years){
+        filePath <- file.path(mainDir, scenario, rcp, climate, run, paste0("ANEE-", year, ".img"))
+        filename <- paste0(scenario, "_", rcp, "_", climate, "_", run, "_", "ANEE-", year)
+        raster <- rast(filePath) %>% flip()
+        crs(raster) <- "epsg:26917"
+        writeRaster(raster,
+                    filename = paste0("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/NMDS/ANEE/", filename, ".tif"),
+                    datatype = "FLT4S",
+                    NAflag = 0,
+                    overwrite = TRUE)
+        }
+      }
+    }
+  }
+}
+gc()
+
+#----CARBON----#
+# Read in all the rasters to a list
+rastersCarbon <- list()
+for (scenario in scenarios) {
+  for (rcp in rcps) {
+    for (climate in climates) {
+      for (run in runs) {
+        for (year in years){
+        filePath <- file.path(mainDir, scenario, rcp, climate, run, paste0("TotalC-", year, ".img"))
+        filename <- paste0(scenario, "_", rcp, "_", climate, "_", run, "_", "TotalC-", year)
+        raster <- rast(filePath) %>% flip()
+        crs(raster) <- "epsg:26917"
+        writeRaster(raster,
+                    filename = paste0("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/NMDS/CARBON/", filename, ".tif"),
+                    datatype = "FLT4S",
+                    NAflag = 0,
+                    overwrite = TRUE)
+        }
+      }
+    }
+  }
+}
+gc()
+
+#----CULTURAL TREES----#
+directory <- "D:/ALL RASTERS/Cultural_Maps"
+files <- list.files(directory, full.names = TRUE, pattern = "\\.tif$")
+rastersCulture <- list()
+for (i in files) {
+  fname <- basename(i)
+  fname_no_ext <- tools::file_path_sans_ext(fname)
+  parts <- strsplit(fname_no_ext, "_")[[1]]
+  new_name <- paste0(paste(head(parts, -1), collapse = "_"), "_Cultural_", tail(parts, 1))
+  raster <- rast(i)
+  crs(raster) <- "epsg:26917"
+  writeRaster(raster,
+                    filename = paste0("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/NMDS/CULTURE/", filename, ".tif"),
+                    datatype = "FLT4S",
+                    NAflag = 0,
+                    overwrite = TRUE)
+}
+gc()
+
+#----FRUIT NUT TREES----#
+directory <- "D:/ALL RASTERS/Fruit_Nut_Maps"
+files <- list.files(directory, full.names = TRUE, pattern = "\\.tif$")
+rastersFruitNut <- list()
+for (i in files) {
+  fname <- basename(i)
+  fname_no_ext <- tools::file_path_sans_ext(fname)
+  parts <- strsplit(fname_no_ext, "_")[[1]]
+  new_name <- paste0(paste(head(parts, -1), collapse = "_"), "_Fruit_Nut_", tail(parts, 1))
+  raster <- rast(i)
+  crs(raster) <- "epsg:26917"
+  writeRaster(raster,
+                    filename = paste0("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/NMDS/FRUITNUT/", filename, ".tif"),
+                    datatype = "FLT4S",
+                    NAflag = 0,
+                    overwrite = TRUE)
+}
+gc()
+
+#----HARVEST----#
+# Read in all the rasters to a list
+rastersHarvest <- list()
+for (scenario in scenarios) {
+  for (rcp in rcps) {
+    for (climate in climates) {
+      for (run in runs) {
+        for (year in years){
+        filePath <- file.path(mainDir, scenario, rcp, climate, run, paste0("Harvest/biomass-removed-", year, ".img"))
+        filename <- paste0(scenario, "_", rcp, "_", climate, "_", run, "_", "Total-Harvest-", year)
+        raster <- rast(filePath) %>% flip() %>%
+          ifel(is.na(.), 0, .)
+        crs(raster) <- "epsg:26917"
+        writeRaster(raster,
+                    filename = paste0("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/NMDS/HARVEST/", filename, ".tif"),
+                    datatype = "FLT4S",
+                    NAflag = 0,
+                    overwrite = TRUE)
+        }
+      }
+    }
+  }
+}
+gc()
+
+#----SOMTC----#
+# Read in all the rasters to a list
+rastersSOMTC <- list()
+for (scenario in scenarios) {
+  for (rcp in rcps) {
+    for (climate in climates) {
+      for (run in runs) {
+        for (year in years){
+        filePath <- file.path(mainDir, scenario, rcp, climate, run, paste0("SOMTC-", year, ".img"))
+        filename <- paste0(scenario, "_", rcp, "_", climate, "_", run, "_", "SOMTC-", year)
+        raster <- rast(filePath) %>% flip()
+        crs(raster) <- "epsg:26917"
+        writeRaster(raster,
+                    filename = paste0("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/NMDS/SOMTC/", filename, ".tif"),
+                    datatype = "FLT4S",
+                    NAflag = 0,
+                    overwrite = TRUE)
+        }
+      }
+    }
+  }
+}
+gc()
+
+#----STRUCTURAL DIVERSITY----#
+directory <- "D:/ALL RASTERS/Structural_Diversity_Maps"
+files <- list.files(directory, full.names = TRUE, pattern = "\\.tif$")
+rastersStrDiv <- list()
+for (i in files) {
+  fname <- basename(i)
+  fname_no_ext <- tools::file_path_sans_ext(fname)
+  parts <- strsplit(fname_no_ext, "_")[[1]]
+  new_name <- paste0(paste(head(parts, -1), collapse = "_"), "_StrDiv_", tail(parts, 1))
+  raster <- rast(i)
+  crs(raster) <- "epsg:26917"
+  writeRaster(raster,
+                    filename = paste0("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/NMDS/STRDIV/", filename, ".tif"),
+                    datatype = "FLT4S",
+                    NAflag = 0,
+                    overwrite = TRUE)
+}
+gc()
+
+#----DIVERSITY----#
+directory <- "C:Users/lagoodal/Documents/TEST HPC OUTPUTS/DIVERSITY/"
+files <- list.files(directory, full.names = TRUE, pattern = "\\.tif$")
+rastersDiversity <- list()
+for (i in files) {
+  fname <- basename(i)
+  fname_no_ext <- tools::file_path_sans_ext(fname)
+  parts <- strsplit(fname_no_ext, "_")[[1]]
+  new_name <- paste0(paste(head(parts, -1), collapse = "_"), "_Fruit_Nut_", tail(parts, 1))
+  raster <- rast(i)
+  crs(raster) <- "epsg:26917"
+  writeRaster(raster,
+                    filename = paste0("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/NMDS/FRUITNUT/", filename, ".tif"),
+                    datatype = "FLT4S",
+                    NAflag = 0,
+                    overwrite = TRUE)
+}
+gc()
+```
+
+
+
+
+
+
+
+
+
+
+
+
+

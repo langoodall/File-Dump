@@ -1,0 +1,325 @@
+---
+title: "Untitled"
+output: pdf_document
+date: "2025-05-02"
+---
+
+
+```{r, warning = FALSE, message = FALSE}
+library(tidyverse)
+library(terra)
+library(sf)
+library(data.table)
+library(lidR)
+templateRaster <- rast("D:/Landis Outputs/Raster Template/templateRaster.tif")
+softwoods <- c("JUVI","PIEC2","PIPA2","PIST","PITA","PIVI2","TAAS","TADI2")
+oaks <- c("QUAL","QUCO2","QUFA","QULA3","QUNI","QUPH","QUPR2","QURU","QUST","QUVE")
+hardwoods <- c("ACRU","CAAL27","CAGL8","FAGR","FRAM2","FRPE","LIST2","LITU","NYBI","NYSY","OXAR","PRSE2")
+```
+
+
+
+```{r}
+mainDir <- "D:/Landis Outputs"
+scenarios <- c("Resistance", "Resilience", "Transition")
+rcps <- c("RCP45", "RCP85")
+climates <- c("HSHV", "HSLV", "LSHV", "LSLV")
+runs <- paste0("run",1:5)
+
+biomassList <- list()
+for (scenario in scenarios) {
+  for (rcp in rcps) {
+    for (climate in climates) {
+      for (run in runs) {
+          filePath <- file.path(mainDir, scenario, rcp, climate, run, paste0("spp-biomass-log.csv"))
+          csv <- fread(filePath)
+          name <- paste(scenario, rcp, climate, run, sep = "_")
+          csv <- csv[,-34]
+          csv <- csv %>% filter(EcoName != "inactive")
+          csv <- csv %>% pivot_longer(cols = c("AboveGroundBiomass_ACRU":"AboveGroundBiomass_TADI2"),
+                                      names_to = "Species", values_to = "Biomass")
+          csv <- csv %>% mutate(Species = str_replace(Species, "^[^_]*_", ""))
+          csv <- csv %>% mutate(Name = as.character(name)) %>%
+            bind_cols(str_split_fixed(.$Name, "_", 4) %>%
+                        as.data.frame() %>%
+                        setNames(c("Prescription", "RCP", "Model", "run")))
+          biomassList[[name]] <- csv
+      }
+    }
+  }
+}
+
+csv %>% arrange(EcoName)
+
+
+biomassDf <- do.call(rbind, biomassList)
+
+biomassDf <- biomassDf %>%
+  group_by(Time, EcoName, Prescription, RCP, Model, Species) %>%
+  summarise(Biomass = weighted.mean(Biomass, w = NumActiveSites, na.rm = TRUE), .groups = "drop") %>%
+  group_by(Time, Prescription, RCP, Model, Species) %>%
+  summarise(Biomass = mean(Biomass), .groups = "drop") %>%
+  group_by(Time, Prescription, RCP, Model) %>%
+  mutate(Proportion = Biomass / sum(Biomass),
+         FunctionalGroup = case_when(
+           Species %in% softwoods ~ "Softwoods",
+           Species %in% oaks ~ "Oaks",
+           TRUE ~ "Hardwoods"
+         ))
+
+
+biomassDf %>%
+  filter(Time == 10) %>%
+  ggplot(., aes(x = Model, y = Proportion, fill = FunctionalGroup)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  facet_grid(RCP ~ Prescription)
+
+biomassDf %>%
+  filter(Time == 80) %>%
+  ggplot(., aes(x = Model, y = Proportion, fill = FunctionalGroup)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  facet_grid(RCP ~ Prescription)
+
+biomassDf %>%
+  filter(Time == 80) %>%
+  ggplot(., aes(x = Model, y = Proportion, fill = Species)) +
+  geom_bar(stat = "identity", col = "black") +
+  theme_classic() +
+  facet_grid(RCP ~ Prescription)
+
+
+biomassDf %>%
+  filter(Time != 0) %>%
+  group_by(Time, Prescription, RCP, Model, FunctionalGroup) %>%
+  summarise(Biomass = sum(Biomass),
+            Proportion = sum(Proportion)) %>%
+  ggplot(., aes(x = Time, y = Biomass, fill = FunctionalGroup)) +
+  geom_area() +
+  theme_classic() +
+  facet_grid(RCP ~ Prescription) +
+  scale_fill_manual(values = c(
+      "Hardwoods" = "#0072B2",
+      "Softwoods" = "#E69F00",
+      "Oaks"      = "#999999"
+    ))
+
+biomassDf %>%
+  filter(Time != 0) %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance", "Resilience", "Transition"))) %>%
+  group_by(Time, Prescription, RCP, Model, FunctionalGroup) %>%
+  summarise(Biomass = sum(Biomass),
+            Proportion = sum(Proportion)) %>%
+  ggplot(., aes(x = Time, y = Biomass, fill = FunctionalGroup)) +
+  geom_area() +
+  theme_classic() +
+  facet_grid(RCP ~ Prescription) +
+  scale_fill_manual(values = c(
+      "Hardwoods" = "seagreen4",
+      "Softwoods" = "#E69F00",
+      "Oaks"      = "firebrick3"
+    ),
+    name = "Functional Group") +
+  scale_x_continuous(breaks = c(0,20,40,60,80), labels = c(2020,2040,2060,2080,20100)) +
+  scale_y_continuous(breaks = c(0, 2.5e3, 5e3, 7.5e3, 1e4, 1.25e4), labels = c(0, 2.5, 5, 7.5, 10, 12.5), name = "Residual Biomass (kg/m2)")
+
+
+ggsave(filename = "AGB_Area.png",
+       path = "C:/Users/lagoodal/Pictures/",
+       width = 16,
+       height = 10,
+       dpi = 300)
+
+biomassDf %>%
+  filter(Time != 0) %>%
+  mutate(Prescription = factor(Prescription, levels = c("Resistance", "Resilience", "Transition"))) %>%
+  group_by(Time, Prescription, RCP, Model, FunctionalGroup) %>%
+  summarise(Biomass = sum(Biomass),
+            Proportion = sum(Proportion)) %>%
+  ggplot(., aes(x = Time, y = Biomass, fill = FunctionalGroup)) +
+  geom_area() +
+  theme_classic() +
+  facet_grid(Model ~ Prescription) +
+  scale_fill_manual(values = c(
+      "Hardwoods" = "seagreen4",
+      "Softwoods" = "#E69F00",
+      "Oaks"      = "firebrick3"
+    ),
+    name = "Functional Group") +
+  scale_x_continuous(breaks = c(0,20,40,60,80), labels = c(2020,2040,2060,2080,20100)) +
+  scale_y_continuous(breaks = c(0, 2.5e3, 5e3, 7.5e3, 1e4, 1.25e4), labels = c(0, 2.5, 5, 7.5, 10, 12.5), name = "Residual Biomass (kg/m2)")
+```
+
+
+
+```{r}
+mainDir <- "D:/Landis Outputs"
+scenarios <- c("Resistance", "Resilience", "Transition")
+rcps <- c("RCP45", "RCP85")
+climates <- c("HSHV", "HSLV", "LSHV", "LSLV")
+runs <- paste0("run",1:5)
+
+# Soil N
+rasterList <- list()
+for (scenario in scenarios) {
+  for (rcp in rcps) {
+    for (climate in climates) {
+      for (run in runs) {
+          img_file <- file.path(mainDir, scenario, rcp, climate, run, paste0("SoilN-", 80, ".img"))
+          raster <- rast(img_file)
+          crs(raster) <- "epsg:26917"
+          raster <- flip(raster)
+          ext(raster) <- ext(templateRaster)
+          
+          
+          
+          name <- paste(scenario, rcp, climate, run, "80", sep = "_")
+          rasterList[[name]] <- raster
+      }
+    }
+  }
+}
+
+
+
+lapply(names(rasterList), function(x) {
+  raster_object <- rasterList[[x]]
+  plot(raster_object, main = x) 
+})
+
+
+# Total Harvest
+rasterList <- list()
+for (scenario in scenarios) {
+  for (rcp in rcps) {
+    for (climate in climates) {
+      for (run in runs) {
+          img_file <- file.path(mainDir, scenario, rcp, climate, run, "Harvest", paste0("biomass-removed-", 80, ".img"))
+          raster <- rast(img_file)
+          crs(raster) <- "epsg:26917"
+          raster <- flip(raster)
+          ext(raster) <- ext(templateRaster)
+          
+          
+          
+          name <- paste(scenario, rcp, climate, run, "80", sep = "_")
+          rasterList[[name]] <- raster
+      }
+    }
+  }
+}
+
+lapply(names(rasterList), function(x) {
+  raster_object <- rasterList[[x]]
+  plot(raster_object, main = x) 
+})
+
+# ANPP
+rasterList <- list()
+for (scenario in scenarios) {
+  for (rcp in rcps) {
+    for (climate in climates) {
+      for (run in runs) {
+          img_file <- file.path(mainDir, scenario, rcp, climate, run, paste0("AG_NPP-", 80, ".img"))
+          raster <- rast(img_file)
+          crs(raster) <- "epsg:26917"
+          raster <- flip(raster)
+          ext(raster) <- ext(templateRaster)
+          
+          
+          
+          name <- paste(scenario, rcp, climate, run, "80", sep = "_")
+          rasterList[[name]] <- raster
+      }
+    }
+  }
+}
+
+lapply(names(rasterList), function(x) {
+  raster_object <- rasterList[[x]]
+  plot(raster_object, main = x) 
+})
+```
+
+
+
+
+
+```{r}
+rhdf5::h5ls("C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/USGS_LPC_MN_RainyLake_2020_B20_15TWP547307.laz")
+
+library(rhdf5)
+
+
+
+readRDS("C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/GEDI/fracCoverage.rds")
+
+
+x <- rast("C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/GEDI/fortypcdBWCA.tif") %>% project(., "epsg:26915", method = "near", res = c(30,30))
+plot(x)
+
+writeRaster(x,
+            filename = "C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/GEDI/fortypcdBWCA_UTM.tif",
+            NAflag = 0,
+            overwrite = TRUE)
+
+
+
+gediMatched <- st_read("C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/GEDI/gediMatched.shp")
+lidar <- lidR::readALS("C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/GEDI/USGS_LPC_MN_RainyLake_2020_B20_15TWP559315.laz")
+
+st_crs(gediMatched)
+st_crs(st_as_sf(lidar))
+
+sum(st_intersects(gediMatched, st_as_sf(lidar), sparse = FALSE))
+
+
+library(tidyverse)
+library(terra)
+library(sf)
+library(lidR)
+library(data.table)
+library(minpack.lm)
+library(gstat)
+
+# Read in the data that we will need
+gediMatched <- st_read("C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/GEDI/gediMatched.shp")
+fortypcdBWCA_UTM <- rast("/share/tcsi/lagoodal/GEDI/Storage/fortypcdBWCA.tif") %>% project(., "epsg:26915", method = "near", res = c(30,30))
+treeMN <- fread("/share/tcsi/lagoodal/GEDI/Storage/MN_TREE.csv")
+cbdRast <- rast("/share/tcsi/lagoodal/GEDI/Storage/cbdRast.tif")
+canopyCoverRast <- rast("/share/tcsi/lagoodal/GEDI/Storage/canopyCoverRast.tif")
+source("/share/tcsi/lagoodal/GEDI/Storage/lidarMetrics.R")
+
+# Read in and set analysis parameters of the lidar point clouds
+LAS <- readLAScatalog("C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/GEDI/", select = "xyzc")
+opt_chunk_size(LAS) <- 250
+opt_chunk_buffer(LAS) <- 15
+LAS@data$code <- str_extract(LAS@data$filename, "[A-Z]{3}[0-9]{6}")
+
+# Create a dataframe of the rows that match the lidar point cloud locations
+gediDf <- gediMatched %>% filter(code %in% unique(LAS@data$code))
+gediCodes <- unique(gediDf$code)
+matchedCodes <- LAS@data$code[LAS@data$code %in% gediCodes]
+LAS <- LAS[LAS@data$code %in% gediCodes, ]
+
+
+LAS@data %>% as.data.frame()
+```
+
+
+```{r}
+x <- st_read("C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/GEDI/metricsDf.shp")
+
+x %>% as.data.frame()
+
+
+crs(x)
+crs(rast("C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/GEDI/canopyCoverRast.tif"))
+
+
+plot(rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Hurricane/test_135_wind_fix.tif"))
+plot(rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Hurricane/test_180_wind_fix.tif"))
+plot(rast("C:/Users/lagoodal/Desktop/Dissertation Stuff/Hurricane/test_225_wind_fix.tif"))
+```
+

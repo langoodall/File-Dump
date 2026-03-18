@@ -1,0 +1,699 @@
+---
+title: "Untitled"
+output: pdf_document
+date: "2025-09-04"
+---
+
+```{r, message = FALSE, warning = FALSE}
+library(tidyverse)
+library(terra)
+library(sf)
+library(data.table)
+library(vegan)
+library(adespatial)
+templateRaster <- rast("D:/Landis Outputs/Raster Template/templateRaster.tif")
+```
+
+# Clean raster loops
+
+```{r}
+#----ABOVEGROUND BIOMASS----#
+directory <- "D:/Historical_LANDIS/Resistance"
+outDirectory <- "C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/HPC_ES_MAPS"
+runs <- paste0("run", 1:5)
+timesteps <- seq(10,80,10)
+
+for (run in runs) {
+  for (timestep in timesteps) {
+    filePath <- file.path(paste0(directory, "/", run, "/output/biomass/bio-TotalBiomass-", timestep, ".img"))
+    raster <- rast(filePath) %>% flip()
+    crs(raster) <- crs(templateRaster)
+    ext(raster) <- ext(templateRaster)
+    timestepDir <- file.path(outDirectory, timestep, "AGB")
+    outFile <- file.path(timestepDir, "Historical.tif")
+    writeRaster(raster, filename = outFile, NAflag = 0, datatype = "FLT4S", overwrite = TRUE)
+  }
+}
+
+#----ANNUAL WATER BUDGET----#
+for (run in runs) {
+  for (timestep in timesteps) {
+    filePath <- file.path(paste0(directory, "/", run, "/Annual-water-budget-", timestep, ".img"))
+    raster <- rast(filePath) %>% flip()
+    crs(raster) <- crs(templateRaster)
+    ext(raster) <- ext(templateRaster)
+    timestepDir <- file.path(outDirectory, timestep, "AWB")
+    outFile <- file.path(timestepDir, "Historical.tif")
+    writeRaster(raster, filename = outFile, NAflag = 0, datatype = "FLT4S", overwrite = TRUE)
+  }
+}
+
+#----ANPP----#
+for (run in runs) {
+  for (timestep in timesteps) {
+    filePath <- file.path(paste0(directory, "/", run, "/AG_NPP-", timestep, ".img"))
+    raster <- rast(filePath) %>% flip()
+    crs(raster) <- crs(templateRaster)
+    ext(raster) <- ext(templateRaster)
+    timestepDir <- file.path(outDirectory, timestep, "ANPP")
+    outFile <- file.path(timestepDir, "Historical.tif")
+    writeRaster(raster, filename = outFile, NAflag = 0, datatype = "FLT4S", overwrite = TRUE)
+  }
+}
+
+#----CARBON----#
+for (run in runs) {
+  for (timestep in timesteps) {
+    filePath <- file.path(paste0(directory, "/", run, "/TotalC-", timestep, ".img"))
+    raster <- rast(filePath) %>% flip()
+    crs(raster) <- crs(templateRaster)
+    ext(raster) <- ext(templateRaster)
+    timestepDir <- file.path(outDirectory, timestep, "CARBON")
+    outFile <- file.path(timestepDir, "Historical.tif")
+    writeRaster(raster, filename = outFile, NAflag = 0, datatype = "FLT4S", overwrite = TRUE)
+  }
+}
+
+#----CULTURE----#
+directory <- "C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/File Dump/Cultural_Maps"
+rcps     <- c("RCP45", "RCP85", "Historical")
+climates <- c("HSHV", "HSLV", "LSHV", "LSLV", "NA")
+timesteps <- as.character(seq(10, 80, 10))
+
+# build all combos (avoid factors)
+combos <- expand.grid(RCP = rcps, Climate = climates, Timestep = timesteps, stringsAsFactors = FALSE)
+
+# keep only valid combinations
+validCombos <- combos %>%
+  filter((RCP == "Historical" & Climate == "NA") | (RCP %in% c("RCP45", "RCP85") & Climate != "NA")) %>%
+  mutate(inFile  = file.path(directory, paste0("Resistance_", RCP, "_", Climate, "_", Timestep, ".tif")),
+         outDir  = file.path(outDirectory, Timestep, "CULTURE"),
+         outFile = file.path(outDir, paste0("Resistance_", RCP, "_", Climate, "_", Timestep, ".tif")))
+
+# Loop through each valid combination
+for (i in seq_len(nrow(validCombos))) {
+  filePath <- validCombos$inFile[i]
+  outPath  <- validCombos$outFile[i]
+  raster <- rast(filePath)
+  crs(raster) <- crs(templateRaster)
+  ext(raster) <- ext(templateRaster)
+  writeRaster(raster, filename = outPath, overwrite = TRUE, datatype = "FLT4S", NAflag = 0)
+}
+
+#----DIVERSITY----#
+directory <- "C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/File Dump/Diversity_Maps"
+combos <- expand.grid(RCP = rcps, Climate = climates, Timestep = timesteps, stringsAsFactors = FALSE)
+validCombos <- combos %>%
+  filter((RCP == "Historical" & Climate == "NA") | (RCP %in% c("RCP45", "RCP85") & Climate != "NA")) %>%
+  mutate(inFile  = file.path(directory, paste0("Resistance_", RCP, "_", Climate, "_", Timestep, ".tif")),
+         outDir  = file.path(outDirectory, Timestep, "DIVERSITY"),
+         outFile = file.path(outDir, paste0("Resistance_", RCP, "_", Climate, "_", Timestep, ".tif")))
+
+# Loop through each valid combination
+for (i in seq_len(nrow(validCombos))) {
+  filePath <- validCombos$inFile[i]
+  outPath  <- validCombos$outFile[i]
+  raster <- rast(filePath)
+  crs(raster) <- crs(templateRaster)
+  ext(raster) <- ext(templateRaster)
+  writeRaster(raster, filename = outPath, overwrite = TRUE, datatype = "FLT4S", NAflag = 0)
+}
+
+#----FRUITNUT----#
+directory <- "C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/File Dump/Fruit_Maps"
+combos <- expand.grid(RCP = rcps, Climate = climates, Timestep = timesteps, stringsAsFactors = FALSE)
+validCombos <- combos %>%
+  filter((RCP == "Historical" & Climate == "NA") | (RCP %in% c("RCP45", "RCP85") & Climate != "NA")) %>%
+  mutate(inFile  = file.path(directory, paste0("Resistance_", RCP, "_", Climate, "_", Timestep, ".tif")),
+         outDir  = file.path(outDirectory, Timestep, "FRUITNUT"),
+         outFile = file.path(outDir, paste0("Resistance_", RCP, "_", Climate, "_", Timestep, ".tif")))
+
+# Loop through each valid combination
+for (i in seq_len(nrow(validCombos))) {
+  filePath <- validCombos$inFile[i]
+  outPath  <- validCombos$outFile[i]
+  raster <- rast(filePath)
+  crs(raster) <- crs(templateRaster)
+  ext(raster) <- ext(templateRaster)
+  writeRaster(raster, filename = outPath, overwrite = TRUE, datatype = "FLT4S", NAflag = 0)
+}
+
+#----HARVEST----#
+directory <- "D:/Historical_LANDIS/Resistance"
+outDirectory <- "C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/HPC_ES_MAPS"
+timesteps <- seq(10, 80, 10)
+for (run in runs) {
+  for (timestep in timesteps) {
+    filePath <- file.path(paste0(directory, "/", run, "/Harvest/biomass-removed-", timestep, ".img"))
+    raster <- rast(filePath) %>% flip()
+    crs(raster) <- crs(templateRaster)
+    ext(raster) <- ext(templateRaster)
+    timestepDir <- file.path(outDirectory, timestep, "HARVEST")
+    outFile <- file.path(timestepDir, "Historical.tif")
+    writeRaster(raster, filename = outFile, NAflag = 0, datatype = "FLT4S", overwrite = TRUE)
+  }
+}
+
+#----NEEC----#
+for (run in runs) {
+  for (timestep in timesteps) {
+    filePath <- file.path(paste0(directory, "/", run, "/ANEE-", timestep, ".img"))
+    raster <- rast(filePath) %>% flip()
+    crs(raster) <- crs(templateRaster)
+    ext(raster) <- ext(templateRaster)
+    timestepDir <- file.path(outDirectory, timestep, "NEEC")
+    outFile <- file.path(timestepDir, "Historical.tif")
+    writeRaster(raster, filename = outFile, NAflag = 0, datatype = "FLT4S", overwrite = TRUE)
+  }
+}
+
+#----SOMTC----#
+for (run in runs) {
+  for (timestep in timesteps) {
+    filePath <- file.path(paste0(directory, "/", run, "/SOMTC-", timestep, ".img"))
+    raster <- rast(filePath) %>% flip()
+    crs(raster) <- crs(templateRaster)
+    ext(raster) <- ext(templateRaster)
+    timestepDir <- file.path(outDirectory, timestep, "SOMTC")
+    outFile <- file.path(timestepDir, "Historical.tif")
+    writeRaster(raster, filename = outFile, NAflag = 0, datatype = "FLT4S", overwrite = TRUE)
+  }
+}
+
+#----STRUCTURE----#
+directory <- "C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/File Dump/Structure_Maps"
+combos <- expand.grid(RCP = rcps, Climate = climates, Timestep = timesteps, stringsAsFactors = FALSE)
+validCombos <- combos %>%
+  filter((RCP == "Historical" & Climate == "NA") | (RCP %in% c("RCP45", "RCP85") & Climate != "NA")) %>%
+  mutate(inFile  = file.path(directory, paste0("Resistance_", RCP, "_", Climate, "_", Timestep, ".tif")),
+         outDir  = file.path(outDirectory, Timestep, "STRUCTURE"),
+         outFile = file.path(outDir, paste0("Resistance_", RCP, "_", Climate, "_", Timestep, ".tif")))
+
+# Loop through each valid combination
+for (i in seq_len(nrow(validCombos))) {
+  filePath <- validCombos$inFile[i]
+  outPath  <- validCombos$outFile[i]
+  raster <- rast(filePath)
+  crs(raster) <- crs(templateRaster)
+  ext(raster) <- ext(templateRaster)
+  writeRaster(raster, filename = outPath, overwrite = TRUE, datatype = "FLT4S", NAflag = 0)
+}
+
+# Now I need to do the GCMs for each variable that remains
+#----ABOVEGROUND BIOMASS----#
+directory <- "D:/Landis Outputs/Resistance"
+rcps <- c("RCP45", "RCP85")
+climates <- c("HSHV", "HSLV", "LSHV", "LSLV")
+
+rasterList <- list()
+for (rcp in rcps) {
+  for (climate in climates) {
+    for (run in runs) {
+      for (timestep in timesteps) {
+        filePath <- file.path(paste0(directory, "/", rcp, "/", climate, "/", run, "/", "/output/biomass/bio-TotalBiomass-", timestep, ".img"))
+        raster <- rast(filePath) %>% flip()
+        crs(raster) <- crs(templateRaster)
+        ext(raster) <- ext(templateRaster)
+        name <- paste("Resistance", rcp, climate, run, timestep, sep = "_")
+        names(raster) <- name
+        rasterList[[name]] <- raster
+      }
+    }
+  }
+}
+
+rasterInfo <- tibble(
+  name = names(rasterList),
+  RCP = sub("^Resistance_(RCP[0-9]+)_.*$", "\\1", names(rasterList)),
+  Climate = sub("^Resistance_RCP[0-9]+_([A-Z]+)_.*$", "\\1", names(rasterList)),
+  Timestep = sub("^Resistance_RCP[0-9]+_[A-Z]+_run[0-9]+_([0-9]+)$", "\\1", names(rasterList))
+)
+
+rasterInfo <- rasterInfo %>% mutate(groupID = paste(RCP, Climate, Timestep, sep = "_"))
+averagedRasters <- list()
+for (gid in unique(rasterInfo$groupID)) {
+  subsetNames <- rasterInfo$name[rasterInfo$groupID == gid]
+  rasters <- rast(rasterList[subsetNames])
+  averaged <- mean(rasters, na.rm = TRUE)
+  names(averaged) <- paste0("Resistance_", gid)
+  averagedRasters[[gid]] <- averaged
+}
+
+outDirectory <- "C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/HPC_ES_MAPS"
+for (gid in names(averagedRasters)) {
+  r <- averagedRasters[[gid]]
+  parts <- strsplit(gid, "_")[[1]]
+  rcp <- parts[1]
+  climate <- parts[2]
+  timestep <- parts[3]
+  timestepDir <- file.path(outDirectory, timestep, "AGB")
+  dir.create(timestepDir, recursive = TRUE, showWarnings = FALSE)
+  outFile <- file.path(timestepDir, paste0("Resistance_", rcp, "_", climate, ".tif"))
+  writeRaster(r, filename = outFile, NAflag = 0, datatype = "FLT4S", overwrite = TRUE)
+}
+
+#----ANPP----#
+rasterList <- list()
+for (rcp in rcps) {
+  for (climate in climates) {
+    for (run in runs) {
+      for (timestep in timesteps) {
+        filePath <- file.path(paste0(directory, "/", rcp, "/", climate, "/", run, "/", "AG_NPP-", timestep, ".img"))
+        raster <- rast(filePath) %>% flip()
+        crs(raster) <- crs(templateRaster)
+        ext(raster) <- ext(templateRaster)
+        name <- paste("Resistance", rcp, climate, run, timestep, sep = "_")
+        names(raster) <- name
+        rasterList[[name]] <- raster
+      }
+    }
+  }
+}
+rasterInfo <- tibble(
+  name = names(rasterList),
+  RCP = sub("^Resistance_(RCP[0-9]+)_.*$", "\\1", names(rasterList)),
+  Climate = sub("^Resistance_RCP[0-9]+_([A-Z]+)_.*$", "\\1", names(rasterList)),
+  Timestep = sub("^Resistance_RCP[0-9]+_[A-Z]+_run[0-9]+_([0-9]+)$", "\\1", names(rasterList))
+)
+rasterInfo <- rasterInfo %>% mutate(groupID = paste(RCP, Climate, Timestep, sep = "_"))
+averagedRasters <- list()
+for (gid in unique(rasterInfo$groupID)) {
+  subsetNames <- rasterInfo$name[rasterInfo$groupID == gid]
+  rasters <- rast(rasterList[subsetNames])
+  averaged <- mean(rasters, na.rm = TRUE)
+  names(averaged) <- paste0("Resistance_", gid)
+  averagedRasters[[gid]] <- averaged
+}
+outDirectory <- "C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/HPC_ES_MAPS"
+for (gid in names(averagedRasters)) {
+  r <- averagedRasters[[gid]]
+  parts <- strsplit(gid, "_")[[1]]
+  rcp <- parts[1]
+  climate <- parts[2]
+  timestep <- parts[3]
+  timestepDir <- file.path(outDirectory, timestep, "ANPP")
+  dir.create(timestepDir, recursive = TRUE, showWarnings = FALSE)
+  outFile <- file.path(timestepDir, paste0("Resistance_", rcp, "_", climate, ".tif"))
+  writeRaster(r, filename = outFile, NAflag = 0, datatype = "FLT4S", overwrite = TRUE)
+}
+
+#----ANNUAL WATER BUDGET----#
+rasterList <- list()
+for (rcp in rcps) {
+  for (climate in climates) {
+    for (run in runs) {
+      for (timestep in timesteps) {
+        filePath <- file.path(paste0(directory, "/", rcp, "/", climate, "/", run, "/", "Annual-water-budget-", timestep, ".img"))
+        raster <- rast(filePath) %>% flip()
+        crs(raster) <- crs(templateRaster)
+        ext(raster) <- ext(templateRaster)
+        name <- paste("Resistance", rcp, climate, run, timestep, sep = "_")
+        names(raster) <- name
+        rasterList[[name]] <- raster
+      }
+    }
+  }
+}
+rasterInfo <- tibble(
+  name = names(rasterList),
+  RCP = sub("^Resistance_(RCP[0-9]+)_.*$", "\\1", names(rasterList)),
+  Climate = sub("^Resistance_RCP[0-9]+_([A-Z]+)_.*$", "\\1", names(rasterList)),
+  Timestep = sub("^Resistance_RCP[0-9]+_[A-Z]+_run[0-9]+_([0-9]+)$", "\\1", names(rasterList))
+)
+rasterInfo <- rasterInfo %>% mutate(groupID = paste(RCP, Climate, Timestep, sep = "_"))
+averagedRasters <- list()
+for (gid in unique(rasterInfo$groupID)) {
+  subsetNames <- rasterInfo$name[rasterInfo$groupID == gid]
+  rasters <- rast(rasterList[subsetNames])
+  averaged <- mean(rasters, na.rm = TRUE)
+  names(averaged) <- paste0("Resistance_", gid)
+  averagedRasters[[gid]] <- averaged
+}
+outDirectory <- "C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/HPC_ES_MAPS"
+for (gid in names(averagedRasters)) {
+  r <- averagedRasters[[gid]]
+  parts <- strsplit(gid, "_")[[1]]
+  rcp <- parts[1]
+  climate <- parts[2]
+  timestep <- parts[3]
+  timestepDir <- file.path(outDirectory, timestep, "AWB")
+  dir.create(timestepDir, recursive = TRUE, showWarnings = FALSE)
+  outFile <- file.path(timestepDir, paste0("Resistance_", rcp, "_", climate, ".tif"))
+  writeRaster(r, filename = outFile, NAflag = 0, datatype = "FLT4S", overwrite = TRUE)
+}
+
+#----CARBON----#
+rasterList <- list()
+for (rcp in rcps) {
+  for (climate in climates) {
+    for (run in runs) {
+      for (timestep in timesteps) {
+        filePath <- file.path(paste0(directory, "/", rcp, "/", climate, "/", run, "/", "TotalC-", timestep, ".img"))
+        raster <- rast(filePath) %>% flip()
+        crs(raster) <- crs(templateRaster)
+        ext(raster) <- ext(templateRaster)
+        name <- paste("Resistance", rcp, climate, run, timestep, sep = "_")
+        names(raster) <- name
+        rasterList[[name]] <- raster
+      }
+    }
+  }
+}
+rasterInfo <- tibble(
+  name = names(rasterList),
+  RCP = sub("^Resistance_(RCP[0-9]+)_.*$", "\\1", names(rasterList)),
+  Climate = sub("^Resistance_RCP[0-9]+_([A-Z]+)_.*$", "\\1", names(rasterList)),
+  Timestep = sub("^Resistance_RCP[0-9]+_[A-Z]+_run[0-9]+_([0-9]+)$", "\\1", names(rasterList))
+)
+rasterInfo <- rasterInfo %>% mutate(groupID = paste(RCP, Climate, Timestep, sep = "_"))
+averagedRasters <- list()
+for (gid in unique(rasterInfo$groupID)) {
+  subsetNames <- rasterInfo$name[rasterInfo$groupID == gid]
+  rasters <- rast(rasterList[subsetNames])
+  averaged <- mean(rasters, na.rm = TRUE)
+  names(averaged) <- paste0("Resistance_", gid)
+  averagedRasters[[gid]] <- averaged
+}
+outDirectory <- "C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/HPC_ES_MAPS"
+for (gid in names(averagedRasters)) {
+  r <- averagedRasters[[gid]]
+  parts <- strsplit(gid, "_")[[1]]
+  rcp <- parts[1]
+  climate <- parts[2]
+  timestep <- parts[3]
+  timestepDir <- file.path(outDirectory, timestep, "CARBON")
+  dir.create(timestepDir, recursive = TRUE, showWarnings = FALSE)
+  outFile <- file.path(timestepDir, paste0("Resistance_", rcp, "_", climate, ".tif"))
+  writeRaster(r, filename = outFile, NAflag = 0, datatype = "FLT4S", overwrite = TRUE)
+}
+
+#----HARVEST----#
+rasterList <- list()
+for (rcp in rcps) {
+  for (climate in climates) {
+    for (run in runs) {
+      for (timestep in timesteps) {
+        filePath <- file.path(paste0(directory, "/", rcp, "/", climate, "/", run, "/", "Harvest/biomass-removed-", timestep, ".img"))
+        raster <- rast(filePath) %>% flip()
+        crs(raster) <- crs(templateRaster)
+        ext(raster) <- ext(templateRaster)
+        name <- paste("Resistance", rcp, climate, run, timestep, sep = "_")
+        names(raster) <- name
+        rasterList[[name]] <- raster
+      }
+    }
+  }
+}
+rasterInfo <- tibble(
+  name = names(rasterList),
+  RCP = sub("^Resistance_(RCP[0-9]+)_.*$", "\\1", names(rasterList)),
+  Climate = sub("^Resistance_RCP[0-9]+_([A-Z]+)_.*$", "\\1", names(rasterList)),
+  Timestep = sub("^Resistance_RCP[0-9]+_[A-Z]+_run[0-9]+_([0-9]+)$", "\\1", names(rasterList))
+)
+rasterInfo <- rasterInfo %>% mutate(groupID = paste(RCP, Climate, Timestep, sep = "_"))
+averagedRasters <- list()
+for (gid in unique(rasterInfo$groupID)) {
+  subsetNames <- rasterInfo$name[rasterInfo$groupID == gid]
+  rasters <- rast(rasterList[subsetNames])
+  averaged <- mean(rasters, na.rm = TRUE)
+  names(averaged) <- paste0("Resistance_", gid)
+  averagedRasters[[gid]] <- averaged
+}
+outDirectory <- "C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/HPC_ES_MAPS"
+for (gid in names(averagedRasters)) {
+  r <- averagedRasters[[gid]]
+  parts <- strsplit(gid, "_")[[1]]
+  rcp <- parts[1]
+  climate <- parts[2]
+  timestep <- parts[3]
+  timestepDir <- file.path(outDirectory, timestep, "HARVEST")
+  dir.create(timestepDir, recursive = TRUE, showWarnings = FALSE)
+  outFile <- file.path(timestepDir, paste0("Resistance_", rcp, "_", climate, ".tif"))
+  writeRaster(r, filename = outFile, NAflag = 0, datatype = "FLT4S", overwrite = TRUE)
+}
+
+#----NEEC----#
+rasterList <- list()
+for (rcp in rcps) {
+  for (climate in climates) {
+    for (run in runs) {
+      for (timestep in timesteps) {
+        filePath <- file.path(paste0(directory, "/", rcp, "/", climate, "/", run, "/", "ANEE-", timestep, ".img"))
+        raster <- rast(filePath) %>% flip()
+        crs(raster) <- crs(templateRaster)
+        ext(raster) <- ext(templateRaster)
+        name <- paste("Resistance", rcp, climate, run, timestep, sep = "_")
+        names(raster) <- name
+        rasterList[[name]] <- raster
+      }
+    }
+  }
+}
+rasterInfo <- tibble(
+  name = names(rasterList),
+  RCP = sub("^Resistance_(RCP[0-9]+)_.*$", "\\1", names(rasterList)),
+  Climate = sub("^Resistance_RCP[0-9]+_([A-Z]+)_.*$", "\\1", names(rasterList)),
+  Timestep = sub("^Resistance_RCP[0-9]+_[A-Z]+_run[0-9]+_([0-9]+)$", "\\1", names(rasterList))
+)
+rasterInfo <- rasterInfo %>% mutate(groupID = paste(RCP, Climate, Timestep, sep = "_"))
+averagedRasters <- list()
+for (gid in unique(rasterInfo$groupID)) {
+  subsetNames <- rasterInfo$name[rasterInfo$groupID == gid]
+  rasters <- rast(rasterList[subsetNames])
+  averaged <- mean(rasters, na.rm = TRUE)
+  names(averaged) <- paste0("Resistance_", gid)
+  averagedRasters[[gid]] <- averaged
+}
+outDirectory <- "C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/HPC_ES_MAPS"
+for (gid in names(averagedRasters)) {
+  r <- averagedRasters[[gid]]
+  parts <- strsplit(gid, "_")[[1]]
+  rcp <- parts[1]
+  climate <- parts[2]
+  timestep <- parts[3]
+  timestepDir <- file.path(outDirectory, timestep, "NEEC")
+  dir.create(timestepDir, recursive = TRUE, showWarnings = FALSE)
+  outFile <- file.path(timestepDir, paste0("Resistance_", rcp, "_", climate, ".tif"))
+  writeRaster(r, filename = outFile, NAflag = 0, datatype = "FLT4S", overwrite = TRUE)
+}
+
+#----SOMTC----#
+rasterList <- list()
+for (rcp in rcps) {
+  for (climate in climates) {
+    for (run in runs) {
+      for (timestep in timesteps) {
+        filePath <- file.path(paste0(directory, "/", rcp, "/", climate, "/", run, "/", "SOMTC-", timestep, ".img"))
+        raster <- rast(filePath) %>% flip()
+        crs(raster) <- crs(templateRaster)
+        ext(raster) <- ext(templateRaster)
+        name <- paste("Resistance", rcp, climate, run, timestep, sep = "_")
+        names(raster) <- name
+        rasterList[[name]] <- raster
+      }
+    }
+  }
+}
+rasterInfo <- tibble(
+  name = names(rasterList),
+  RCP = sub("^Resistance_(RCP[0-9]+)_.*$", "\\1", names(rasterList)),
+  Climate = sub("^Resistance_RCP[0-9]+_([A-Z]+)_.*$", "\\1", names(rasterList)),
+  Timestep = sub("^Resistance_RCP[0-9]+_[A-Z]+_run[0-9]+_([0-9]+)$", "\\1", names(rasterList))
+)
+rasterInfo <- rasterInfo %>% mutate(groupID = paste(RCP, Climate, Timestep, sep = "_"))
+averagedRasters <- list()
+for (gid in unique(rasterInfo$groupID)) {
+  subsetNames <- rasterInfo$name[rasterInfo$groupID == gid]
+  rasters <- rast(rasterList[subsetNames])
+  averaged <- mean(rasters, na.rm = TRUE)
+  names(averaged) <- paste0("Resistance_", gid)
+  averagedRasters[[gid]] <- averaged
+}
+outDirectory <- "C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/HPC_ES_MAPS"
+for (gid in names(averagedRasters)) {
+  r <- averagedRasters[[gid]]
+  parts <- strsplit(gid, "_")[[1]]
+  rcp <- parts[1]
+  climate <- parts[2]
+  timestep <- parts[3]
+  timestepDir <- file.path(outDirectory, timestep, "SOMTC")
+  dir.create(timestepDir, recursive = TRUE, showWarnings = FALSE)
+  outFile <- file.path(timestepDir, paste0("Resistance_", rcp, "_", climate, ".tif"))
+  writeRaster(r, filename = outFile, NAflag = 0, datatype = "FLT4S", overwrite = TRUE)
+}
+```
+
+# Cumulative Rasters
+
+```{r}
+# Top-level directory containing timestep folders
+directory <- "C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/HPC_ES_MAPS"
+
+# Scenarios and timesteps
+scenarios <- c(
+  "Historical",
+  "Resistance_RCP45_HSHV",
+  "Resistance_RCP45_HSLV",
+  "Resistance_RCP45_LSHV",
+  "Resistance_RCP45_LSLV",
+  "Resistance_RCP85_HSHV",
+  "Resistance_RCP85_HSLV",
+  "Resistance_RCP85_LSHV",
+  "Resistance_RCP85_LSLV"
+)
+timesteps <- seq(10, 80, 10)
+
+# Function to normalize a raster
+normalize_raster <- function(r) {
+  vals <- values(r, mat = FALSE)
+  vals[is.na(vals)] <- 0
+  minV <- min(vals)
+  maxV <- max(vals)
+  
+  if (minV == maxV) {
+    vals[] <- 0
+  } else {
+    vals <- (vals - minV) / (maxV - minV)
+  }
+  
+  r[] <- vals
+  return(r)
+}
+
+# Prepare a list to store cumulative rasters for each scenario
+cumulativeScenarioRasters <- list()
+
+for (scenario in scenarios) {
+  timestepRasters <- list()
+  
+  for (timestep in timesteps) {
+    timestepFolder <- file.path(directory, as.character(timestep))
+    
+    # get all subfolders in this timestep folder
+    folders <- list.dirs(timestepFolder, recursive = FALSE)
+    rasterList <- list()
+    
+    for (folder in folders) {
+      pattern <- paste0(scenario, ".tif")
+      filePath <- list.files(folder, pattern = pattern, full.names = TRUE)
+      
+      if (length(filePath) == 0) next  # skip if no file
+      
+      r <- rast(filePath[1])
+      r <- normalize_raster(r)
+      
+      rasterList[[paste0(basename(folder), "_", timestep)]] <- r
+    }
+    
+    # Only process if at least 2 rasters found
+    if (length(rasterList) >= 2) {
+      rasterNames <- names(rasterList)
+      nRasters <- length(rasterList)
+      tradeoffList <- list()
+      
+      for (i in 1:(nRasters - 1)) {
+        for (j in (i + 1):nRasters) {
+          rA <- rasterList[[i]]
+          rB <- rasterList[[j]]
+          tradeoff <- abs(rA - rB) * (1 / sqrt(2))
+          pairName <- paste0(rasterNames[i], "_vs_", rasterNames[j])
+          tradeoffList[[pairName]] <- tradeoff
+        }
+      }
+      
+      timestepStack <- rast(tradeoffList)
+      timestepRasters[[as.character(timestep)]] <- app(timestepStack, sum, na.rm = TRUE)
+    }
+  }
+  
+  # Sum across all timesteps for this scenario
+  if (length(timestepRasters) > 0) {
+    scenarioStack <- rast(timestepRasters)
+    cumulativeScenarioRasters[[scenario]] <- app(scenarioStack, sum, na.rm = TRUE)
+  }
+}
+
+# cumulativeScenarioRasters now contains the summed tradeoffs for all scenarios across all timesteps
+
+
+for (i in 1:9) {
+writeRaster(cumulativeScenarioRasters[[i]],
+            filename = paste0("C:/Users/lagoodal/Desktop/Dissertation Stuff/Chapter 2/HPC_ES_MAPS/Finished_Cumulative/",
+                              names(cumulativeScenarioRasters)[i], ".tif"),
+            NAflag = 0,
+            overwrite = TRUE,
+            datatype = "FLT4S")
+  }
+```
+
+
+
+```{r}
+directory <- "C:/Users/lagoodal/Documents/TEST HPC OUTPUTS/LISA/Chapter 2"
+files <- list.files(directory, full.names = TRUE, pattern = "top25\\.csv$")
+
+dfList <- list()
+for (file in files) {
+  filePath <- file.path(file)
+  name <- basename(file)
+  parts <- strsplit(name, "_")[[1]]
+  df <- read_csv(filePath)
+  df$RCP <- parts[2]
+  df$Model <- parts[3]
+  dfList[[name]] <- df
+}
+
+
+mapsDf <- do.call(bind_rows, dfList)
+
+mapsDf <- mapsDf %>%
+  mutate(RCP = ifelse(RCP == "LISA", "Historical", RCP),
+         Model = ifelse(Model == "top25.csv", "Historical", Model),
+         Scenario = paste(Model, RCP, sep = "_")) 
+
+
+ggplot(mapsDf) +
+  geom_sf(data = Piedmont.shp, fill = "grey95", color = "black", linewidth = 0.4) +
+  geom_raster(aes(x = x, y = y, fill = orig_value)) +
+  scale_fill_viridis_c(name = "Cumulative Tradeoff Score") +
+  coord_sf() +
+  theme_classic() +
+  facet_wrap(~ Scenario)
+
+
+fortypcdRast <- rast("D:/TreeMap_FORTYPCD_Piedmont.tif")
+shapefile <- st_transform(Piedmont.shp, crs = crs(fortypcdRast))
+fortypcdRast <- crop(fortypcdRast, shapefile) %>% mask(., shapefile) %>% project(., templateRaster, method = "near")
+plot(fortypcdRast)
+fortypcdRast[fortypcdRast < 0] <- NA
+plot(fortypcdRast)
+
+fortypcdRast <- ifel(fortypcdRast %in% c(0:199), 1,
+     ifel(fortypcdRast %in% c(400:499), 2,
+          ifel(fortypcdRast %in% c(500:599), 3,
+               ifel(fortypcdRast %in% c(600:699), 4,
+                    ifel(fortypcdRast %in% c(700:799), 5,
+                         ifel(fortypcdRast %in% c(800:899), 6,
+                              ifel(fortypcdRast %in% c(900:909), 7, NA)))))))
+
+fortypcdRast <- as.factor(fortypcdRast)
+levels(fortypcdRast) <- data.frame(ID = c(1,2,3,4,5,6,7),
+                                   class = c("Pine", "Oak-Pine", "Oak-Hickory", "Oak-Gum-Cypress", "Elm-Ash-Cottonwood", "Maple-Beech-Birch", "Aspen-Birch"))
+
+plot(fortypcdRast, col = c("red", "black", "forestgreen", "blue", "orange"))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
