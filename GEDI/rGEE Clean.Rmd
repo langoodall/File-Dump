@@ -1,0 +1,913 @@
+---
+title: "rGEE Clean"
+author: "Louis Goodall"
+date: "2026-05-11"
+output: pdf_document
+---
+
+# Initialize rGEE and GEE
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE}
+# Weird order I know but run this in it's entirety and it'll be fine
+library(reticulate)
+use_condaenv("rgee_py", conda = "/opt/anaconda3/bin/conda", required = TRUE)
+py_run_string("
+import ee
+ee.Initialize()
+")
+library(rgee)
+ee_Initialize(drive = TRUE, project = "ee-gis712-2024", gcs = FALSE)
+ee_clean_user_credentials()
+ee_Authenticate()
+library(reticulate)
+use_condaenv("rgee_py", conda = "/opt/anaconda3/bin/conda", required = TRUE)
+py_run_string("
+import ee
+ee.Initialize()
+")
+ee_Initialize(drive = TRUE, project = "ee-gis712-2024", gcs = FALSE)
+```
+
+# Earth Obervation Satellite Imagery download
+
+```{r}
+# Here I will download the satellite imagery that I will then use as the training data to
+# help predict the wildfire risk potential
+eeBWCA.shp <- sf_as_ee(BWCA.shp)
+startDate <- "2024-06-01"
+endDate <- "2024-09-01"
+
+#----SENTINEL 2----#
+# Band 1
+# Read in the Sentinel-2 surface reflectance image collection which contains all the 
+# images that we may want. Also ge the cloud band for masking purposes
+
+# Load Sentinel-2 Surface Reflectance and Cloud Probability collections
+s2Collection <- ee$ImageCollection("COPERNICUS/S2_SR")$
+  filterDate(startDate, endDate)$
+  filterBounds(eeBWCA.shp)$
+  select("B1")
+s2Clouds <- ee$ImageCollection("COPERNICUS/S2_CLOUD_PROBABILITY")$
+  filterDate(startDate, endDate)
+
+# Join SR and cloud collections by system:index
+joinFilter <- ee$Filter$equals(leftField = "system:index", rightField = "system:index")
+innerJoin <- ee$Join$inner()
+joinedCol <- innerJoin$apply(s2Collection, s2Clouds, joinFilter)
+
+# Cloud masking function (you must define this based on your needs)
+# Example placeholder:
+maskClouds <- function(joined) {
+  sr <- ee$Image(joined$get("primary"))
+  cloud <- ee$Image(joined$get("secondary"))
+  cloudMask <- cloud$lt(10)  # Keep pixels with <10% cloud probability
+  return(sr$updateMask(cloudMask))
+}
+
+# Apply cloud masking
+sentinel2_band1_clean <- ee$ImageCollection(joinedCol$map(maskClouds))
+
+# Optional: Resample to 30m and reproject to UTM Zone 15N (EPSG:26915)
+resample30m <- function(image) {
+  image$reproject(crs = "EPSG:26915", scale = 30)
+}
+sentinel2_band1 <- sentinel2_band1_clean$map(resample30m)
+
+# Reduce across time to compute per-pixel percentiles (10th, 50th, 95th)
+percentiles <- sentinel2_band1_clean$
+  reduce(ee$Reducer$percentile(c(10, 50, 90)))$
+  clip(eeBWCA.shp)$
+  reproject(crs = "EPSG:26915", scale = 30)
+
+# stats <- percentiles$select("B1_p50")$reduceRegion(reducer = ee$Reducer$minMax(), geometry = eeBWCA.shp, scale = 30, maxPixels = 1e13)$getInfo()
+# print(stats)
+# stats <- percentiles$select("B1_p10")$reduceRegion(reducer = ee$Reducer$minMax(), geometry = eeBWCA.shp, scale = 30, maxPixels = 1e13)$getInfo()
+# print(stats)
+# stats <- percentiles$select("B1_p95")$reduceRegion(reducer = ee$Reducer$minMax(), geometry = eeBWCA.shp, scale = 30, maxPixels = 1e13)$getInfo()
+# print(stats)
+
+# # Now you can use percentiles$select("B8A_p10"), "B8A_p50", or "B8A_p95" for display or export
+# Map$centerObject(eeBWCA.shp)
+# Map$addLayer(percentiles$select("B1_p50"),
+#              list(min = 0, max = 16615, palette = c("black", "orange", "red")),
+#              "Sentinel-2 B8A - 50th Percentile")
+# 
+# Map$addLayer(percentiles$select("B1_p10"),
+#              list(min = 0, max = 16615, palette = c("black", "orange", "red")),
+#              "Sentinel-2 B8A - 10th Percentile")
+# 
+# Map$addLayer(percentiles$select("B1_p95"),
+#              list(min = 0, max = 16615, palette = c("black", "orange", "red")),
+#              "Sentinel-2 B8A - 95th Percentile")
+
+bandNames <- percentiles$bandNames()$getInfo()
+
+for (band in bandNames) {
+    image <- percentiles$select(band)$
+    reproject(crs = "EPSG:26915", scale = 30)$
+    clip(eeBWCA.shp)
+    task <- ee_image_to_drive(image = image, description = paste0(band, "_export"), folder = "GEDI_BWCA", fileNamePrefix = band, region = eeBWCA.shp$geometry(), scale = 30, maxPixels = 1e13, fileFormat = "GeoTIFF"
+  )
+  cat("Starting export for:", band, "\n")
+  task$start()
+}
+
+# Band 2
+s2Collection <- ee$ImageCollection("COPERNICUS/S2_SR")$
+  filterDate(startDate, endDate)$
+  filterBounds(eeBWCA.shp)$
+  select("B2")
+s2Clouds <- ee$ImageCollection("COPERNICUS/S2_CLOUD_PROBABILITY")$
+  filterDate(startDate, endDate)
+joinFilter <- ee$Filter$equals(leftField = "system:index", rightField = "system:index")
+innerJoin <- ee$Join$inner()
+joinedCol <- innerJoin$apply(s2Collection, s2Clouds, joinFilter)
+sentinel2_band2 <- ee$ImageCollection(joinedCol$map(maskClouds))
+sentinel2_band2 <- sentinel2_band2$map(resample30m)
+percentiles <- sentinel2_band2$
+  reduce(ee$Reducer$percentile(c(10, 50, 90)))$
+  clip(eeBWCA.shp)$
+  reproject(crs = "EPSG:26915", scale = 30)
+bandNames <- percentiles$bandNames()$getInfo()
+for (band in bandNames) {
+    image <- percentiles$select(band)$
+    reproject(crs = "EPSG:26915", scale = 30)$
+    clip(eeBWCA.shp)
+    task <- ee_image_to_drive(image = image, description = paste0(band, "_export"), folder = "GEDI_BWCA", fileNamePrefix = band, region = eeBWCA.shp$geometry(), scale = 30, maxPixels = 1e13, fileFormat = "GeoTIFF"
+  )
+  cat("Starting export for:", band, "\n")
+  task$start()
+}
+
+# Band 3
+s2Collection <- ee$ImageCollection("COPERNICUS/S2_SR")$
+  filterDate(startDate, endDate)$
+  filterBounds(eeBWCA.shp)$
+  select("B3")
+s2Clouds <- ee$ImageCollection("COPERNICUS/S2_CLOUD_PROBABILITY")$
+  filterDate(startDate, endDate)
+joinFilter <- ee$Filter$equals(leftField = "system:index", rightField = "system:index")
+innerJoin <- ee$Join$inner()
+joinedCol <- innerJoin$apply(s2Collection, s2Clouds, joinFilter)
+sentinel2_band3 <- ee$ImageCollection(joinedCol$map(maskClouds))
+sentinel2_band3 <- sentinel2_band3$map(resample30m)
+percentiles <- sentinel2_band3$
+  reduce(ee$Reducer$percentile(c(10, 50, 90)))$
+  clip(eeBWCA.shp)$
+  reproject(crs = "EPSG:26915", scale = 30)
+bandNames <- percentiles$bandNames()$getInfo()
+for (band in bandNames) {
+    image <- percentiles$select(band)$
+    reproject(crs = "EPSG:26915", scale = 30)$
+    clip(eeBWCA.shp)
+    task <- ee_image_to_drive(image = image, description = paste0(band, "_export"), folder = "GEDI_BWCA", fileNamePrefix = band, region = eeBWCA.shp$geometry(), scale = 30, maxPixels = 1e13, fileFormat = "GeoTIFF"
+  )
+  cat("Starting export for:", band, "\n")
+  task$start()
+}
+
+# Band 4
+s2Collection <- ee$ImageCollection("COPERNICUS/S2_SR")$
+  filterDate(startDate, endDate)$
+  filterBounds(eeBWCA.shp)$
+  select("B4")
+s2Clouds <- ee$ImageCollection("COPERNICUS/S2_CLOUD_PROBABILITY")$
+  filterDate(startDate, endDate)
+joinFilter <- ee$Filter$equals(leftField = "system:index", rightField = "system:index")
+innerJoin <- ee$Join$inner()
+joinedCol <- innerJoin$apply(s2Collection, s2Clouds, joinFilter)
+sentinel2_band4 <- ee$ImageCollection(joinedCol$map(maskClouds))
+sentinel2_band4 <- sentinel2_band4$map(resample30m)
+percentiles <- sentinel2_band4$
+  reduce(ee$Reducer$percentile(c(10, 50, 90)))$
+  clip(eeBWCA.shp)$
+  reproject(crs = "EPSG:26915", scale = 30)
+bandNames <- percentiles$bandNames()$getInfo()
+for (band in bandNames) {
+    image <- percentiles$select(band)$
+    reproject(crs = "EPSG:26915", scale = 30)$
+    clip(eeBWCA.shp)
+    task <- ee_image_to_drive(image = image, description = paste0(band, "_export"), folder = "GEDI_BWCA", fileNamePrefix = band, region = eeBWCA.shp$geometry(), scale = 30, maxPixels = 1e13, fileFormat = "GeoTIFF"
+  )
+  cat("Starting export for:", band, "\n")
+  task$start()
+}
+
+# Band 5
+s2Collection <- ee$ImageCollection("COPERNICUS/S2_SR")$
+  filterDate(startDate, endDate)$
+  filterBounds(eeBWCA.shp)$
+  select("B5")
+s2Clouds <- ee$ImageCollection("COPERNICUS/S2_CLOUD_PROBABILITY")$
+  filterDate(startDate, endDate)
+joinFilter <- ee$Filter$equals(leftField = "system:index", rightField = "system:index")
+innerJoin <- ee$Join$inner()
+joinedCol <- innerJoin$apply(s2Collection, s2Clouds, joinFilter)
+sentinel2_band5 <- ee$ImageCollection(joinedCol$map(maskClouds))
+sentinel2_band5 <- sentinel2_band5$map(resample30m)
+percentiles <- sentinel2_band5$
+  reduce(ee$Reducer$percentile(c(10, 50, 90)))$
+  clip(eeBWCA.shp)$
+  reproject(crs = "EPSG:26915", scale = 30)
+bandNames <- percentiles$bandNames()$getInfo()
+for (band in bandNames) {
+    image <- percentiles$select(band)$
+    reproject(crs = "EPSG:26915", scale = 30)$
+    clip(eeBWCA.shp)
+    task <- ee_image_to_drive(image = image, description = paste0(band, "_export"), folder = "GEDI_BWCA", fileNamePrefix = band, region = eeBWCA.shp$geometry(), scale = 30, maxPixels = 1e13, fileFormat = "GeoTIFF"
+  )
+  cat("Starting export for:", band, "\n")
+  task$start()
+}
+
+# Band 6
+s2Collection <- ee$ImageCollection("COPERNICUS/S2_SR")$
+  filterDate(startDate, endDate)$
+  filterBounds(eeBWCA.shp)$
+  select("B6")
+s2Clouds <- ee$ImageCollection("COPERNICUS/S2_CLOUD_PROBABILITY")$
+  filterDate(startDate, endDate)
+joinFilter <- ee$Filter$equals(leftField = "system:index", rightField = "system:index")
+innerJoin <- ee$Join$inner()
+joinedCol <- innerJoin$apply(s2Collection, s2Clouds, joinFilter)
+sentinel2_band6 <- ee$ImageCollection(joinedCol$map(maskClouds))
+sentinel2_band6 <- sentinel2_band6$map(resample30m)
+percentiles <- sentinel2_band6$
+  reduce(ee$Reducer$percentile(c(10, 50, 90)))$
+  clip(eeBWCA.shp)$
+  reproject(crs = "EPSG:26915", scale = 30)
+bandNames <- percentiles$bandNames()$getInfo()
+for (band in bandNames) {
+    image <- percentiles$select(band)$
+    reproject(crs = "EPSG:26915", scale = 30)$
+    clip(eeBWCA.shp)
+    task <- ee_image_to_drive(image = image, description = paste0(band, "_export"), folder = "GEDI_BWCA", fileNamePrefix = band, region = eeBWCA.shp$geometry(), scale = 30, maxPixels = 1e13, fileFormat = "GeoTIFF"
+  )
+  cat("Starting export for:", band, "\n")
+  task$start()
+}
+
+# Band 7
+s2Collection <- ee$ImageCollection("COPERNICUS/S2_SR")$
+  filterDate(startDate, endDate)$
+  filterBounds(eeBWCA.shp)$
+  select("B7")
+s2Clouds <- ee$ImageCollection("COPERNICUS/S2_CLOUD_PROBABILITY")$
+  filterDate(startDate, endDate)
+joinFilter <- ee$Filter$equals(leftField = "system:index", rightField = "system:index")
+innerJoin <- ee$Join$inner()
+joinedCol <- innerJoin$apply(s2Collection, s2Clouds, joinFilter)
+sentinel2_band7 <- ee$ImageCollection(joinedCol$map(maskClouds))
+sentinel2_band7 <- sentinel2_band7$map(resample30m)
+percentiles <- sentinel2_band7$
+  reduce(ee$Reducer$percentile(c(10, 50, 90)))$
+  clip(eeBWCA.shp)$
+  reproject(crs = "EPSG:26915", scale = 30)
+bandNames <- percentiles$bandNames()$getInfo()
+for (band in bandNames) {
+    image <- percentiles$select(band)$
+    reproject(crs = "EPSG:26915", scale = 30)$
+    clip(eeBWCA.shp)
+    task <- ee_image_to_drive(image = image, description = paste0(band, "_export"), folder = "GEDI_BWCA", fileNamePrefix = band, region = eeBWCA.shp$geometry(), scale = 30, maxPixels = 1e13, fileFormat = "GeoTIFF"
+  )
+  cat("Starting export for:", band, "\n")
+  task$start()
+}
+
+# Band 8
+s2Collection <- ee$ImageCollection("COPERNICUS/S2_SR")$
+  filterDate(startDate, endDate)$
+  filterBounds(eeBWCA.shp)$
+  select("B8")
+s2Clouds <- ee$ImageCollection("COPERNICUS/S2_CLOUD_PROBABILITY")$
+  filterDate(startDate, endDate)
+joinFilter <- ee$Filter$equals(leftField = "system:index", rightField = "system:index")
+innerJoin <- ee$Join$inner()
+joinedCol <- innerJoin$apply(s2Collection, s2Clouds, joinFilter)
+sentinel2_band8 <- ee$ImageCollection(joinedCol$map(maskClouds))
+sentinel2_band8 <- sentinel2_band8$map(resample30m)
+percentiles <- sentinel2_band8$
+  reduce(ee$Reducer$percentile(c(10, 50, 90)))$
+  clip(eeBWCA.shp)$
+  reproject(crs = "EPSG:26915", scale = 30)
+bandNames <- percentiles$bandNames()$getInfo()
+for (band in bandNames) {
+    image <- percentiles$select(band)$
+    reproject(crs = "EPSG:26915", scale = 30)$
+    clip(eeBWCA.shp)
+    task <- ee_image_to_drive(image = image, description = paste0(band, "_export"), folder = "GEDI_BWCA", fileNamePrefix = band, region = eeBWCA.shp$geometry(), scale = 30, maxPixels = 1e13, fileFormat = "GeoTIFF"
+  )
+  cat("Starting export for:", band, "\n")
+  task$start()
+}
+
+# Band 8A
+s2Collection <- ee$ImageCollection("COPERNICUS/S2_SR")$
+  filterDate(startDate, endDate)$
+  filterBounds(eeBWCA.shp)$
+  select("B8A")
+s2Clouds <- ee$ImageCollection("COPERNICUS/S2_CLOUD_PROBABILITY")$
+  filterDate(startDate, endDate)
+joinFilter <- ee$Filter$equals(leftField = "system:index", rightField = "system:index")
+innerJoin <- ee$Join$inner()
+joinedCol <- innerJoin$apply(s2Collection, s2Clouds, joinFilter)
+sentinel2_band8A <- ee$ImageCollection(joinedCol$map(maskClouds))
+sentinel2_band8A <- sentinel2_band8A$map(resample30m)
+percentiles <- sentinel2_band8A$
+  reduce(ee$Reducer$percentile(c(10, 50, 90)))$
+  clip(eeBWCA.shp)$
+  reproject(crs = "EPSG:26915", scale = 30)
+bandNames <- percentiles$bandNames()$getInfo()
+for (band in bandNames) {
+    image <- percentiles$select(band)$
+    reproject(crs = "EPSG:26915", scale = 30)$
+    clip(eeBWCA.shp)
+    task <- ee_image_to_drive(image = image, description = paste0(band, "_export"), folder = "GEDI_BWCA", fileNamePrefix = band, region = eeBWCA.shp$geometry(), scale = 30, maxPixels = 1e13, fileFormat = "GeoTIFF"
+  )
+  cat("Starting export for:", band, "\n")
+  task$start()
+}
+
+# Band 11
+s2Collection <- ee$ImageCollection("COPERNICUS/S2_SR")$
+  filterDate(startDate, endDate)$
+  filterBounds(eeBWCA.shp)$
+  select("B11")
+s2Clouds <- ee$ImageCollection("COPERNICUS/S2_CLOUD_PROBABILITY")$
+  filterDate(startDate, endDate)
+joinFilter <- ee$Filter$equals(leftField = "system:index", rightField = "system:index")
+innerJoin <- ee$Join$inner()
+joinedCol <- innerJoin$apply(s2Collection, s2Clouds, joinFilter)
+sentinel2_band11 <- ee$ImageCollection(joinedCol$map(maskClouds))
+sentinel2_band11 <- sentinel2_band11$map(resample30m)
+percentiles <- sentinel2_band11$
+  reduce(ee$Reducer$percentile(c(10, 50, 90)))$
+  clip(eeBWCA.shp)$
+  reproject(crs = "EPSG:26915", scale = 30)
+bandNames <- percentiles$bandNames()$getInfo()
+for (band in bandNames) {
+    image <- percentiles$select(band)$
+    reproject(crs = "EPSG:26915", scale = 30)$
+    clip(eeBWCA.shp)
+    task <- ee_image_to_drive(image = image, description = paste0(band, "_export"), folder = "GEDI_BWCA", fileNamePrefix = band, region = eeBWCA.shp$geometry(), scale = 30, maxPixels = 1e13, fileFormat = "GeoTIFF"
+  )
+  cat("Starting export for:", band, "\n")
+  task$start()
+}
+
+# Band 12
+s2Collection <- ee$ImageCollection("COPERNICUS/S2_SR")$
+  filterDate(startDate, endDate)$
+  filterBounds(eeBWCA.shp)$
+  select("B12")
+s2Clouds <- ee$ImageCollection("COPERNICUS/S2_CLOUD_PROBABILITY")$
+  filterDate(startDate, endDate)
+joinFilter <- ee$Filter$equals(leftField = "system:index", rightField = "system:index")
+innerJoin <- ee$Join$inner()
+joinedCol <- innerJoin$apply(s2Collection, s2Clouds, joinFilter)
+sentinel2_band12 <- ee$ImageCollection(joinedCol$map(maskClouds))
+sentinel2_band12 <- sentinel2_band12$map(resample30m)
+percentiles <- sentinel2_band12$
+  reduce(ee$Reducer$percentile(c(10, 50, 90)))$
+  clip(eeBWCA.shp)$
+  reproject(crs = "EPSG:26915", scale = 30)
+bandNames <- percentiles$bandNames()$getInfo()
+for (band in bandNames) {
+    image <- percentiles$select(band)$
+    reproject(crs = "EPSG:26915", scale = 30)$
+    clip(eeBWCA.shp)
+    task <- ee_image_to_drive(image = image, description = paste0(band, "_export"), folder = "GEDI_BWCA", fileNamePrefix = band, region = eeBWCA.shp$geometry(), scale = 30, maxPixels = 1e13, fileFormat = "GeoTIFF"
+  )
+  cat("Starting export for:", band, "\n")
+  task$start()
+}
+
+
+#----SENTINEL 1 SAR----#
+# ASCENDING
+# VH polarisation
+# I downloaded the data using GEE and the script which can be found here (https://github.com/langoodall/Project-MN-Canopy-Fuels/blob/main/GEE.js)
+# Uses and modified from Mullissa et al. (2021) https://doi.org/10.3390/rs13101954
+# Here I am reading in the .tif files that I got from GEE and processing them
+
+# So these are odd. The data is stored in linear which is great for the conversions and everything
+# but needs to be in dB for plotting and comparison. To convert from linear to dB do the equation below
+# dB = 10 * log10(x)
+westBWCA_VH <- rast("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/VH_p50-0000000000-0000000000.tif")
+eastBWCA_VH <- rast("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/VH_p50-0000000000-0000023296.tif")
+stack <- sprc(list(westBWCA_VH, eastBWCA_VH))
+VH <- mosaic(stack)
+shapefile <- st_transform(BWCA.shp, crs = crs(VH))
+VH <- crop(VH, shapefile) %>% mask(., shapefile)
+VH <- project(VH, templateRaster, method = "near")
+VH <- ifel(VH > 0, 10 * log10(VH), NA)
+writeRaster(VH,
+            filename = '/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/Processed Rasters/VH_p50.tif',
+            datatype = "FLT8S",
+            NAflag = 0,
+            overwrite = TRUE)
+
+# VV polarisation
+westBWCA_VV <- rast("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/VV_p50-0000000000-0000000000.tif")
+eastBWCA_VV <- rast("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/VV_p50-0000000000-0000023296.tif")
+stack <- sprc(list(westBWCA_VV, eastBWCA_VV))
+VV <- mosaic(stack)
+shapefile <- st_transform(BWCA.shp, crs = crs(VV))
+VV <- crop(VV, shapefile) %>% mask(., shapefile)
+VV <- project(VV, templateRaster, method = "near")
+VV <- ifel(VV > 0, 10 * log10(VV), NA)
+writeRaster(VV,
+            filename = '/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/Processed Rasters/VV_p50.tif',
+            datatype = "FLT8S",
+            NAflag = 0,
+            overwrite = TRUE)
+
+#----JAXA PALSAR----#
+HV <- rast('/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/Processed Rasters/HV_BWCA_PALSAR_2024.tif')
+HH <- rast('/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/Processed Rasters/HH_BWCA_PALSAR_2024.tif')
+
+gc()
+
+plot(HV)
+plot(HH)
+
+HH %>% min()
+HH %>% min()
+HV %>% min()
+HV %>% min()
+
+ifel(HH > 0, 10 * log10(HH), NA) %>% min()
+ifel(HV > 0, 10 * log10(HV), NA) %>% min()
+ifel(HV > 0, 10 * log10(HV), NA) %>% min()
+ifel(HH > 0, 10 * log10(HH), NA) %>% min()
+
+
+plot(ifel(HV > 0, 10 * log10(HV^2) - 83, NA))
+plot(ifel(HH > 0, 10 * log10(HH^2) - 83, NA))
+
+
+
+x <- ifel(HV > 0, 10 * log10(HV^2) - 83, NA) %>% as.data.frame() %>% drop_na()
+
+hist(x$HV, breaks = 100)
+
+?hist
+```
+
+# Old SAR stuff
+
+```{r}
+#----SENTINEL 1 SAR----#
+# ASCENDING
+# VH polarisation
+# Here I am downloading the Sentinel-1 SAR data for the BWCA. I will choose the ASCENDING
+# data because to use both ASCENDING and DESCENDING requires more processing. So, for now,
+# I will use one direction consistently
+s1VHCollection <- ee$ImageCollection("COPERNICUS/S1_GRD")$
+  filterDate(startDate, endDate)$
+  filterBounds(eeBWCA.shp)$
+  filter(ee$Filter$eq("instrumentMode", "IW"))$
+  filter(ee$Filter$listContains("transmitterReceiverPolarisation", "VH"))$
+  filter(ee$Filter$eq("orbitProperties_pass", "ASCENDING"))$
+  select("VH")
+
+maskEdges <- function(img) {
+  edge <- img$lt(-30)
+  img$updateMask(edge$Not())
+}
+
+s1VHCollection <- s1VHCollection$map(maskEdges)
+
+percentiles <- s1VHCollection$
+  reduce(ee$Reducer$percentile(c(10, 50, 90)))$
+  clip(eeBWCA.shp)$
+  reproject(crs = "EPSG:26915", scale = 30)
+
+bandNames <- percentiles$bandNames()$getInfo()
+
+for (band in bandNames) {
+  image <- percentiles$select(band)$reproject(crs = "EPSG:26915", scale = 30)$clip(eeBWCA.shp)
+  task <- ee_image_to_drive(image = image, description = paste0(band, "_export"), folder = "GEDI_BWCA", fileNamePrefix = band, region = eeBWCA.shp$geometry(), scale = 30, maxPixels = 1e13, fileFormat = "GeoTIFF")
+  cat("Starting export for:", band, "\n")
+  task$start()
+}
+
+###########################################
+
+s1VH <- ee$ImageCollection("COPERNICUS/S1_GRD")$
+  filterDate(startDate, endDate)$
+  filterBounds(eeBWCA.shp)$
+  filter(ee$Filter$eq("instrumentMode", "IW"))$
+  filter(ee$Filter$listContains("transmitterReceiverPolarisation", "VH"))$
+  filter(ee$Filter$eq("orbitProperties_pass", "ASCENDING"))$
+  select("VH")
+
+s1VH$size()$getInfo()
+s1VH$aggregate_array("system:id")$getInfo()
+
+maskEdges <- function(img) {
+  img$updateMask(img$gt(-30))
+}
+s1VH <- s1VH$map(maskEdges)
+
+toLinear <- function(img) {
+  ee$Image(10)$pow(img$divide(10))$copyProperties(img, img$propertyNames())
+}
+s1VH <- s1VH$map(toLinear)
+
+leeFilter <- function(img) {
+
+  # 3x3 kernel
+  kernel <- ee$Kernel$square(1)
+
+  # Local mean and variance
+  mean <- img$reduceNeighborhood(ee$Reducer$mean(), kernel)
+  variance <- img$reduceNeighborhood(ee$Reducer$variance(), kernel)
+
+  # Noise variance (estimated locally)
+  noiseVar <- variance$reduceNeighborhood(
+    reducer = ee$Reducer$mean(),
+    kernel = kernel
+  )
+
+  # Lee filter coefficient
+  b <- variance$subtract(noiseVar)$divide(variance)
+
+  # Filtered image
+  mean$add(
+    b$multiply(img$subtract(mean))
+  )$rename(img$bandNames())$
+    copyProperties(img, img$propertyNames())
+}
+
+
+
+lee_gee <- function(img, L = 1, win = 3) {
+
+  kernel <- ee$Kernel$square(
+    radius = win %/% 2,
+    units = "pixels",
+    normalize = TRUE
+  )
+
+  mean <- img$reduceNeighborhood(
+    reducer = ee$Reducer$mean(),
+    kernel = kernel
+  )
+
+  variance <- img$reduceNeighborhood(
+    reducer = ee$Reducer$variance(),
+    kernel = kernel
+  )
+
+  sigma_n2 <- 1 / L
+
+  k <- variance$
+    subtract(mean$pow(2)$multiply(sigma_n2))$
+    divide(variance)$
+    clamp(0, 1)
+
+  mean$add(k$multiply(img$subtract(mean)))
+}
+
+
+
+s1VH <- s1VH$map(leeFilter)
+s1_filt <- lee_gee(s1VH$select("VH"), L = 4)
+
+
+median_s1VH <- s1VH$median()
+median_s1VH <- median_s1VH$clip(eeBWCA.shp)
+
+stats <- median_s1VH$reduceRegion(
+  reducer = ee$Reducer$minMax(),
+  geometry = eeBWCA.shp$geometry(),
+  scale = 30,  # Sentinel-1 pixel size ~10m, 30m is usually fine for regional stats
+  maxPixels = 1e13
+)
+
+# Print stats
+stats$getInfo()
+
+
+
+Map$centerObject(eeBWCA.shp)
+Map$addLayer(eeBWCA.shp)
+Map$addLayer(median_s1VH,
+             list(min = 0, max = 1, palette = c("#ff1b6b", "black", "#45caff")), "VH Median")
+
+
+# VV polarization
+s1VVCollection <- ee$ImageCollection("COPERNICUS/S1_GRD")$
+  filterDate(startDate, endDate)$
+  filterBounds(eeBWCA.shp)$
+  filter(ee$Filter$eq("instrumentMode", "IW"))$
+  filter(ee$Filter$listContains("transmitterReceiverPolarisation", "VV"))$
+  filter(ee$Filter$eq("orbitProperties_pass", "ASCENDING"))$
+  select("VV")
+percentiles <- s1VVCollection$
+  reduce(ee$Reducer$percentile(c(10, 50, 90)))$
+  clip(eeBWCA.shp)$
+  reproject(crs = "EPSG:26915", scale = 30)
+bandNames <- percentiles$bandNames()$getInfo()
+for (band in bandNames) {
+  image <- percentiles$select(band)$reproject(crs = "EPSG:26915", scale = 30)$clip(eeBWCA.shp)
+  task <- ee_image_to_drive(image = image, description = paste0(band, "_export"), folder = "GEDI_BWCA", fileNamePrefix = band, region = eeBWCA.shp$geometry(), scale = 30, maxPixels = 1e13, fileFormat = "GeoTIFF")
+  cat("Starting export for:", band, "\n")
+  task$start()
+}
+
+# HH polarization
+s1HHCollection <- ee$ImageCollection("COPERNICUS/S1_GRD")$
+  # filterDate("2012-01-01", endDate)$
+  # filterBounds(eeBWCA.shp)$
+  filter(ee$Filter$eq("instrumentMode", "IW"))$
+  filter(ee$Filter$listContains("transmitterReceiverPolarisation", "HH"))$
+  filter(ee$Filter$eq("orbitProperties_pass", "DESCENDING"))$
+  select("HH")
+percentiles <- s1HHCollection$
+  reduce(ee$Reducer$percentile(c(10, 50, 95)))$
+  clip(eeBWCA.shp)$
+  reproject(crs = "EPSG:26915", scale = 30)
+bandNames <- percentiles$bandNames()$getInfo()
+for (band in bandNames) {
+  image <- percentiles$select(band)$reproject(crs = "EPSG:26915", scale = 30)$clip(eeBWCA.shp)
+  task <- ee_image_to_drive(image = image, description = paste0(band, "_export"), folder = "GEDI_BWCA", fileNamePrefix = band, region = eeBWCA.shp$geometry(), scale = 30, maxPixels = 1e13, fileFormat = "GeoTIFF")
+  cat("Starting export for:", band, "\n")
+  task$start()
+}
+
+# HV polarization
+s1HVCollection <- ee$ImageCollection("COPERNICUS/S1_GRD")$
+  filterDate(startDate, endDate)$
+  filterBounds(eeBWCA.shp)$
+  filter(ee$Filter$eq("instrumentMode", "IW"))$
+  filter(ee$Filter$listContains("transmitterReceiverPolarisation", "HV"))$
+  filter(ee$Filter$eq("orbitProperties_pass", "ASCENDING"))$
+  select("HV")
+percentiles <- s1HVCollection$
+  reduce(ee$Reducer$percentile(c(10, 50, 90)))$
+  clip(eeBWCA.shp)$
+  reproject(crs = "EPSG:26915", scale = 30)
+bandNames <- percentiles$bandNames()$getInfo()
+for (band in bandNames) {
+  image <- percentiles$select(band)$reproject(crs = "EPSG:26915", scale = 30)$clip(eeBWCA.shp)
+  task <- ee_image_to_drive(image = image, description = paste0(band, "_export"), folder = "GEDI_BWCA", fileNamePrefix = band, region = eeBWCA.shp$geometry(), scale = 30, maxPixels = 1e13, fileFormat = "GeoTIFF")
+  cat("Starting export for:", band, "\n")
+  task$start()
+}
+
+# Load ALOS PALSAR HH yearly mosaics
+alosHHCollection <- ee$ImageCollection("JAXA/ALOS/PALSAR/YEARLY/SAR_EPOCH")$
+  # filterDate(startDate, endDate)$
+  filterBounds(eeBWCA.shp)$
+  select("HH")
+
+
+# Reduce to percentiles (10, 50, 90)
+percentiles <- alosHHCollection$
+  reduce(ee$Reducer$percentile(c(10, 50, 90)))$
+  clip(eeBWCA.shp)$
+  reproject(crs = "EPSG:26915", scale = 30)
+
+# Get the percentile band names (HH_p10, HH_p50, HH_p95)
+bandNames <- percentiles$bandNames()$getInfo()
+
+# Export each band separately
+for (band in bandNames) {
+  image <- percentiles$select(band)$clip(eeBWCA.shp)
+  task <- ee_image_to_drive(
+    image = image,
+    description = paste0(band, "_export"),
+    folder = "GEDI_BWCA",
+    fileNamePrefix = band,
+    region = eeBWCA.shp$geometry(),
+    scale = 30,  # ALOS resolution is ~25 m
+    maxPixels = 1e13,
+    fileFormat = "GeoTIFF"
+  )
+  cat("Starting export for:", band, "\n")
+  task$start()
+}
+
+# Load ALOS PALSAR HH yearly mosaics
+alosHVCollection <- ee$ImageCollection("JAXA/ALOS/PALSAR/YEARLY/SAR_EPOCH")$
+  # filterDate(startDate, endDate)$
+  filterBounds(eeBWCA.shp)$
+  select("HV")
+
+# Reduce to percentiles (10, 50, 95)
+percentiles <- alosHVCollection$
+  reduce(ee$Reducer$percentile(c(10, 50, 90)))$
+  clip(eeBWCA.shp)$
+  reproject(crs = "EPSG:26915", scale = 30)
+
+# Get the percentile band names (HH_p10, HH_p50, HH_p95)
+bandNames <- percentiles$bandNames()$getInfo()
+
+# Export each band separately
+for (band in bandNames) {
+  image <- percentiles$select(band)$clip(eeBWCA.shp)
+  task <- ee_image_to_drive(
+    image = image,
+    description = paste0(band, "_export"),
+    folder = "GEDI_BWCA",
+    fileNamePrefix = band,
+    region = eeBWCA.shp$geometry(),
+    scale = 30,  # ALOS resolution is ~25 m
+    maxPixels = 1e13,
+    fileFormat = "GeoTIFF"
+  )
+  cat("Starting export for:", band, "\n")
+  task$start()
+}
+
+# DESCENDING
+# I had a go at finding descending data for the BWCA but could not find any. No matter.
+# VH polarization = NONE
+# s1VHCollection <- ee$ImageCollection("COPERNICUS/S1_GRD")$
+#   filterDate(startDate, endDate)$
+#   filterBounds(eeBWCA.shp)$
+#   filter(ee$Filter$eq("instrumentMode", "IW"))$
+#   filter(ee$Filter$listContains("transmitterReceiverPolarisation", "VH"))$
+#   select("VH")
+# desc <- s1VHCollection$filter(ee$Filter$eq("orbitProperties_pass", "DESCENDING"))
+# desc <- desc$median()$clip(eeBWCA.shp)
+# stats <- desc$reduceRegion(reducer = ee$Reducer$minMax(), geometry = eeBWCA.shp, scale = 10, maxPixels = 1e13)$getInfo()
+# print(stats)
+# Map$centerObject(eeBWCA.shp)
+# Map$addLayer(desc, 
+#              list(min = -30, max = 0, palette = c("black", "orange", "red")),
+#              "Sentinel 1 - SAR (Descending)")
+# Map$addLayer(desc, {}, "Descending VH - Raw")
+# 
+# # Check to see if the BWCA has any descending data. If not then == 0
+# desc_col <- s1VHCollection$filter(ee$Filter$eq("orbitProperties_pass", "DESCENDING"))
+# desc_col$size()$getInfo()
+```
+
+# Final bits of data acquisition
+
+```{r}
+#----MODIS----#
+# Phenology Start of Season
+# Because we only need the one image of yearly phenology, we can do the cloud masking
+# a bit differently than previous cloud masking in this script. First let's make a
+# function that masks clouds in MODIS
+maskMODISClouds <- function(image) {
+  qa <- image$select("QA_Overall_1")
+  qualityMask <- qa$bitwiseAnd(3)$eq(0)   # Keep only the good cells
+  image$updateMask(qualityMask)
+}
+
+sosMODIS <- ee$ImageCollection("MODIS/061/MCD12Q2")$
+  filterDate("2023-01-01", "2023-12-31")$
+  filterBounds(eeBWCA.shp)$
+  map(maskMODISClouds)$
+  select("Greenup_1")
+sosImage <- sosMODIS$first()$clip(eeBWCA.shp)
+sosImage <- resample30mNN(sosImage)
+# stats <- sosImage$reduceRegion(reducer = ee$Reducer$minMax(), geometry = eeBWCA.shp, scale = 30, maxPixels = 1e13)$getInfo()
+# print(stats)
+Map$centerObject(eeBWCA.shp)
+Map$addLayer(eeBWCA.shp)
+Map$addLayer(sosImage,
+             list(min = 19380, max = 19507, palette = c("black", "orange", "red")),
+             "MODIS Phenology - Start of Season")
+
+
+band_name <- sosImage$bandNames()$get(0)$getInfo()
+task <- ee_image_to_drive(
+  image = sosImage,
+  description = paste0(band_name, "_export"),
+  folder = "GEDI_BWCA",
+  fileNamePrefix = band_name,
+  region = eeBWCA.shp$geometry(),
+  scale = 30,
+  maxPixels = 1e13,
+  fileFormat = "GeoTIFF"
+)
+task$start()
+
+# Phenology End of Season
+sosMODIS <- ee$ImageCollection("MODIS/061/MCD12Q2")$
+  filterDate("2023-01-01", "2023-12-31")$
+  filterBounds(eeBWCA.shp)$
+  map(maskMODISClouds)$
+  select("Senescence_1")
+sosImage <- sosMODIS$first()$clip(eeBWCA.shp)
+sosImage <- resample30mNN(sosImage)
+# stats <- sosImage$reduceRegion(reducer = ee$Reducer$minMax(), geometry = eeBWCA.shp, scale = 30, maxPixels = 1e13)$getInfo()
+# print(stats)
+Map$centerObject(eeBWCA.shp)
+Map$addLayer(eeBWCA.shp)
+Map$addLayer(sosImage,
+             list(min = 19528, max = 19660, palette = c("black", "orange", "red")),
+             "MODIS Phenology - End of Season")
+
+band_name <- sosImage$bandNames()$get(0)$getInfo()
+task <- ee_image_to_drive(
+  image = sosImage,
+  description = paste0(band_name, "_export"),
+  folder = "GEDI_BWCA",
+  fileNamePrefix = band_name,
+  region = eeBWCA.shp$geometry(),
+  scale = 30,
+  maxPixels = 1e13,
+  fileFormat = "GeoTIFF"
+)
+task$start()
+
+#----STATIC LANDSCAPE VARIABLES----#
+# Elevation
+srtmDEM <- ee$Image("USGS/SRTMGL1_003")$
+  clip(eeBWCA.shp)
+# stats <- srtmDEM$reduceRegion(reducer = ee$Reducer$minMax(), geometry = eeBWCA.shp, scale = 30, maxPixels = 1e13)$getInfo()
+# print(stats)
+Map$centerObject(eeBWCA.shp)
+Map$addLayer(eeBWCA.shp)
+Map$addLayer(srtmDEM,
+             list(min = 335, max = 700, palette = c("black", "orange", "red")),
+             "Elevation")
+
+# Slope
+slope <- ee$Terrain$slope(srtmDEM)
+# stats <- slope$reduceRegion(reducer = ee$Reducer$minMax(), geometry = eeBWCA.shp, scale = 30, maxPixels = 1e13)$getInfo()
+# print(stats)
+
+# Aspect
+aspect <- ee$Terrain$aspect(srtmDEM)
+# stats <- aspect$reduceRegion(reducer = ee$Reducer$minMax(), geometry = eeBWCA.shp, scale = 30, maxPixels = 1e13)$getInfo()
+# print(stats)
+
+Map$centerObject(eeBWCA.shp)
+Map$addLayer(eeBWCA.shp)
+Map$addLayer(srtmDEM,
+             list(min = 335, max = 700, palette = c("black", "orange", "red")),
+             "Elevation")
+Map$addLayer(slope,
+             list(min = 0, max = 52.55262, palette = c("black", "orange", "red")),
+             "Slope")
+Map$addLayer(aspect,
+             list(min = 0, max = 358.2852, palette = c("black", "orange", "red")),
+             "Elevation")
+
+################
+# Load SRTM DEM clipped to AOI
+srtmDEM <- ee$Image("USGS/SRTMGL1_003")$
+  clip(eeBWCA.shp)
+
+# Visualize DEM
+Map$centerObject(eeBWCA.shp)
+Map$addLayer(eeBWCA.shp)
+Map$addLayer(
+  srtmDEM,
+  list(min = 335, max = 700, palette = c("black", "orange", "red")),
+  "Elevation"
+)
+
+# Terrain products
+slope <- ee$Terrain$slope(srtmDEM)
+aspect <- ee$Terrain$aspect(srtmDEM)
+
+Map$addLayer(slope, list(min = 0, max = 45, palette = c("blue", "yellow", "red")), "Slope")
+Map$addLayer(aspect, list(min = 0, max = 360, palette = c("purple", "cyan", "green")), "Aspect")
+
+# --- EXPORTS ---
+# Helper function
+export_to_drive <- function(image, band_name) {
+  task <- ee_image_to_drive(
+    image = image,
+    description = paste0(band_name, "_export"),
+    folder = "GEDI_BWCA",
+    fileNamePrefix = band_name,
+    region = eeBWCA.shp$geometry(),
+    scale = 30,
+    maxPixels = 1e13,
+    fileFormat = "GeoTIFF"
+  )
+  task$start()
+}
+
+# DEM
+band_name_dem <- srtmDEM$bandNames()$get(0)$getInfo()
+export_to_drive(srtmDEM, band_name_dem)
+
+# Slope
+band_name_slope <- slope$bandNames()$get(0)$getInfo()
+export_to_drive(slope, band_name_slope)
+
+# Aspect
+band_name_aspect <- aspect$bandNames()$get(0)$getInfo()
+export_to_drive(aspect, band_name_aspect)
+
+```
+
+
+
+
+
+
+
+
+

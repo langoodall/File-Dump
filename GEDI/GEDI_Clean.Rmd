@@ -1,0 +1,351 @@
+---
+title: "Untitled"
+author: "Louis Goodall"
+date: "2026-01-01"
+output: pdf_document
+---
+
+```{r, warning = FALSE, message = FALSE}
+library(tidyverse)
+library(terra)
+library(sf)
+library(rGEDI)
+library(lidR)
+library(pbmcapply)
+library(gstat)
+library(educate)
+library(minpack.lm)
+library(lubridate)
+library(exactextractr)
+library(ellipse)
+library(caret)
+library(randomForest)
+library(glcm)
+library(CAST)
+library(mgcv)
+library(mclust)
+#library(blockCV)
+#library(cluster)
+#library(factoextra)
+#library(ConsensusClusterPlus)
+
+library(segmented)
+
+BWCA.shp <- st_read("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Shapefiles/BWCA/boundary_waters_canoe_area_wilderness.shp") %>%
+  st_transform(., crs = "epsg:4326")
+fortypcdBWCA_UTM <- rast("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/TreeMap/fortypcdBWCA.tif") %>%
+  project(., "epsg:26915", method = "near", res = c(30,30))
+options(scipen = 999)
+templateRaster <- rast("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/Processed Rasters/B1_p50_2026_01_02_11_01_36.tif")
+
+```
+
+
+
+# First we need to download the GEDI data that we will be using to help predict wildfire fuel locations
+
+# Download GEDi data
+## GEDI 1B
+
+```{r}
+# For loop to process all the GEDI_1B waveforms as a sf dataframe and then bind into
+# one large sfdf. Write out as a shapefile. Saves SO much data
+directory1B <- "/Volumes/Crucial X6/GEDI/GEDI 1B"
+gediFiles <- list.files(path = directory1B)
+gedi1BList <- list()
+
+for (i in seq_along(gediFiles)) {
+  gedi1B <- readLevel1B(level1Bpath = file.path(directory1B, gediFiles[i]))
+  gedi1B <- getLevel1BGeo(level1b = gedi1B, select = c("elevation_bin0"))
+  gedi1B$shot_number <- as.character(gedi1B$shot_number)
+  gedi1B$ID <- gediFiles[i]
+  dateTimeCode <- regmatches(gedi1B$ID, regexpr("20\\d{11}", gedi1B$ID))
+  year <- substr(dateTimeCode, 1, 4)
+  doy <- substr(dateTimeCode, 5, 7)
+  gedi1B$Date <- as.Date(as.integer(doy) - 1, origin = paste0(year, "-01-01"))
+  gedi1B <- gedi1B[,-"ID"]
+  # gedi1B <- st_as_sf(gedi1B, coords = c("longitude_bin0", "latitude_bin0"), crs = "epsg:4326")
+  gedi1BList[[i]] <- gedi1B
+}
+
+gedi1BAll <- do.call(rbind, gedi1BList)
+
+# st_write(gedi1BAll,
+#          dsn = "/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Shapefiles/BWCA/GEDI1B/gedi1BAll.shp")
+```
+
+## GEDI 2A
+
+```{r}
+directory2A <- '/Volumes/Crucial X6/GEDI/GEDI 2A'
+gediFiles <- list.files(path = directory2A)
+gedi2AList <- list()
+
+for (i in seq_along(gediFiles)) {
+  gedi2A <- readLevel2A(level2Apath = file.path(directory2A, gediFiles[i]))
+  gedi2A <- getLevel2AM(level2a = gedi2A)
+  gedi2A$shot_number <- as.character(gedi2A$shot_number)
+  gedi2A$ID <- gediFiles[i]
+  dateTimeCode <- regmatches(gedi2A$ID, regexpr("20\\d{11}", gedi2A$ID))
+  year <- substr(dateTimeCode, 1, 4)
+  doy <- substr(dateTimeCode, 5, 7)
+  gedi2A$Date <- as.Date(as.integer(doy) - 1, origin = paste0(year, "-01-01"))
+  gedi2A <- gedi2A[,-"ID"]
+  # gedi2A <- st_as_sf(gedi2A, coords = c("lon_lowestmode", "lat_lowestmode"), crs = "epsg:4326")
+  gedi2AList[[i]] <- gedi2A
+}
+
+gedi2AAll <- do.call(rbind, gedi2AList)
+gedi2AAll <- gedi2AAll %>% filter(quality_flag == 1)
+
+# st_write(gedi2AAll,
+#          dsn = "/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Shapefiles/BWCA/GEDI2A/gedi2AAll.shp")
+
+
+# sf::st_read("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Shapefiles/BWCA/GEDI2A/gedi2AAll.shp")
+```
+
+## GEDI 2B
+
+```{r}
+directory2B <- '/Volumes/Crucial X6/GEDI/GEDI 2B'
+gediFiles <- list.files(path = directory2B)
+gedi2BList <- list()
+
+dropList <- c("GEDI02_B_2022089212114_O18672_02_T00721_02_003_01_V002_subsetted.h5",
+              "GEDI02_B_2022146024621_O19544_03_T10057_02_003_01_V002_subsetted.h5",
+              "GEDI02_B_2022158180539_O19740_02_T04990_02_003_01_V002_subsetted.h5",
+              "GEDI02_B_2022173153335_O19971_03_T09965_02_003_02_V002_subsetted.h5",
+              "GEDI02_B_2022193042801_O20274_02_T02144_02_003_02_V002_subsetted.h5",
+              "GEDI02_B_2022219175619_O20686_02_T10682_02_003_01_V002_subsetted.h5",
+              "GEDI02_B_2022292124902_O21815_02_T02052_02_003_01_V002_subsetted.h5",
+              "GEDI02_B_2024139003534_O30756_02_T10284_02_004_01_V002_subsetted.h5",
+              "GEDI02_B_2024170155920_O31247_03_T02942_02_004_01_V002_subsetted.h5",
+              "GEDI02_B_2024217174101_O31977_02_T04990_02_004_02_V002_subsetted.h5",
+              "GEDI02_B_2024235141708_O32254_03_T07211_02_004_02_V002_subsetted.h5",
+              "GEDI02_B_2024290161126_O33108_03_T04273_02_004_01_V002_subsetted.h5")
+
+for (i in seq_along(gediFiles)) {
+  fileName <- gediFiles[i]
+  if (fileName %in% dropList) {
+    next
+  }
+  gedi2B <- readLevel2B(level2Bpath = file.path(directory2B, gediFiles[i]))
+  gedi2B_PAI <- getLevel2BPAIProfile(level2b = gedi2B)
+  gedi2B_PAI$shot_number <- as.character(gedi2B_PAI$shot_number)
+  gedi2B_PAI$ID <- gediFiles[i]
+  dateTimeCode <- regmatches(gedi2B_PAI$ID, regexpr("20\\d{11}", gedi2B_PAI$ID))
+  year <- substr(dateTimeCode, 1, 4)
+  doy <- substr(dateTimeCode, 5, 7)
+  gedi2B_PAI$Date <- as.Date(as.integer(doy) - 1, origin = paste0(year, "-01-01"))
+  gedi2B_PAI <- gedi2B_PAI[,-"ID"]
+  gedi2B_PAVD <- getLevel2BPAVDProfile(level2b = gedi2B)
+  gedi2B_PAVD$shot_number <- as.character(gedi2B_PAVD$shot_number)
+  gedi2B_PAVD$ID <- gediFiles[i]
+  dateTimeCode <- regmatches(gedi2B_PAVD$ID, regexpr("20\\d{11}", gedi2B_PAVD$ID))
+  year <- substr(dateTimeCode, 1, 4)
+  doy <- substr(dateTimeCode, 5, 7)
+  gedi2B_PAVD$Date <- as.Date(as.integer(doy) - 1, origin = paste0(year, "-01-01"))
+  gedi2B_PAVD <- gedi2B_PAVD[,-"ID"]
+  gedi2B_BVPM <- getLevel2BVPM(level2b = gedi2B)
+  gedi2B_BVPM$shot_number <- as.character(gedi2B_BVPM$shot_number)
+  gedi2B_BVPM$ID <- gediFiles[i]
+  dateTimeCode <- regmatches(gedi2B_BVPM$ID, regexpr("20\\d{11}", gedi2B_BVPM$ID))
+  year <- substr(dateTimeCode, 1, 4)
+  doy <- substr(dateTimeCode, 5, 7)
+  gedi2B_BVPM$Date <- as.Date(as.integer(doy) - 1, origin = paste0(year, "-01-01"))
+  gedi2B_BVPM <- gedi2B_BVPM[,-"ID"]
+  gedi2B <- inner_join(gedi2B_PAI, gedi2B_PAVD, by = c("shot_number", "beam", "algorithmrun_flag",
+                                                       "l2b_quality_flag", "delta_time", "lat_lowestmode",
+                                                       "lon_lowestmode", "elev_highestreturn", "elev_lowestmode",
+                                                       "height_lastbin", "height_bin0"))
+  gedi2B <- inner_join(gedi2B, gedi2B_BVPM, by = c("shot_number", "algorithmrun_flag", "l2b_quality_flag", "delta_time",
+                                         "elev_highestreturn", "elev_lowestmode"))
+  gedi2BList[[i]] <- gedi2B
+}
+
+
+gedi2BAll <- do.call(rbind, gedi2BList)
+gedi2BAll <- gedi2BAll %>% filter(l2b_quality_flag == 1)
+
+```
+
+# Data wrangling
+
+```{r}
+gedi1BAll
+
+
+
+# Combine all the data into one big GEDI dataframe
+gediAll <- inner_join(gedi1BAll, gedi2AAll, by = c("shot_number", "Date"))
+gediAll <- inner_join(gediAll, gedi2BAll,
+                      by = c("shot_number", "delta_time", "sensitivity", "solar_elevation", "lat_lowestmode",
+                             "lon_lowestmode", "elev_highestreturn", "elev_lowestmode", "Date"))
+
+# Clean up the dataframe a bit
+gediAll <- gediAll %>%
+  dplyr::select(-beam.y, -beam.x, -latitude_lastbin.y, -latitude_bin0.y,
+         -longitude_bin0.y, -longitude_lastbin.y, -rh100.y,
+         -Date.x, -Date.y) %>%
+  rename("latitude_bin0" = "latitude_bin0.x",
+         "latitude_lastbin" = "latitude_lastbin.x",
+         "longitude_bin0" = "longitude_bin0.x",
+         "longitude_lastbin" = "longitude_lastbin.x",
+         "rh100" = "rh100.x")
+
+# write_csv(gediAll, "/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/GEDI_ALL/gediAll.csv")
+
+gediAll <- read_csv("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/GEDI_ALL/gediAll.csv")
+
+# Turn into an sf object
+gediAll_sf <- st_as_sf(gediAll, coords = c("longitude_lastbin", "latitude_lastbin"), crs = "epsg:4326")
+
+
+class(gediAll_sf$geometry)
+# rm(gediAll, gediAll_sf)
+```
+
+
+# What files to download?
+
+```{r}
+# Read in the list of the LAZ files. There are so many and the data allocation to download
+# and read all of them in would be too much, so I will try and find if any of our GEDI locations
+# fall within the 1km grid cell that each of them represent. Once I have that figured out I can
+# then calculate tree metrics
+lazFiles <- data.table::fread('/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/LAZ files.txt')
+
+# Function to get easting and northing from the LAZ file names
+parse_tile_coords <- function(tile_name) {
+  tile_id <- str_extract(tile_name, "15[A-Z]{3}[0-9]{6}")
+  zone <- as.numeric(str_sub(tile_id, 1, 2))
+  mgrs <- str_sub(tile_id, 3, 5)
+  east <- as.numeric(str_sub(tile_id, 6, 8)) * 1000
+  north <- as.numeric(str_sub(tile_id, 9, 11)) * 1000 + 5000000
+  data.frame(zone = zone, mgrs = mgrs, easting = east, northing = north)
+}
+
+# Bind together
+tile_meta <- do.call(rbind, lapply(lazFiles$Files, parse_tile_coords)) %>% drop_na()
+
+# Function to create square polygons
+make_tile <- function(easting, northing, size = 1000) {
+  st_polygon(list(rbind(
+    c(easting, northing),
+    c(easting + size, northing),
+    c(easting + size, northing + size),
+    c(easting, northing + size),
+    c(easting, northing)
+  )))
+}
+
+# Apply to all elements and then convert to epsg 4326
+tiles_polys <- mapply(make_tile, tile_meta$easting, tile_meta$northing, SIMPLIFY = FALSE)
+tiles_sf <- st_sfc(tiles_polys, crs = 26915)
+tiles_sf <- st_as_sf(tiles_sf)
+tiles_sf$mgrs <- tile_meta$mgrs
+tiles_sf$n <- 1:nrow(tiles_sf)
+tiles_sfGedi <- st_transform(tiles_sf, crs = "epsg:4326")
+
+# Plot for visual check (optional)
+ggplot() +
+  geom_sf(data = tiles_sfGedi, fill = NA, color = "black") +
+  geom_sf(data = BWCA.shp[3], fill = NA, color = "red") +
+  theme_minimal()
+
+# Clip the tiles to the BWCA shapefile and then decipher which GEDI location fall in which grid cells
+tilesBWCA <- st_intersection(tiles_sfGedi, BWCA.shp)
+tilesBWCA <- st_as_sf(tilesBWCA, crs = "epsg:4326") %>%
+  mutate(tileID = n)
+# Transform intersected tiles back to UTM
+tilesBWCA_UTM <- st_transform(tilesBWCA, crs = "epsg:26915")
+
+# Extract xmin/ymin and carry tileID + mgrs
+n <- nrow(tilesBWCA_UTM)
+xmin_vals <- numeric(n)
+ymin_vals <- numeric(n)
+tileID_vals <- numeric(n)
+mgrs_vals <- character(n)
+
+for (i in 1:n) {
+  bbox <- st_bbox(tilesBWCA_UTM[i, ])
+  xmin_vals[i] <- bbox["xmin"]
+  ymin_vals[i] <- bbox["ymin"]
+  tileID_vals[i] <- tilesBWCA_UTM$tileID[i]
+  mgrs_vals[i] <- tilesBWCA_UTM$mgrs[i]
+}
+
+# Final output data frame
+coordsDf <- data.frame(
+  tileID = tileID_vals,
+  xmin = as.integer(xmin_vals) / 1000,
+  ymin = (ymin_vals - 5000000) / 1000,
+  mgrs = mgrs_vals,
+  stringsAsFactors = FALSE
+)
+
+coordsDf <- coordsDf %>% mutate(xmin = round(xmin), ymin = round(ymin))
+coordsDf <- coordsDf %>% mutate(code = paste0(mgrs, xmin, ymin))
+
+# Now that we have the tiles/coordinates that we need, we can start filtering the original
+# LAZ files to figure out which ones we need to download
+# Mark dummy = 1 if the coordsDf$code is in laz_codes to test if they are in
+lazCodes <- str_extract(lazFiles$Files, "[A-Z]{3}[0-9]{6}")
+coordsDf$dummy <- ifelse(coordsDf$code %in% lazCodes, 1, 0)
+coordsDf <- coordsDf %>% filter(dummy == 1)
+
+# Filter for the final LAZ files
+lazFilesFinal <- lazFiles[map_lgl(lazFiles$Files, function(file) {
+  any(str_detect(file, fixed(coordsDf$code)))
+}), ]
+
+
+# write_csv(lazFilesFinal,
+#           file = "/Users/louisgoodall/Desktop/lazFilesFinal.csv")
+
+
+#######################
+gediAll_UTM <- st_transform(gediAll_sf, crs = "epsg:26915")
+
+gediAll_joined <- st_join(gediAll_UTM, tilesBWCA_UTM[, c("tileID", "mgrs")], left = FALSE)
+
+gediAll_joined <- gediAll_joined %>%
+  mutate(xmin = floor(st_coordinates(.)[, 1] / 1000),
+         ymin = floor((st_coordinates(.)[, 2] - 5000000) / 1000),
+         code = paste0(mgrs, xmin, ymin))
+
+gediAll_joined <- gediAll_joined %>% mutate(code = trimws(code))
+
+gediMatched <- gediAll_joined %>% filter(code %in% coordsDf$code)
+
+
+gediMatched <- gediMatched %>%
+  filter(degrade_flag == 0,
+         Date > "2023-12-31") %>%
+  group_by(code) %>%
+  arrange(code, shot_number) %>%
+  mutate(shot_order = row_number(),
+         uniqueID = paste0("uID_",code,"_",shot_order))
+
+# gediMatched <- gediMatched %>%
+#   filter(Date > "2023-12-31",
+#          degrade_flag == 0) %>%
+#   group_by(code) %>%
+#   # select(shot_number, code) %>%
+#   arrange(code, shot_number) %>%
+#   mutate(shot_order = row_number(),
+#          uniqueID = paste0("uID_",code,"_",shot_order))
+
+st_write(gediMatched,
+         dsn = "/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Shapefiles/gediMatched.shp")
+```
+
+
+
+
+
+
+
+
+

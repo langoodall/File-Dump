@@ -1,0 +1,150 @@
+---
+title: "MN-GEDI"
+author: "Louis Goodall"
+date: "2025-06-17"
+output: pdf_document
+---
+
+```{r}
+library(tidyverse)
+library(sf)
+library(terra)
+library(rGEDI)
+library(mapview)
+# use_python("/opt/anaconda3/envs/rgee_py/bin/python", required = TRUE)
+# ee_Initialize("louisangoodall@gmail.com", drive = TRUE, project = "ee-gis712-2024")
+
+library(reticulate)
+# Tell reticulate to use the Conda environment explicitly
+use_condaenv("rgee_py", conda = "/opt/anaconda3/bin/conda", required = TRUE)
+# Now load rgee and initialize Earth Engine
+library(rgee)
+ee_Initialize(email = "louisangoodall@gmail.com", drive = TRUE, project = "ee-gis712-2024")
+
+# reticulate::py_discover_config()
+# ee_clean_user_credentials()
+# ee_Authenticate()
+```
+
+
+
+```{r}
+bwcaBox <- ee$Geometry$Rectangle(c(c(-92.45544,47.77243,-90.01705,48.36565)))
+# Read in BWCA shapefile and transform to gee crs
+BWCA.shp <- st_read("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Shapefiles/BWCA/boundary_waters_canoe_area_wilderness.shp") %>%
+  st_transform(., crs = "epsg:4326")
+eeBWCA.shp <- sf_as_ee(BWCA.shp)
+
+gedi_fc <- ee$FeatureCollection("LARSE/GEDI/GEDI02_A_002_INDEX")
+gedi_fc$size()$getInfo()
+
+gediCol <- ee$FeatureCollection("LARSE/GEDI/GEDI02_A_002_INDEX")$
+  filterBounds(eeBWCA.shp)$
+  filter(ee$Filter$gte('sensitivity', 0.9))$
+  filter(ee$Filter$eq('quality_flag', 1))
+
+gediIDs <- gediCol$aggregate_array("table_id")$getInfo()
+
+
+clip_to_aoi <- function(image) {
+  image$clip(eeBWCA.shp)
+}
+
+clippedGedi <- gediCol$map(clip_to_aoi)
+
+granule_ids <- clippedGedi$aggregate_array('granule_id')$getInfo()
+
+
+# gedi2AFilter = function(x){
+#   gr = ee$FeatureCollection(x)$                      # Loads GEDI Level2A as a gee feature collection
+#     filterBounds(eeBWCA.shp)$                        # Filters for aoi
+#     # filter(ee$Filter$inList('beam',list(5, 6, 8, 11)))$ # Filters for only the power beams in GEDI
+#     filter(ee$Filter$inList('beam', list(1,2,3,4,5,6,7,8,9,10,11,12)))$
+#     filter(ee$Filter$eq('quality_flag', 1))$         # Filters for only the best quality observations
+#     filter(ee$Filter$eq('degrade_flag', 0))$         # Removes degraded data
+#     # filter(ee$Filter$gt('rh98', 2))$                 # Removes small (noisy) height values
+#     # filter(ee$Filter$lt('rh98', 60))$                # Removes very tall returns which may not be trees
+#     filter(ee$Filter$gt('sensitivity', 0.8))        # Keeps only data with a high sensitivity
+#   return(gr)
+# }
+```
+
+
+
+```{r}
+# Read in BWCA shapefile and transform to gee crs
+BWCA.shp <- st_read("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Shapefiles/BWCA/boundary_waters_canoe_area_wilderness.shp") %>%
+  st_transform(., crs = "epsg:4326")
+plot(BWCA.shp[5])
+
+# Create gee shapefile
+eeBWCA.shp <- sf_as_ee(BWCA.shp)
+
+# Get bounding box coordinates
+st_bbox(BWCA.shp)
+bbox <- paste(st_bbox(BWCA)[c("xmin", "ymin", "xmax", "ymax")], collapse = ",")
+
+daterange1 <- c("2024-01-01","2024-08-30")
+daterange2 <- c("2024-09-01","2024-12-31") 
+
+# Get granule names for elevation/height data
+gr2A <- gedifinder('GEDI02_A',
+                   version = "002",
+                   ul_lat = 48.36565341357,
+                   ul_lon = -92.4554407336653,
+                   lr_lat = 47.7724278318685,
+                   lr_lon = -90.0170479505885,
+                   daterange = daterange1) %>%
+  unlist() %>%
+  basename()
+
+# and canopy cover and vertical profile metrics
+gr2B <- gedifinder('GEDI02_B',
+                   version = "002",
+                   ul_lat = 48.36565341357,
+                   ul_lon = -92.4554407336653,
+                   lr_lat = 47.7724278318685,
+                   lr_lon = -90.0170479505885) %>%
+  unlist() %>%
+  basename()
+
+# Create a dataset of the different values
+gr2A <- tibble(L2A = gr2A) %>% mutate(id = substr(L2A, 10, 39))
+gr2B <- tibble(L2B = gr2B) %>% mutate(id = substr(L2B, 10, 39))
+granules = inner_join(gr2A, gr2B, by = "id")
+
+getDateTime <- function(x){
+  t = substr(sub("GEDI02_[AB]_","",x),1,13)
+  strptime(t, "%Y%j%H%M%S")
+}
+
+granules <- granules %>%
+  mutate(date = getDateTime(L2A),
+         year = lubridate::year(date),
+         month = lubridate::month(date),
+         hour = lubridate::hour(date),
+         date = lubridate::as_date(date),
+         assetPathL2A = sub('.h5', '', paste0('LARSE/GEDI/GEDI02_A_002/',L2A)),
+         assetPathL2B = sub('.h5', '', paste0('LARSE/GEDI/GEDI02_B_002/',L2B))) %>%
+  select(-c(L2A,L2B)) %>%
+  filter(!between(hour, 6, 23)) %>%
+  glimpse()
+
+
+gediDownload(filepath = gr2A, outdir = "/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/L2A/")
+```
+
+
+
+
+```{r}
+
+
+```
+
+
+
+
+
+
+

@@ -1,0 +1,43 @@
+---
+title: "Untitled"
+author: "Louis Goodall"
+date: "2025-06-15"
+output: pdf_document
+---
+
+```{r}
+library(pacman)
+library(rgee)
+```
+
+
+
+```{r}
+rgee::ee_clean_user_credentials()
+rgee_environment_directory <- "/opt/anaconda3/envs/rgee_py/bin/python"
+
+p_load(raster,
+       rgdal,
+       rgeos,
+       gdalUtils,
+       sp,
+       sf,
+       leaflet,
+       mapview,
+       caret,
+       terra)
+p_load(rgee, geojsonio, remotes, reticulate, devtools, googledrive)
+
+# set python
+reticulate::use_python(rgee_environment_directory, required=T)
+rgee::ee_install_set_pyenv(
+  py_path = rgee_environment_directory, # Change it for your own Python PATH
+  py_env = "rgee_py" # Change it for your own Python ENV
+)
+Sys.setenv(RETICULATE_PYTHON = rgee_environment_directory)
+Sys.setenv(EARTHENGINE_PYTHON = rgee_environment_directory)
+
+rgee::ee_Initialize(drive = T)
+```
+
+

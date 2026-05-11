@@ -1,0 +1,4001 @@
+---
+title: "GEDI"
+author: "Louis Goodall"
+date: "2025-05-27"
+output: pdf_document
+---
+
+```{r, warning = FALSE, message = FALSE}
+library(tidyverse)
+library(terra)
+library(sf)
+library(rGEDI)
+library(lidR)
+library(pbmcapply)
+library(gstat)
+library(educate)
+library(minpack.lm)
+library(lubridate)
+library(exactextractr)
+library(ellipse)
+library(caret)
+library(randomForest)
+library(glcm)
+library(CAST)
+library(mgcv)
+library(mclust)
+#library(blockCV)
+#library(cluster)
+#library(factoextra)
+#library(ConsensusClusterPlus)
+
+library(segmented)
+
+library(pls)
+
+BWCA.shp <- st_read("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Shapefiles/BWCA/boundary_waters_canoe_area_wilderness.shp") %>%
+  st_transform(., crs = "epsg:4326")
+fortypcdBWCA_UTM <- rast("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/TreeMap/fortypcdBWCA.tif") %>%
+  project(., "epsg:26915", method = "near", res = c(30,30))
+options(scipen = 999)
+templateRaster <- rast('/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/Processed Rasters/B1_p10_2026_01_02_11_01_35.tif')
+gc()
+
+
+```
+
+# GEDI 1B
+
+```{r}
+# For loop to process all the GEDI_1B waveforms as a sf dataframe and then bind into
+# one large sfdf. Write out as a shapefile. Saves SO much data
+directory1B <- "/Volumes/Crucial X6/GEDI/GEDI 1B"
+gediFiles <- list.files(path = directory1B)
+gedi1BList <- list()
+
+for (i in seq_along(gediFiles)) {
+  gedi1B <- readLevel1B(level1Bpath = file.path(directory1B, gediFiles[i]))
+  # gedi1B <- getLevel1BGeo(level1b = gedi1B, select = c("elevation_bin0"))   # IT'S PROBABLY THIS FILTERING OUT OTHER COLUMNS
+  gedi1B <- getLevel1BGeo(level1b = gedi1B)
+  gedi1B$shot_number <- as.character(gedi1B$shot_number)
+  gedi1B$ID <- gediFiles[i]
+  dateTimeCode <- regmatches(gedi1B$ID, regexpr("20\\d{11}", gedi1B$ID))
+  year <- substr(dateTimeCode, 1, 4)
+  doy <- substr(dateTimeCode, 5, 7)
+  gedi1B$Date <- as.Date(as.integer(doy) - 1, origin = paste0(year, "-01-01"))
+  gedi1B <- gedi1B %>% dplyr::select(-ID)
+  # gedi1B <- st_as_sf(gedi1B, coords = c("longitude_bin0", "latitude_bin0"), crs = "epsg:4326")
+  gedi1BList[[i]] <- gedi1B
+}
+
+gedi1BAll <- do.call(rbind, gedi1BList)
+
+# st_write(gedi1BAll,
+#          dsn = "/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Shapefiles/BWCA/GEDI1B/gedi1BAll.shp")
+
+names(gedi1BAll)
+
+# x <- st_read("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Shapefiles/BWCA/GEDI1B/gedi1BAll.shp")
+# 
+# names(x)
+```
+
+# GEDI 2A
+
+```{r}
+directory2A <- '/Volumes/Crucial X6/GEDI/GEDI 2A'
+gediFiles <- list.files(path = directory2A)
+gedi2AList <- list()
+
+for (i in seq_along(gediFiles)) {
+  gedi2A <- readLevel2A(level2Apath = file.path(directory2A, gediFiles[i]))
+  gedi2A <- getLevel2AM(level2a = gedi2A)
+  gedi2A$shot_number <- as.character(gedi2A$shot_number)
+  gedi2A$ID <- gediFiles[i]
+  dateTimeCode <- regmatches(gedi2A$ID, regexpr("20\\d{11}", gedi2A$ID))
+  year <- substr(dateTimeCode, 1, 4)
+  doy <- substr(dateTimeCode, 5, 7)
+  gedi2A$Date <- as.Date(as.integer(doy) - 1, origin = paste0(year, "-01-01"))
+  gedi2A <- gedi2A %>% select(-ID)
+  # gedi2A <- st_as_sf(gedi2A, coords = c("lon_lowestmode", "lat_lowestmode"), crs = "epsg:4326")
+  gedi2AList[[i]] <- gedi2A
+}
+
+gedi2AAll <- do.call(rbind, gedi2AList)
+gedi2AAll <- gedi2AAll %>% filter(quality_flag == 1)
+
+# st_write(gedi2AAll,
+#          dsn = "/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Shapefiles/BWCA/GEDI2A/gedi2AAll.shp")
+
+y <- st_read("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Shapefiles/BWCA/GEDI2A/gedi2AAll.shp")
+
+names(y)
+```
+
+# GEDI 2B
+
+```{r}
+directory2B <- '/Volumes/Crucial X6/GEDI/GEDI 2B'
+gediFiles <- list.files(path = directory2B)
+gedi2BList <- list()
+
+dropList <- c("GEDI02_B_2022089212114_O18672_02_T00721_02_003_01_V002_subsetted.h5",
+              "GEDI02_B_2022146024621_O19544_03_T10057_02_003_01_V002_subsetted.h5",
+              "GEDI02_B_2022158180539_O19740_02_T04990_02_003_01_V002_subsetted.h5",
+              "GEDI02_B_2022173153335_O19971_03_T09965_02_003_02_V002_subsetted.h5",
+              "GEDI02_B_2022193042801_O20274_02_T02144_02_003_02_V002_subsetted.h5",
+              "GEDI02_B_2022219175619_O20686_02_T10682_02_003_01_V002_subsetted.h5",
+              "GEDI02_B_2022292124902_O21815_02_T02052_02_003_01_V002_subsetted.h5",
+              "GEDI02_B_2024139003534_O30756_02_T10284_02_004_01_V002_subsetted.h5",
+              "GEDI02_B_2024170155920_O31247_03_T02942_02_004_01_V002_subsetted.h5",
+              "GEDI02_B_2024217174101_O31977_02_T04990_02_004_02_V002_subsetted.h5",
+              "GEDI02_B_2024235141708_O32254_03_T07211_02_004_02_V002_subsetted.h5",
+              "GEDI02_B_2024290161126_O33108_03_T04273_02_004_01_V002_subsetted.h5")
+
+for (i in seq_along(gediFiles)) {
+  fileName <- gediFiles[i]
+  if (fileName %in% dropList) {
+    next
+  }
+  gedi2B <- readLevel2B(level2Bpath = file.path(directory2B, gediFiles[i]))
+  gedi2B_PAI <- getLevel2BPAIProfile(level2b = gedi2B)
+  gedi2B_PAI$shot_number <- as.character(gedi2B_PAI$shot_number)
+  gedi2B_PAI$ID <- gediFiles[i]
+  dateTimeCode <- regmatches(gedi2B_PAI$ID, regexpr("20\\d{11}", gedi2B_PAI$ID))
+  year <- substr(dateTimeCode, 1, 4)
+  doy <- substr(dateTimeCode, 5, 7)
+  gedi2B_PAI$Date <- as.Date(as.integer(doy) - 1, origin = paste0(year, "-01-01"))
+  gedi2B_PAI <- gedi2B_PAI %>% select(-ID)
+  gedi2B_PAVD <- getLevel2BPAVDProfile(level2b = gedi2B)
+  gedi2B_PAVD$shot_number <- as.character(gedi2B_PAVD$shot_number)
+  gedi2B_PAVD$ID <- gediFiles[i]
+  dateTimeCode <- regmatches(gedi2B_PAVD$ID, regexpr("20\\d{11}", gedi2B_PAVD$ID))
+  year <- substr(dateTimeCode, 1, 4)
+  doy <- substr(dateTimeCode, 5, 7)
+  gedi2B_PAVD$Date <- as.Date(as.integer(doy) - 1, origin = paste0(year, "-01-01"))
+  gedi2B_PAVD <- gedi2B_PAVD %>% select(-ID)
+  gedi2B_BVPM <- getLevel2BVPM(level2b = gedi2B)
+  gedi2B_BVPM$shot_number <- as.character(gedi2B_BVPM$shot_number)
+  gedi2B_BVPM$ID <- gediFiles[i]
+  dateTimeCode <- regmatches(gedi2B_BVPM$ID, regexpr("20\\d{11}", gedi2B_BVPM$ID))
+  year <- substr(dateTimeCode, 1, 4)
+  doy <- substr(dateTimeCode, 5, 7)
+  gedi2B_BVPM$Date <- as.Date(as.integer(doy) - 1, origin = paste0(year, "-01-01"))
+  gedi2B_BVPM <- gedi2B_BVPM %>% select(-ID)
+  gedi2B <- inner_join(gedi2B_PAI, gedi2B_PAVD, by = c("shot_number", "beam", "algorithmrun_flag",
+                                                       "l2b_quality_flag", "delta_time", "lat_lowestmode",
+                                                       "lon_lowestmode", "elev_highestreturn", "elev_lowestmode",
+                                                       "height_lastbin", "height_bin0"))
+  gedi2B <- inner_join(gedi2B, gedi2B_BVPM, by = c("shot_number", "algorithmrun_flag", "l2b_quality_flag", "delta_time",
+                                         "elev_highestreturn", "elev_lowestmode"))
+  gedi2BList[[i]] <- gedi2B
+}
+
+
+gedi2BAll <- do.call(rbind, gedi2BList)
+gedi2BAll <- gedi2BAll %>% filter(l2b_quality_flag == 1)
+
+
+```
+
+# Data wrangling
+
+```{r}
+# Combine all the data into one big GEDI dataframe
+gediAll <- inner_join(gedi1BAll, gedi2AAll, by = c("shot_number", "Date"))
+gediAll <- inner_join(gediAll, gedi2BAll, by = c("shot_number", "delta_time", "sensitivity", "solar_elevation", "lat_lowestmode", "lon_lowestmode", "elev_highestreturn", "elev_lowestmode", "Date"))
+
+# Clean up the dataframe a bit
+gediAll <- gediAll %>%
+  select(-beam.y, -beam.x, -latitude_lastbin.y, -latitude_bin0.y,
+         -longitude_bin0.y, -longitude_lastbin.y, -rh100.y,
+         -Date.x, -Date.y) %>%
+  rename("latitude_bin0" = "latitude_bin0.x",
+         "latitude_lastbin" = "latitude_lastbin.x",
+         "longitude_bin0" = "longitude_bin0.x",
+         "longitude_lastbin" = "longitude_lastbin.x",
+         "rh100" = "rh100.x")
+
+# write_csv(gediAll, "/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/GEDI_ALL/gediAll.csv")
+
+gediAll <- read_csv("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/GEDI_ALL/gediAll.csv")
+
+# Turn into an sf object
+gediAll_sf <- st_as_sf(gediAll, coords = c("longitude_lastbin", "latitude_lastbin"), crs = "epsg:4326")
+
+
+class(gediAll_sf$geometry)
+# rm(gediAll, gediAll_sf)
+```
+
+# UNDERSTORY LADDER FUELS STUFF
+
+```{r}
+gediAll_sf %>%
+  filter(rh100 >= 5,
+         sensitivity >= 0.9,
+         format(Date, "%m-%d") >= "04-30" &
+         format(Date, "%m-%d") <= "08-06")
+
+
+# MODIS MCD12Q2.006 Land Cover Dynamics 500m
+# This product is used to determine the leaf up and leaf out dates for the BWCA in days since
+# Jan 1 1970. This is the year 2023. Can be changed in the future for a more recent representation
+sos <- rast('/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/Processed Rasters/Greenup_1_2025_08_03_15_37_26.tif')
+eos <- rast('/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/Processed Rasters/Senescence_1_2025_08_03_15_37_36.tif')
+los <- eos - sos
+
+# Convert to a dataframe and then get the mode for leaf up and leaf down. Then get the julian date for that year
+# This is so that we can filter for GEDI shots that are within these dates
+sosNoZeros <- sos %>% as.data.frame() %>% filter(Greenup_1 > 0)
+eosNoZeros <- eos %>% as.data.frame() %>% filter(Senescence_1 > 0)
+sosMode <- DescTools::Mode(sosNoZeros$Greenup_1)[1]
+eosMode <- DescTools::Mode(eosNoZeros$Senescence_1)[1]
+
+sosDate <- as.Date(sosMode, origin = "1970-01-01")
+sosJulian <- as.integer(format(sosDate, "%j"))
+eosDate <- as.Date(eosMode, origin = "1970-01-01")
+eosJulian <- as.integer(format(eosDate, "%j"))
+
+
+
+
+
+
+gc()
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# What files to download?
+
+```{r}
+# Read in the list of the LAZ files. There are so many and the data allocation to download
+# and read all of them in would be too much, so I will try and find if any of our GEDI locations
+# fall within the 1km grid cell that each of them represent. Once I have that figured out I can
+# then calculate tree metrics
+lazFiles <- data.table::fread('/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/LAZ files.txt')
+
+# Function to get easting and northing from the LAZ file names
+parse_tile_coords <- function(tile_name) {
+  tile_id <- str_extract(tile_name, "15[A-Z]{3}[0-9]{6}")
+  zone <- as.numeric(str_sub(tile_id, 1, 2))
+  mgrs <- str_sub(tile_id, 3, 5)
+  east <- as.numeric(str_sub(tile_id, 6, 8)) * 1000
+  north <- as.numeric(str_sub(tile_id, 9, 11)) * 1000 + 5000000
+  data.frame(zone = zone, mgrs = mgrs, easting = east, northing = north)
+}
+
+# Bind together
+tile_meta <- do.call(rbind, lapply(lazFiles$Files, parse_tile_coords)) %>% drop_na()
+
+# Function to create square polygons
+make_tile <- function(easting, northing, size = 1000) {
+  st_polygon(list(rbind(
+    c(easting, northing),
+    c(easting + size, northing),
+    c(easting + size, northing + size),
+    c(easting, northing + size),
+    c(easting, northing)
+  )))
+}
+
+# Apply to all elements and then convert to epsg 4326
+tiles_polys <- mapply(make_tile, tile_meta$easting, tile_meta$northing, SIMPLIFY = FALSE)
+tiles_sf <- st_sfc(tiles_polys, crs = 26915)
+tiles_sf <- st_as_sf(tiles_sf)
+tiles_sf$mgrs <- tile_meta$mgrs
+tiles_sf$n <- 1:nrow(tiles_sf)
+tiles_sfGedi <- st_transform(tiles_sf, crs = "epsg:4326")
+
+# Plot for visual check (optional)
+ggplot() +
+  geom_sf(data = tiles_sfGedi, fill = NA, color = "black") +
+  geom_sf(data = BWCA.shp[3], fill = NA, color = "red") +
+  theme_minimal()
+
+# Clip the tiles to the BWCA shapefile and then decipher which GEDI location fall in which grid cells
+tilesBWCA <- st_intersection(tiles_sfGedi, BWCA.shp)
+tilesBWCA <- st_as_sf(tilesBWCA, crs = "epsg:4326") %>%
+  mutate(tileID = n)
+# Transform intersected tiles back to UTM
+tilesBWCA_UTM <- st_transform(tilesBWCA, crs = "epsg:26915")
+
+# Extract xmin/ymin and carry tileID + mgrs
+n <- nrow(tilesBWCA_UTM)
+xmin_vals <- numeric(n)
+ymin_vals <- numeric(n)
+tileID_vals <- numeric(n)
+mgrs_vals <- character(n)
+
+for (i in 1:n) {
+  bbox <- st_bbox(tilesBWCA_UTM[i, ])
+  xmin_vals[i] <- bbox["xmin"]
+  ymin_vals[i] <- bbox["ymin"]
+  tileID_vals[i] <- tilesBWCA_UTM$tileID[i]
+  mgrs_vals[i] <- tilesBWCA_UTM$mgrs[i]
+}
+
+# Final output data frame
+coordsDf <- data.frame(
+  tileID = tileID_vals,
+  xmin = as.integer(xmin_vals) / 1000,
+  ymin = (ymin_vals - 5000000) / 1000,
+  mgrs = mgrs_vals,
+  stringsAsFactors = FALSE
+)
+
+coordsDf <- coordsDf %>% mutate(xmin = round(xmin), ymin = round(ymin))
+coordsDf <- coordsDf %>% mutate(code = paste0(mgrs, xmin, ymin))
+
+# Now that we have the tiles/coordinates that we need, we can start filtering the original
+# LAZ files to figure out which ones we need to download
+# Mark dummy = 1 if the coordsDf$code is in laz_codes to test if they are in
+coordsDf$dummy <- ifelse(coordsDf$code %in% lazCodes, 1, 0)
+coordsDf <- coordsDf %>% filter(dummy == 1)
+
+# Filter for the final LAZ files
+lazFilesFinal <- lazFiles[map_lgl(lazFiles$Files, function(file) {
+  any(str_detect(file, fixed(coordsDf$code)))
+}), ]
+
+
+# write_csv(lazFilesFinal,
+#           file = "/Users/louisgoodall/Desktop/lazFilesFinal.csv")
+
+
+#######################
+gediAll_UTM <- st_transform(gediAll_sf, crs = "epsg:26915")
+
+gediAll_joined <- st_join(gediAll_UTM, tilesBWCA_UTM[, c("tileID", "mgrs")], left = FALSE)
+
+gediAll_joined <- gediAll_joined %>%
+  mutate(xmin = floor(st_coordinates(.)[, 1] / 1000),
+         ymin = floor((st_coordinates(.)[, 2] - 5000000) / 1000),
+         code = paste0(mgrs, xmin, ymin))
+
+gediAll_joined <- gediAll_joined %>% mutate(code = trimws(code))
+
+gediMatched <- gediAll_joined %>% filter(code %in% coordsDf$code)
+
+
+gediMatched <- gediMatched %>%
+  filter(degrade_flag == 0,
+         Date > "2023-12-31") %>%
+  group_by(code) %>%
+  arrange(code, shot_number) %>%
+  mutate(shot_order = row_number(),
+         uniqueID = paste0("uID_",code,"_",shot_order))
+
+# gediMatched <- gediMatched %>%
+#   filter(Date > "2023-12-31",
+#          degrade_flag == 0) %>%
+#   group_by(code) %>%
+#   # select(shot_number, code) %>%
+#   arrange(code, shot_number) %>%
+#   mutate(shot_order = row_number(),
+#          uniqueID = paste0("uID_",code,"_",shot_order))
+
+st_write(gediMatched,
+         dsn = "/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Shapefiles/gediMatched.shp")
+```
+
+# Tree metrics
+
+```{r}
+# Read in and set analysis parameters of the lidar point clouds
+testLAS <- readLAScatalog("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Test_Data/", select = "xyzc")
+opt_chunk_size(testLAS) <- 100
+opt_chunk_buffer(testLAS) <- 15
+testLAS@data$code <- str_extract(testLAS@data$filename, "[A-Z]{3}[0-9]{6}")
+
+# Create a data frame of the rows that match the lidar point cloud locations by code
+testGEDI <- gediMatched %>% filter(code %in% unique(testLAS@data$code))
+source("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/lidarMetrics.R")
+gediCodes <- unique(testGEDI$code)
+matchedCodes <- testLAS@data$code[testLAS@data$code %in% gediCodes]
+setdiff(gediCodes, matchedCodes)
+testLAS <- testLAS[testLAS@data$code %in% gediCodes, ]
+class(testGEDI) <- c("sf", "data.frame")
+
+# Create folders for metricsDir, alsDir and FuelCalcDir
+metricsDir = "/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/Tree-Level Metrics"
+alsDir = "/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/LAZ"
+fcDir = "/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/FuelCalc"
+for (d in c(metricsDir, alsDir, fcDir)) if (!dir.exists(d)) dir.create(d, recursive = T)
+
+# Create the metrics and LAS files
+for (i in 1:nrow(testGEDI)) {
+  process_tlm2(i, gedi = testGEDI, .ctg = testLAS, alsdir = alsDir, mdir = metricsDir)
+}
+```
+
+
+```{r}
+# Read in the metrics that have been created by the for loop above
+#filesMetrics <- list.files(metricsDir, full.names = TRUE)
+#filesALS <- list.files(alsDir, full.names = TRUE)
+filesMetrics <- list.files("/Users/louisgoodall/Desktop/Tree-Level_Metrics", full.names = TRUE)
+filesALS <- list.files("/Users/louisgoodall/Desktop/LAZ", full.names = TRUE)
+idsMetrics <- parse_number(basename(filesMetrics))
+idsALS <- parse_number(basename(filesALS))
+identical(idsALS, idsMetrics)
+
+# Function to load spatial df, add uniqueID column and renames Zmax to Z
+read_with_id = function(path) {
+  # Extract the full ID like TXP624306_1
+  id = str_extract(basename(path), "(?<=uID_)[A-Za-z0-9_]+(?=\\.gpkg$)")
+  
+  m = st_read(path, quiet = TRUE)
+  m$uniqueID = id
+  
+  return(select(m, uniqueID, treeID, Z = Zmax, everything()))
+}
+
+# Get metrics and then find the forest types beneath them
+metrics <- map_dfr(filesMetrics, read_with_id) %>% `st_crs<-`("epsg:26915")
+fortypGEDI <- extract(fortypcdBWCA_UTM, metrics)
+metrics <- cbind(metrics, fortypGEDI) %>% rename("Species" = "Label")
+
+# Here I handle the missing species labels
+dominantSpp <- metrics %>%
+  st_drop_geometry() %>%
+  group_by(uniqueID) %>%
+  count(Species) %>%
+  summarise(Ndom = sum(n),
+            domSpec = Species[which.max(n)],
+            percDom = n[which.max(n)] / Ndom,
+            Nna = sum(is.na(Species)),
+            percNA = Nna/Ndom, .groups = "drop")
+
+metricsDf <- inner_join(metrics, select(dominantSpp, uniqueID, domSpec), by = "uniqueID") %>%
+  mutate(Species = case_when(is.na(Species) ~ domSpec, TRUE ~ Species)) %>%
+  filter(sum(is.na(Species)) == 0, .by = uniqueID)
+
+
+#----PREDICT DBH----#
+# Gotta build the models for predicting DBH. I will use the height (Z) of the trees to 
+# create models that express a hieght-diameter relationship
+spcds <- c(105, 125, 129, 12, 94, 97, 95, 71, 241, 129, 100, 802, 833, 823, 972, 316, 543, 920, 461, 317, 318, 951, 746, 375,741, 761)
+treeMN <- data.table::fread("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/MN_TREE.csv")
+treeMN <- treeMN %>% filter(SPCD %in% spcds, INVYR  == 2023) %>% mutate(DIA_CM = DIA * 2.54, HT_M = HT * 0.3048) %>%
+  mutate(Species = case_when(SPCD == 12 ~ "Balsam fir",SPCD == 71 ~ "Tamarack",SPCD == 94 ~ "White spruce",SPCD == 95 ~ "Black spruce",SPCD == 97 ~ "Red spruce",SPCD == 105 ~ "Jack pine",SPCD == 125 ~ "Red pine",SPCD == 129 ~ "Eastern white pine",SPCD == 241 ~ "Northern white-cedar",SPCD == 316 ~ "Red maple",SPCD == 317 ~ "Silver maple",SPCD == 318 ~ "Sugar maple",SPCD == 375 ~ "Paper birch",SPCD == 543 ~ "Black ash",SPCD == 741 ~ "Balsam poplar",SPCD == 746 ~ "Quaking aspen",SPCD == 802 ~ "White oak",SPCD == 823 ~ "Bur oak",SPCD == 833 ~ "Northern red oak",SPCD == 951 ~ "American basswood",TRUE ~ "American elm"))
+
+# Crate a function to fit Chapman-Richards growth model. I couldn't find any good height-diameter
+# relationships in the literature so I decided to estimate them using the nlsLM function.
+# Below is the function to run the model and then a for loop to look at the residuals of
+# each model.
+fitChapman <- function(df) {
+  tryCatch({
+    nlsLM(DIA_CM ~ a * (1 - exp(-b * HT_M))^c,
+          data = df,
+          start = list(a = 30, b = 0.02, c = 1),
+          control = nls.lm.control(maxiter = 1000))
+  }, error = function(e) {
+    # fallback to log-log linear
+    lm(log(DIA_CM) ~ log(HT_M), data = df)
+  })
+}
+
+fittedSpecies <- treeMN %>% group_by(Species) %>% group_map(~ fitChapman(.x), .keep = TRUE)
+species_names <- treeMN %>% group_by(Species) %>% group_keys() %>% pull(Species)
+
+# Residual plots to check the assumptions of the models I created. There are some assumptions
+# being violated here and models will need improvement, but for now they are close enough
+# plot_list <- list()
+# for (i in seq_along(species_names)) {
+#   species <- species_names[i]
+#   model <- fittedSpecies[[i]]
+#   df <- treeMN %>% filter(Species == species) %>% select(DIA_CM, HT_M) %>% drop_na()
+#   if ("nls" %in% class(model) || "nlsLM" %in% class(model)) {
+#     coefs <- coef(model)
+#     df$predictor <- coefs[1] * (1 - exp(-coefs[2] * df$HT_M))^coefs[3]
+#     lm_model <- lm(DIA_CM ~ predictor, data = df)
+#     aug <- broom::augment(lm_model)
+#     p1 <- ggplot(data = aug, aes(x = .std.resid)) +
+#       educate::stat_density_confidence(model = "normal") +
+#       stat_density(geom = "line") +
+#       theme_bw() +
+#       xlab("Standardized residuals") +
+#       ylab("Probability density") +
+#       ggtitle(paste("Density: Residuals for", species))
+#     p2 <- ggplot(aug, aes(x = .fitted, y = .std.resid)) +
+#       geom_point(alpha = 0.5) +
+#       geom_smooth(se = FALSE, color = "blue") +
+#       geom_hline(yintercept = 0, linetype = "dashed") +
+#       xlab("Fitted Values") +
+#       ylab("Standardized Residuals") +
+#       theme_bw() +
+#       ggtitle(paste("Residuals vs Fitted for", species))
+#     plot_list[[species]] <- list(density_plot = p1, resid_plot = p2)
+#   } else {
+#     message(paste("Skipping", species, "- fallback model was used."))
+#   }
+# }
+
+# Because I am trying to assign species height-diameter curves to forest type code there is
+# sometimes a mismatch. To circumvent this I will assign species as appropriately as possible
+# and for those that have more than one (e.g. Eastern white pine / northern red oak / white ash), 
+# I will assign one species randomly
+modelTable <- tibble(
+  species = species_names,
+  fitModel = fittedSpecies
+)
+
+uniqueMetricSpp <- unique(metricsDf$Species)
+modelSpp <- unique(modelTable$species)
+
+set.seed(33)
+speciesMap <- tibble(
+  metricsSpp = uniqueMetricSpp,
+  matchedModelSpp = map_chr(unique(metricsDf$Species), function(ms) {
+    components <- str_split(tolower(ms), " / |,| and | & ") %>% unlist() %>% str_trim()
+    matches <- modelSpp[map_lgl(tolower(modelSpp), function(mod) {
+      any(str_detect(mod, fixed(components)))
+    })]
+    if (length(matches) == 0) {
+      NA_character_
+    } else {
+      sample(matches, 1)
+    }
+  })
+)
+
+# Join with metricsDf and then run the calculation for DBH
+metricsDf <- metricsDf %>% left_join(speciesMap, by = c("Species" = "metricsSpp"))
+for (i in 1:nrow(modelTable)) {
+  S <- modelTable$species[i]
+  # matchRows <- metricsDf$matchedModelSpp == S
+  matchRows <- !is.na(metricsDf$matchedModelSpp) & metricsDf$matchedModelSpp == S
+  
+  if (any(matchRows)) {
+    metricsDf$DBH[matchRows] <- predict(modelTable$fitModel[[i]], metricsDf[matchRows, ] %>% select(Z)) %>%
+      round(2)
+  }
+}
+
+#----CROWN CLASS----#
+# Function to find crown class
+crcl <- function(Z) {
+  if (length(Z) == 1) {             # If only 1 value then D is assigned
+    return(c(cl = as.factor("D")))
+  } else {
+    m <- mean(Z, na.rm = TRUE)
+    s <- sd(Z, na.rm = TRUE)
+    up <- m + s
+    lo <- m - s
+    cut(Z, breaks = c(0, lo, up, 100), labels = c("S", "C", "D"))  # C is found from lo -- up
+  }
+}
+metricsDf$CrCl <- group_by(metricsDf, uniqueID) %>% group_map(~ crcl(.$Z)) %>% unlist()
+
+# Check for any trees that have unrealistic CBHs. If the CBH is too high up, or if
+# it is less than 2m. Any tree with an unralistic CBH is given the default value of 0.5
+unrealistic <- sum(metricsDf$CBH > metricsDf$Z * 0.9 | metricsDf$CBH < 2)
+unrealistic / nrow(metricsDf) # 36%
+sum(metricsDf$DBH < 7) / nrow(metricsDf) # 20%
+
+metricsDf <- metricsDf %>% mutate(CBH = ifelse(CBH > Z * 0.9 | CBH < 2, Z/2, CBH))
+
+
+
+# THIS BIT MAY NOT BE NEEDED
+# footprint_m2 <- pi * 12.5^2
+# footprint_ha <- footprint_m2 / 10000
+# 
+# # I will need this later on
+# geometry <- metricsDf$geom
+# 
+# acreExpansion <- 2.87
+# hectareExpansion <- 4.51
+# 
+# treeN <- metricsDf %>% as.data.frame() %>%
+#   group_by(uniqueID) %>%
+#   summarise(n = n())
+# 
+# metricsDf <- metricsDf %>% left_join(treeN, by = "uniqueID") %>% as.data.frame()
+# 
+# metricsDf %>% as.data.frame() %>%
+#   group_by(matchedModelSpp) %>%
+#   summarise(n = n()) %>%
+#   ggplot(., aes(x = matchedModelSpp, y = n, fill = matchedModelSpp)) +
+#   geom_bar(stat = "identity") +
+#   theme_classic() +
+#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5))
+# 
+# 
+# metricsDf <- metricsDf %>%
+#   group_by(uniqueID) %>%
+#   mutate(matchedModelSpp = ifelse(is.na(matchedModelSpp), mode(matchedModelSpp), matchedModelSpp))
+# 
+# metricsDf <- metricsDf %>%
+#   group_by(uniqueID, matchedModelSpp) %>%
+#   mutate(local_values = list(DBH[!is.na(DBH)])) %>%
+#   ungroup() %>%
+#   group_by(matchedModelSpp) %>%
+#   mutate(global_values = list(DBH[!is.na(DBH)])) %>%
+#   ungroup() %>%
+#   rowwise() %>%
+#   mutate(
+#     DBH = ifelse(
+#       is.na(DBH),
+#       if (length(local_values) > 0) {
+#         sample(local_values, 1)
+#       } else if (length(global_values) > 0) {
+#         sample(global_values, 1)
+#       } else {
+#         NA_real_  # if no data at all for that species
+#       },
+#       DBH
+#     )
+#   ) %>%
+#   ungroup() %>%
+#   select(-local_values, -global_values)
+# 
+# x <- metricsDf %>%
+#   drop_na() %>%
+#   mutate(CrownDepth = Z - CBH) %>%
+#   select(uniqueID, treeID, Z, CBH, canopy_volume, crown_area, volume_per_m2, Species, DBH, CrCl, CFL, CCover, CBD, CrownDepth) %>%
+#   mutate(CBD_2 = CFL / CrownDepth)
+# 
+# hist(x$CBD_2)
+# 
+# 
+# hist(metricsDf$CBH)
+  
+```
+
+
+# FuelCalc
+
+```{r}
+#----TRE FILE----#
+# NAs need to be filled in. Do that below.
+fuelCalcDf <- data.frame(
+  PlotID = metricsDf$uniqueID,
+  MonitoringStatus = "Baseline",
+  MonitoringStatusOrder = 1,
+  TreesSpecies = metricsDf$matchedModelSpp,
+  TreeExpansionFactor = acreExpansion,
+  Diameter = metricsDf$DBH / 2.54,
+  TreeHeight = metricsDf$Z * 3.281,
+  CrownBaseHeight = metricsDf$CBH * 3.281,
+  TreeStatus = "H",
+  CrownClass = metricsDf$CrCl,
+  CrownRatio = "",
+  BoleCharHeight  = "",
+  "CrownScorch%" = "",
+  ScorchHeight = 0.1,
+  CKR = "",
+  BeetleDamage = "",
+  EquationType = "CRNSCH",
+  "FIHt/ScHt" = "",
+  FS = "S",
+  Severity = ""
+)
+
+# The meth0d below doesn't like factors so I need to make it a character
+fuelCalcDf$TreesSpecies <- as.character(fuelCalcDf$TreesSpecies)
+
+validSpp <- unique(fuelCalcDf$TreesSpecies[!is.na(fuelCalcDf$TreesSpecies)])
+rowsNA <- which(is.na(fuelCalcDf$TreesSpecies))
+sppTable <- table(fuelCalcDf$TreesSpecies[!is.na(fuelCalcDf$TreesSpecies)])
+set.seed(33)
+fuelCalcDf$TreesSpecies[rowsNA] <- sample(names(sppTable), length(rowsNA), replace = TRUE, prob = sppTable)
+
+# Fill in NAs for DBH
+fuelCalcDf <- fuelCalcDf %>%
+  group_by(PlotID) %>%
+  mutate(Diameter = ifelse(is.na(Diameter), median(Diameter, na.rm = TRUE), Diameter)) %>% ungroup()
+
+# Now do crown class
+mode <- function(x) {
+  x <- na.omit(x)
+  if (length(x) == 0) return(NA)
+  ux <- unique(x)
+  ux[which.max(tabulate(match(x, ux)))]
+}
+
+fuelCalcDf <- fuelCalcDf %>%
+  group_by(PlotID) %>%
+  mutate(CrownClass = ifelse(is.na(CrownClass), mode(CrownClass), CrownClass)) %>% ungroup()
+
+# Now do tree status. This is for alive, sick or dead trees. I am unsure as to the actual status
+# of all my LiDAR trees, so I will assume they are all healthy for simplicity. Dead ones are
+# removed anyway
+# fuelCalcDf$TS <- "L"
+
+
+fuelMap <- rast("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/FuelMap/fuelRast.tif")
+CN <- terra::extract(fuelMap[[1]], vect(geometry))
+lookupCN <- read_csv("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/FuelMap/CN_lookup.csv")
+treeMN <- data.table::fread("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/MN_TREE.csv")
+
+treeMN$PLT_CN <- as.numeric(treeMN$PLT_CN)
+
+
+crownRatioLookUp <- inner_join(lookupCN, CN, by = c("Value" = "FuelMapCN")) %>%
+  inner_join(treeMN, by = c("PredCN" = "PLT_CN")) %>%
+  select(Value, PredCN, UNCRCD) %>%
+  unique()
+cnRast <- fuelMap[[1]]
+
+
+crownRatioLookUp <- crownRatioLookUp %>%
+  group_by(Value) %>%
+  mutate(UNCRCD = ifelse(is.na(UNCRCD), median(UNCRCD, na.rm = TRUE), UNCRCD)) %>%
+  summarise(UNCRCD = mean(UNCRCD))
+
+
+crownRatioRast <- classify(cnRast, rcl = crownRatioLookUp, others = NA)
+
+crownRatioDf <- terra::extract(crownRatioRast, vect(geometry))
+colnames(crownRatioDf)[2] <- "CRWN_RT"
+
+fuelCalcDf$CrownRatio <- crownRatioDf$CRWN_RT
+
+fuelCalcDf <- fuelCalcDf %>% mutate(CrownClass = case_when(CrownClass == 3 ~ "D", CrownClass == 2 ~ "C", TRUE ~ "S"))
+
+# Not all of these species match with the species coded into FuelCalc and as such I will
+# have to add in the nearest phylogenetic replacement
+fuelCalcDf <- fuelCalcDf %>%
+  mutate(TreesSpecies = case_when(
+    TreesSpecies == "American basswood" ~ "QURU",       # Should be TIAM
+    TreesSpecies == "Balsam fir" ~ "ABBA",
+    TreesSpecies == "Balsam poplar" ~ "BEPA",           # Should be POBA2
+    TreesSpecies == "Black ash" ~ "BEAL2",              # Should be FRNI
+    TreesSpecies == "Black spruce" ~ "PIMA",
+    TreesSpecies == "Bur oak" ~ "QURU",                 # Should be QUMA2
+    TreesSpecies == "Eastern white pine" ~ "PIST",
+    TreesSpecies == "Jack pine" ~ "PICO",               # Should be PIBA2
+    TreesSpecies == "Northern red oak" ~ "QURU",
+    TreesSpecies == "Northern white-cedar" ~ "CHTH2",    # Should be THOC2
+    TreesSpecies == "Paper birch" ~ "BEPA",
+    TreesSpecies == "Quaking aspen" ~ "POTR5",
+    TreesSpecies == "Red maple" ~ "ACRU",
+    TreesSpecies == "Red pine" ~ "PIJE",                # Should be PIRE
+    TreesSpecies == "Sugar maple" ~ "ACSA3",
+    TreesSpecies == "Tamarack" ~ "LAOC",                # Should be LALA
+    TreesSpecies == "White spruce" ~ "PIGL",
+    TRUE ~ TreesSpecies
+  ))
+
+fuelCalcDf <- fuelCalcDf %>%
+  # Gather local crown ratio values per uniqueID/species
+  group_by(PlotID, TreesSpecies) %>%
+  mutate(local_crown = list(CrownRatio[!is.na(CrownRatio)])) %>%
+  ungroup() %>%
+  # Gather global crown ratio values per species
+  group_by(TreesSpecies) %>%
+  mutate(global_crown = list(CrownRatio[!is.na(CrownRatio)])) %>%
+  ungroup() %>%
+  rowwise() %>%
+  mutate(
+    CrownRatio = ifelse(
+      is.na(CrownRatio),
+      if (length(local_crown) > 0) {
+        sample(local_crown, 1)
+      } else if (length(global_crown) > 0) {
+        sample(global_crown, 1)
+      } else {
+        NA_real_
+      },
+      CrownRatio
+    )
+  ) %>%
+  ungroup() %>%
+  select(-local_crown, -global_crown)
+
+
+
+fuelCalcDf <- fuelCalcDf %>% arrange(PlotID, TreesSpecies)
+
+# write_csv(fuelCalcDf, "/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/FuelCalc/treeFile.csv")
+
+#----FFI FILE----#
+# Now we need to get the fuel data that falls underneath each individual tree in the BWCA
+fuelMap <- rast("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/FuelMap/fuelRast.tif")
+duffRast <- fuelMap[[7]] * 0.0005
+litterRast <- fuelMap[[6]] * 0.0005
+hr1Rast <- fuelMap[[2]] * 0.0005
+hr10Rast <- fuelMap[[3]] * 0.0005
+hr100Rast <- fuelMap[[4]] * 0.0005
+hr1000Rast <- fuelMap[[5]] * 0.0005
+
+# Duff depth is not in these maps, but it is in the FIA MN_DWM_DUFF_LITTER_FUEL table
+CN <- terra::extract(fuelMap[[1]], vect(geometry))
+lookupCN <- read_csv("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/FuelMap/CN_lookup.csv")
+duffFIA <- read_csv("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/FuelMap/MN_DWM_DUFF_LITTER_FUEL.csv")
+lookupTable <- inner_join(lookupCN, CN, by = c("Value" = "FuelMapCN")) %>%
+  inner_join(duffFIA, by = c("PredCN" = "PLT_CN")) %>%
+  select(Value, PredCN, DUFFDEP)
+cnRast <- fuelMap[[1]]
+duffLookup <- as.data.frame(cbind(as.integer(lookupTable$Value), as.data.frame(lookupTable$DUFFDEP)))
+duffDepRast <- terra::classify(cnRast, rcl = duffLookup, others = NA)
+
+# Now do the same for decay classes
+dwmFIA <- read_csv("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/FuelMap/MN_DWM_COARSE_WOODY_DEBRIS.csv")
+lookupTable <- inner_join(lookupCN, CN, by = c("Value" = "FuelMapCN")) %>%
+  inner_join(dwmFIA, by = c("PredCN" = "PLT_CN")) %>%
+  select(Value, PredCN, DECAYCD)
+dwmLookup <- as.data.frame(cbind(as.integer(lookupTable$Value), as.data.frame(lookupTable$DECAYCD)))
+decayRast <- classify(cnRast, rcl = dwmLookup, others = NA)
+
+fuelStack <- c(duffDepRast, decayRast ,duffRast, litterRast, hr1Rast, hr10Rast, hr100Rast, hr1000Rast)
+
+# Extract the data and then fill NAs with the mean value for each uniqueID
+fuelDf <- terra::extract(fuelStack, vect(geometry))
+fuelDf$uniqueID <- metricsDf$uniqueID
+colnames(fuelDf)[2:3] <- c("DUFF_DEPTH", "DECAYCD")
+
+fuelDf <- fuelDf %>%
+  group_by(uniqueID) %>%
+  mutate(across(where(is.numeric), ~ ifelse(is.na(.), mean(., na.rm = TRUE), .))) %>%
+  ungroup()
+
+fuelCalcDf
+
+fuelDf %>%
+  group_by(uniqueID) %>%
+  summarise(DECAYCD = as.character(DECAYCD),
+            across(where(is.numeric), ~mean(.x, na.rm = TRUE))) %>%
+  ungroup() %>%
+  group_by()
+  
+
+fuelDf <- fuelDf %>%
+  group_by(uniqueID) %>%
+  summarise(
+    DECAYCD = as.integer(mode(DECAYCD)),                      # mode of DECAYCD
+    across(where(is.numeric), ~mean(.x, na.rm = TRUE)), # mean of numeric columns
+    .groups = "drop"
+  ) %>%
+  mutate(ID = 1:nrow(.))
+
+ffiFileDf <- data.frame(
+  PlotID = fuelDf$uniqueID,
+  Monitoring_Status = "Baseline",
+  Monitoring_Status_Order = 1,
+  TotalDuffLoad = fuelDf$DUFF_CARBON,
+  DuffDepth = fuelDf$DUFF_DEPTH,
+  LitterLoad = fuelDf$LITTER_CARBON * 2,
+  LichenLoad = 0,
+  LiveMossLoad = 0,
+  OneHour = fuelDf$FWD_SM_CARBON * 2,
+  TenHour = fuelDf$FWD_MD_CARBON * 2,
+  HundredHour = fuelDf$FWD_LG_CARBON * 2,
+  ThousandHour = fuelDf$CWD_CARBON,
+  ThousandHourDc1Sz1 = "",
+  ThousandHourDc1Sz2 = "",
+  ThousandHourDc1Sz3 = "",
+  ThousandHourDc1Sz4 = "",
+  ThousandHourDc1Sz5 = "",
+  ThousandHourDc2Sz1 = "",
+  ThousandHourDc2Sz2 = "",
+  ThousandHourDc2Sz3 = "",
+  ThousandHourDc2Sz4 = "",
+  ThousandHourDc2Sz5 = "",
+  ThousandHourDc3Sz1 = "",
+  ThousandHourDc3Sz2 = "",
+  ThousandHourDc3Sz3 = "",
+  ThousandHourDc3Sz4 = "",
+  ThousandHourDc3Sz5 = "",
+  ThousandHourDc4Sz1 = "",
+  ThousandHourDc4Sz2 = "",
+  ThousandHourDc4Sz3 = "",
+  ThousandHourDc4Sz4 = "",
+  ThousandHourDc4Sz5 = "",
+  ThousandHourDc5Sz1 = "",
+  ThousandHourDc5Sz2 = "",
+  ThousandHourDc5Sz3 = "",
+  ThousandHourDc5Sz4 = "",
+  ThousandHourDc5Sz5 = "",
+  HerbLoadDead = "",
+  HerbLoadLive = "",
+  ShrubLoadDead = "",
+  ShrubLoadLive = "",
+  HerbSAV = "",
+  GrassSAV = "",
+  WoodySAVoneHour = "",
+  FractionGroundAreaPileCovered = "",
+  PileLoadWholePlot = "",
+  EmisSTFS = "",
+  EmisDuffRSC = "",
+  EmisCWDRSC = ""
+) %>% arrange(PlotID)
+
+
+# write_csv(ffiFileDf, "/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/FuelCalc/fuelsFile.csv")
+
+
+
+
+# MAY NOT BE NEEDED ANY MORE
+# metricsDf <- metricsDf %>%
+#   group_by(uniqueID) %>%
+#   summarise(Z = max(Z, na.rm = TRUE),
+#             CBH = sum(CBH * canopy_volume, na.rm = TRUE) / sum(canopy_volume, na.rm = TRUE),
+#             CBD = sum(CBD * canopy_volume, na.rm = TRUE) / sum(canopy_volume, na.rm = TRUE),
+#             CC = mean(CCover, na.rm = TRUE),
+#             N = n()) %>%
+#   mutate(CD = Z - CBH,
+#          CFL = CD * CBD)
+```
+
+# Initialize rGEE and GEE
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE}
+# Weird order I know but run this in it's entirety and it'll be fine
+library(reticulate)
+use_condaenv("rgee_py", conda = "/opt/anaconda3/bin/conda", required = TRUE)
+py_run_string("
+import ee
+ee.Initialize()
+")
+library(rgee)
+ee_Initialize(drive = TRUE, project = "ee-gis712-2024", gcs = FALSE)
+ee_clean_user_credentials()
+ee_Authenticate()
+library(reticulate)
+use_condaenv("rgee_py", conda = "/opt/anaconda3/bin/conda", required = TRUE)
+py_run_string("
+import ee
+ee.Initialize()
+")
+ee_Initialize(drive = TRUE, project = "ee-gis712-2024", gcs = FALSE)
+```
+
+# Earth Obervation Satellite Imagery download
+
+```{r}
+# Here I will download the satellite imagery that I will then use as the training data to
+# help predict the wildfire risk potential
+eeBWCA.shp <- sf_as_ee(BWCA.shp)
+startDate <- "2024-06-01"
+endDate <- "2024-09-01"
+
+#----SENTINEL 2----#
+# Band 1
+# Read in the Sentinel-2 surface reflectance image collection which contains all the 
+# images that we may want. Also ge the cloud band for masking purposes
+
+# Load Sentinel-2 Surface Reflectance and Cloud Probability collections
+s2Collection <- ee$ImageCollection("COPERNICUS/S2_SR")$
+  filterDate(startDate, endDate)$
+  filterBounds(eeBWCA.shp)$
+  select("B1")
+s2Clouds <- ee$ImageCollection("COPERNICUS/S2_CLOUD_PROBABILITY")$
+  filterDate(startDate, endDate)
+
+# Join SR and cloud collections by system:index
+joinFilter <- ee$Filter$equals(leftField = "system:index", rightField = "system:index")
+innerJoin <- ee$Join$inner()
+joinedCol <- innerJoin$apply(s2Collection, s2Clouds, joinFilter)
+
+# Cloud masking function (you must define this based on your needs)
+# Example placeholder:
+maskClouds <- function(joined) {
+  sr <- ee$Image(joined$get("primary"))
+  cloud <- ee$Image(joined$get("secondary"))
+  cloudMask <- cloud$lt(10)  # Keep pixels with <10% cloud probability
+  return(sr$updateMask(cloudMask))
+}
+
+# Apply cloud masking
+sentinel2_band1_clean <- ee$ImageCollection(joinedCol$map(maskClouds))
+
+# Optional: Resample to 30m and reproject to UTM Zone 15N (EPSG:26915)
+resample30m <- function(image) {
+  image$reproject(crs = "EPSG:26915", scale = 30)
+}
+sentinel2_band1 <- sentinel2_band1_clean$map(resample30m)
+
+# Reduce across time to compute per-pixel percentiles (10th, 50th, 95th)
+percentiles <- sentinel2_band1_clean$
+  reduce(ee$Reducer$percentile(c(10, 50, 90)))$
+  clip(eeBWCA.shp)$
+  reproject(crs = "EPSG:26915", scale = 30)
+
+# stats <- percentiles$select("B1_p50")$reduceRegion(reducer = ee$Reducer$minMax(), geometry = eeBWCA.shp, scale = 30, maxPixels = 1e13)$getInfo()
+# print(stats)
+# stats <- percentiles$select("B1_p10")$reduceRegion(reducer = ee$Reducer$minMax(), geometry = eeBWCA.shp, scale = 30, maxPixels = 1e13)$getInfo()
+# print(stats)
+# stats <- percentiles$select("B1_p95")$reduceRegion(reducer = ee$Reducer$minMax(), geometry = eeBWCA.shp, scale = 30, maxPixels = 1e13)$getInfo()
+# print(stats)
+
+# # Now you can use percentiles$select("B8A_p10"), "B8A_p50", or "B8A_p95" for display or export
+# Map$centerObject(eeBWCA.shp)
+# Map$addLayer(percentiles$select("B1_p50"),
+#              list(min = 0, max = 16615, palette = c("black", "orange", "red")),
+#              "Sentinel-2 B8A - 50th Percentile")
+# 
+# Map$addLayer(percentiles$select("B1_p10"),
+#              list(min = 0, max = 16615, palette = c("black", "orange", "red")),
+#              "Sentinel-2 B8A - 10th Percentile")
+# 
+# Map$addLayer(percentiles$select("B1_p95"),
+#              list(min = 0, max = 16615, palette = c("black", "orange", "red")),
+#              "Sentinel-2 B8A - 95th Percentile")
+
+bandNames <- percentiles$bandNames()$getInfo()
+
+for (band in bandNames) {
+    image <- percentiles$select(band)$
+    reproject(crs = "EPSG:26915", scale = 30)$
+    clip(eeBWCA.shp)
+    task <- ee_image_to_drive(image = image, description = paste0(band, "_export"), folder = "GEDI_BWCA", fileNamePrefix = band, region = eeBWCA.shp$geometry(), scale = 30, maxPixels = 1e13, fileFormat = "GeoTIFF"
+  )
+  cat("Starting export for:", band, "\n")
+  task$start()
+}
+
+# Band 2
+s2Collection <- ee$ImageCollection("COPERNICUS/S2_SR")$
+  filterDate(startDate, endDate)$
+  filterBounds(eeBWCA.shp)$
+  select("B2")
+s2Clouds <- ee$ImageCollection("COPERNICUS/S2_CLOUD_PROBABILITY")$
+  filterDate(startDate, endDate)
+joinFilter <- ee$Filter$equals(leftField = "system:index", rightField = "system:index")
+innerJoin <- ee$Join$inner()
+joinedCol <- innerJoin$apply(s2Collection, s2Clouds, joinFilter)
+sentinel2_band2 <- ee$ImageCollection(joinedCol$map(maskClouds))
+sentinel2_band2 <- sentinel2_band2$map(resample30m)
+percentiles <- sentinel2_band2$
+  reduce(ee$Reducer$percentile(c(10, 50, 90)))$
+  clip(eeBWCA.shp)$
+  reproject(crs = "EPSG:26915", scale = 30)
+bandNames <- percentiles$bandNames()$getInfo()
+for (band in bandNames) {
+    image <- percentiles$select(band)$
+    reproject(crs = "EPSG:26915", scale = 30)$
+    clip(eeBWCA.shp)
+    task <- ee_image_to_drive(image = image, description = paste0(band, "_export"), folder = "GEDI_BWCA", fileNamePrefix = band, region = eeBWCA.shp$geometry(), scale = 30, maxPixels = 1e13, fileFormat = "GeoTIFF"
+  )
+  cat("Starting export for:", band, "\n")
+  task$start()
+}
+
+# Band 3
+s2Collection <- ee$ImageCollection("COPERNICUS/S2_SR")$
+  filterDate(startDate, endDate)$
+  filterBounds(eeBWCA.shp)$
+  select("B3")
+s2Clouds <- ee$ImageCollection("COPERNICUS/S2_CLOUD_PROBABILITY")$
+  filterDate(startDate, endDate)
+joinFilter <- ee$Filter$equals(leftField = "system:index", rightField = "system:index")
+innerJoin <- ee$Join$inner()
+joinedCol <- innerJoin$apply(s2Collection, s2Clouds, joinFilter)
+sentinel2_band3 <- ee$ImageCollection(joinedCol$map(maskClouds))
+sentinel2_band3 <- sentinel2_band3$map(resample30m)
+percentiles <- sentinel2_band3$
+  reduce(ee$Reducer$percentile(c(10, 50, 90)))$
+  clip(eeBWCA.shp)$
+  reproject(crs = "EPSG:26915", scale = 30)
+bandNames <- percentiles$bandNames()$getInfo()
+for (band in bandNames) {
+    image <- percentiles$select(band)$
+    reproject(crs = "EPSG:26915", scale = 30)$
+    clip(eeBWCA.shp)
+    task <- ee_image_to_drive(image = image, description = paste0(band, "_export"), folder = "GEDI_BWCA", fileNamePrefix = band, region = eeBWCA.shp$geometry(), scale = 30, maxPixels = 1e13, fileFormat = "GeoTIFF"
+  )
+  cat("Starting export for:", band, "\n")
+  task$start()
+}
+
+# Band 4
+s2Collection <- ee$ImageCollection("COPERNICUS/S2_SR")$
+  filterDate(startDate, endDate)$
+  filterBounds(eeBWCA.shp)$
+  select("B4")
+s2Clouds <- ee$ImageCollection("COPERNICUS/S2_CLOUD_PROBABILITY")$
+  filterDate(startDate, endDate)
+joinFilter <- ee$Filter$equals(leftField = "system:index", rightField = "system:index")
+innerJoin <- ee$Join$inner()
+joinedCol <- innerJoin$apply(s2Collection, s2Clouds, joinFilter)
+sentinel2_band4 <- ee$ImageCollection(joinedCol$map(maskClouds))
+sentinel2_band4 <- sentinel2_band4$map(resample30m)
+percentiles <- sentinel2_band4$
+  reduce(ee$Reducer$percentile(c(10, 50, 90)))$
+  clip(eeBWCA.shp)$
+  reproject(crs = "EPSG:26915", scale = 30)
+bandNames <- percentiles$bandNames()$getInfo()
+for (band in bandNames) {
+    image <- percentiles$select(band)$
+    reproject(crs = "EPSG:26915", scale = 30)$
+    clip(eeBWCA.shp)
+    task <- ee_image_to_drive(image = image, description = paste0(band, "_export"), folder = "GEDI_BWCA", fileNamePrefix = band, region = eeBWCA.shp$geometry(), scale = 30, maxPixels = 1e13, fileFormat = "GeoTIFF"
+  )
+  cat("Starting export for:", band, "\n")
+  task$start()
+}
+
+# Band 5
+s2Collection <- ee$ImageCollection("COPERNICUS/S2_SR")$
+  filterDate(startDate, endDate)$
+  filterBounds(eeBWCA.shp)$
+  select("B5")
+s2Clouds <- ee$ImageCollection("COPERNICUS/S2_CLOUD_PROBABILITY")$
+  filterDate(startDate, endDate)
+joinFilter <- ee$Filter$equals(leftField = "system:index", rightField = "system:index")
+innerJoin <- ee$Join$inner()
+joinedCol <- innerJoin$apply(s2Collection, s2Clouds, joinFilter)
+sentinel2_band5 <- ee$ImageCollection(joinedCol$map(maskClouds))
+sentinel2_band5 <- sentinel2_band5$map(resample30m)
+percentiles <- sentinel2_band5$
+  reduce(ee$Reducer$percentile(c(10, 50, 90)))$
+  clip(eeBWCA.shp)$
+  reproject(crs = "EPSG:26915", scale = 30)
+bandNames <- percentiles$bandNames()$getInfo()
+for (band in bandNames) {
+    image <- percentiles$select(band)$
+    reproject(crs = "EPSG:26915", scale = 30)$
+    clip(eeBWCA.shp)
+    task <- ee_image_to_drive(image = image, description = paste0(band, "_export"), folder = "GEDI_BWCA", fileNamePrefix = band, region = eeBWCA.shp$geometry(), scale = 30, maxPixels = 1e13, fileFormat = "GeoTIFF"
+  )
+  cat("Starting export for:", band, "\n")
+  task$start()
+}
+
+# Band 6
+s2Collection <- ee$ImageCollection("COPERNICUS/S2_SR")$
+  filterDate(startDate, endDate)$
+  filterBounds(eeBWCA.shp)$
+  select("B6")
+s2Clouds <- ee$ImageCollection("COPERNICUS/S2_CLOUD_PROBABILITY")$
+  filterDate(startDate, endDate)
+joinFilter <- ee$Filter$equals(leftField = "system:index", rightField = "system:index")
+innerJoin <- ee$Join$inner()
+joinedCol <- innerJoin$apply(s2Collection, s2Clouds, joinFilter)
+sentinel2_band6 <- ee$ImageCollection(joinedCol$map(maskClouds))
+sentinel2_band6 <- sentinel2_band6$map(resample30m)
+percentiles <- sentinel2_band6$
+  reduce(ee$Reducer$percentile(c(10, 50, 90)))$
+  clip(eeBWCA.shp)$
+  reproject(crs = "EPSG:26915", scale = 30)
+bandNames <- percentiles$bandNames()$getInfo()
+for (band in bandNames) {
+    image <- percentiles$select(band)$
+    reproject(crs = "EPSG:26915", scale = 30)$
+    clip(eeBWCA.shp)
+    task <- ee_image_to_drive(image = image, description = paste0(band, "_export"), folder = "GEDI_BWCA", fileNamePrefix = band, region = eeBWCA.shp$geometry(), scale = 30, maxPixels = 1e13, fileFormat = "GeoTIFF"
+  )
+  cat("Starting export for:", band, "\n")
+  task$start()
+}
+
+# Band 7
+s2Collection <- ee$ImageCollection("COPERNICUS/S2_SR")$
+  filterDate(startDate, endDate)$
+  filterBounds(eeBWCA.shp)$
+  select("B7")
+s2Clouds <- ee$ImageCollection("COPERNICUS/S2_CLOUD_PROBABILITY")$
+  filterDate(startDate, endDate)
+joinFilter <- ee$Filter$equals(leftField = "system:index", rightField = "system:index")
+innerJoin <- ee$Join$inner()
+joinedCol <- innerJoin$apply(s2Collection, s2Clouds, joinFilter)
+sentinel2_band7 <- ee$ImageCollection(joinedCol$map(maskClouds))
+sentinel2_band7 <- sentinel2_band7$map(resample30m)
+percentiles <- sentinel2_band7$
+  reduce(ee$Reducer$percentile(c(10, 50, 90)))$
+  clip(eeBWCA.shp)$
+  reproject(crs = "EPSG:26915", scale = 30)
+bandNames <- percentiles$bandNames()$getInfo()
+for (band in bandNames) {
+    image <- percentiles$select(band)$
+    reproject(crs = "EPSG:26915", scale = 30)$
+    clip(eeBWCA.shp)
+    task <- ee_image_to_drive(image = image, description = paste0(band, "_export"), folder = "GEDI_BWCA", fileNamePrefix = band, region = eeBWCA.shp$geometry(), scale = 30, maxPixels = 1e13, fileFormat = "GeoTIFF"
+  )
+  cat("Starting export for:", band, "\n")
+  task$start()
+}
+
+# Band 8
+s2Collection <- ee$ImageCollection("COPERNICUS/S2_SR")$
+  filterDate(startDate, endDate)$
+  filterBounds(eeBWCA.shp)$
+  select("B8")
+s2Clouds <- ee$ImageCollection("COPERNICUS/S2_CLOUD_PROBABILITY")$
+  filterDate(startDate, endDate)
+joinFilter <- ee$Filter$equals(leftField = "system:index", rightField = "system:index")
+innerJoin <- ee$Join$inner()
+joinedCol <- innerJoin$apply(s2Collection, s2Clouds, joinFilter)
+sentinel2_band8 <- ee$ImageCollection(joinedCol$map(maskClouds))
+sentinel2_band8 <- sentinel2_band8$map(resample30m)
+percentiles <- sentinel2_band8$
+  reduce(ee$Reducer$percentile(c(10, 50, 90)))$
+  clip(eeBWCA.shp)$
+  reproject(crs = "EPSG:26915", scale = 30)
+bandNames <- percentiles$bandNames()$getInfo()
+for (band in bandNames) {
+    image <- percentiles$select(band)$
+    reproject(crs = "EPSG:26915", scale = 30)$
+    clip(eeBWCA.shp)
+    task <- ee_image_to_drive(image = image, description = paste0(band, "_export"), folder = "GEDI_BWCA", fileNamePrefix = band, region = eeBWCA.shp$geometry(), scale = 30, maxPixels = 1e13, fileFormat = "GeoTIFF"
+  )
+  cat("Starting export for:", band, "\n")
+  task$start()
+}
+
+# Band 8A
+s2Collection <- ee$ImageCollection("COPERNICUS/S2_SR")$
+  filterDate(startDate, endDate)$
+  filterBounds(eeBWCA.shp)$
+  select("B8A")
+s2Clouds <- ee$ImageCollection("COPERNICUS/S2_CLOUD_PROBABILITY")$
+  filterDate(startDate, endDate)
+joinFilter <- ee$Filter$equals(leftField = "system:index", rightField = "system:index")
+innerJoin <- ee$Join$inner()
+joinedCol <- innerJoin$apply(s2Collection, s2Clouds, joinFilter)
+sentinel2_band8A <- ee$ImageCollection(joinedCol$map(maskClouds))
+sentinel2_band8A <- sentinel2_band8A$map(resample30m)
+percentiles <- sentinel2_band8A$
+  reduce(ee$Reducer$percentile(c(10, 50, 90)))$
+  clip(eeBWCA.shp)$
+  reproject(crs = "EPSG:26915", scale = 30)
+bandNames <- percentiles$bandNames()$getInfo()
+for (band in bandNames) {
+    image <- percentiles$select(band)$
+    reproject(crs = "EPSG:26915", scale = 30)$
+    clip(eeBWCA.shp)
+    task <- ee_image_to_drive(image = image, description = paste0(band, "_export"), folder = "GEDI_BWCA", fileNamePrefix = band, region = eeBWCA.shp$geometry(), scale = 30, maxPixels = 1e13, fileFormat = "GeoTIFF"
+  )
+  cat("Starting export for:", band, "\n")
+  task$start()
+}
+
+# Band 11
+s2Collection <- ee$ImageCollection("COPERNICUS/S2_SR")$
+  filterDate(startDate, endDate)$
+  filterBounds(eeBWCA.shp)$
+  select("B11")
+s2Clouds <- ee$ImageCollection("COPERNICUS/S2_CLOUD_PROBABILITY")$
+  filterDate(startDate, endDate)
+joinFilter <- ee$Filter$equals(leftField = "system:index", rightField = "system:index")
+innerJoin <- ee$Join$inner()
+joinedCol <- innerJoin$apply(s2Collection, s2Clouds, joinFilter)
+sentinel2_band11 <- ee$ImageCollection(joinedCol$map(maskClouds))
+sentinel2_band11 <- sentinel2_band11$map(resample30m)
+percentiles <- sentinel2_band11$
+  reduce(ee$Reducer$percentile(c(10, 50, 90)))$
+  clip(eeBWCA.shp)$
+  reproject(crs = "EPSG:26915", scale = 30)
+bandNames <- percentiles$bandNames()$getInfo()
+for (band in bandNames) {
+    image <- percentiles$select(band)$
+    reproject(crs = "EPSG:26915", scale = 30)$
+    clip(eeBWCA.shp)
+    task <- ee_image_to_drive(image = image, description = paste0(band, "_export"), folder = "GEDI_BWCA", fileNamePrefix = band, region = eeBWCA.shp$geometry(), scale = 30, maxPixels = 1e13, fileFormat = "GeoTIFF"
+  )
+  cat("Starting export for:", band, "\n")
+  task$start()
+}
+
+# Band 12
+s2Collection <- ee$ImageCollection("COPERNICUS/S2_SR")$
+  filterDate(startDate, endDate)$
+  filterBounds(eeBWCA.shp)$
+  select("B12")
+s2Clouds <- ee$ImageCollection("COPERNICUS/S2_CLOUD_PROBABILITY")$
+  filterDate(startDate, endDate)
+joinFilter <- ee$Filter$equals(leftField = "system:index", rightField = "system:index")
+innerJoin <- ee$Join$inner()
+joinedCol <- innerJoin$apply(s2Collection, s2Clouds, joinFilter)
+sentinel2_band12 <- ee$ImageCollection(joinedCol$map(maskClouds))
+sentinel2_band12 <- sentinel2_band12$map(resample30m)
+percentiles <- sentinel2_band12$
+  reduce(ee$Reducer$percentile(c(10, 50, 90)))$
+  clip(eeBWCA.shp)$
+  reproject(crs = "EPSG:26915", scale = 30)
+bandNames <- percentiles$bandNames()$getInfo()
+for (band in bandNames) {
+    image <- percentiles$select(band)$
+    reproject(crs = "EPSG:26915", scale = 30)$
+    clip(eeBWCA.shp)
+    task <- ee_image_to_drive(image = image, description = paste0(band, "_export"), folder = "GEDI_BWCA", fileNamePrefix = band, region = eeBWCA.shp$geometry(), scale = 30, maxPixels = 1e13, fileFormat = "GeoTIFF"
+  )
+  cat("Starting export for:", band, "\n")
+  task$start()
+}
+
+
+#----SENTINEL 1 SAR----#
+# ASCENDING
+# VH polarisation
+# I downloaded the data using GEE and the script which can be found here (https://github.com/langoodall/Project-MN-Canopy-Fuels/blob/main/GEE.js)
+# Uses and modified from Mullissa et al. (2021) https://doi.org/10.3390/rs13101954
+# Here I am reading in the .tif files that I got from GEE and processing them
+
+# So these are odd. The data is stored in linear which is great for the conversions and everything
+# but needs to be in dB for plotting and comparison. To convert from linear to dB do the equation below
+# dB = 10 * log10(x)
+westBWCA_VH <- rast("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/VH_p50-0000000000-0000000000.tif")
+eastBWCA_VH <- rast("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/VH_p50-0000000000-0000023296.tif")
+stack <- sprc(list(westBWCA_VH, eastBWCA_VH))
+VH <- mosaic(stack)
+shapefile <- st_transform(BWCA.shp, crs = crs(VH))
+VH <- crop(VH, shapefile) %>% mask(., shapefile)
+VH <- project(VH, templateRaster, method = "near")
+VH <- ifel(VH > 0, 10 * log10(VH), NA)
+writeRaster(VH,
+            filename = '/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/Processed Rasters/VH_p50.tif',
+            datatype = "FLT8S",
+            NAflag = 0,
+            overwrite = TRUE)
+
+# VV polarisation
+westBWCA_VV <- rast("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/VV_p50-0000000000-0000000000.tif")
+eastBWCA_VV <- rast("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/VV_p50-0000000000-0000023296.tif")
+stack <- sprc(list(westBWCA_VV, eastBWCA_VV))
+VV <- mosaic(stack)
+shapefile <- st_transform(BWCA.shp, crs = crs(VV))
+VV <- crop(VV, shapefile) %>% mask(., shapefile)
+VV <- project(VV, templateRaster, method = "near")
+VV <- ifel(VV > 0, 10 * log10(VV), NA)
+writeRaster(VV,
+            filename = '/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/Processed Rasters/VV_p50.tif',
+            datatype = "FLT8S",
+            NAflag = 0,
+            overwrite = TRUE)
+
+#----JAXA PALSAR----#
+HV <- rast('/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/Processed Rasters/HV_BWCA_PALSAR_2024.tif')
+HH <- rast('/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/Processed Rasters/HH_BWCA_PALSAR_2024.tif')
+
+gc()
+
+plot(HV)
+plot(HH)
+
+HH %>% min()
+HH %>% min()
+HV %>% min()
+HV %>% min()
+
+ifel(HH > 0, 10 * log10(HH), NA) %>% min()
+ifel(HV > 0, 10 * log10(HV), NA) %>% min()
+ifel(HV > 0, 10 * log10(HV), NA) %>% min()
+ifel(HH > 0, 10 * log10(HH), NA) %>% min()
+
+
+plot(ifel(HV > 0, 10 * log10(HV^2) - 83, NA))
+plot(ifel(HH > 0, 10 * log10(HH^2) - 83, NA))
+
+
+
+x <- ifel(HV > 0, 10 * log10(HV^2) - 83, NA) %>% as.data.frame() %>% drop_na()
+
+hist(x$HV, breaks = 100)
+
+?hist
+```
+
+# Old SAR stuff
+
+```{r}
+#----SENTINEL 1 SAR----#
+# ASCENDING
+# VH polarisation
+# Here I am downloading the Sentinel-1 SAR data for the BWCA. I will choose the ASCENDING
+# data because to use both ASCENDING and DESCENDING requires more processing. So, for now,
+# I will use one direction consistently
+s1VHCollection <- ee$ImageCollection("COPERNICUS/S1_GRD")$
+  filterDate(startDate, endDate)$
+  filterBounds(eeBWCA.shp)$
+  filter(ee$Filter$eq("instrumentMode", "IW"))$
+  filter(ee$Filter$listContains("transmitterReceiverPolarisation", "VH"))$
+  filter(ee$Filter$eq("orbitProperties_pass", "ASCENDING"))$
+  select("VH")
+
+maskEdges <- function(img) {
+  edge <- img$lt(-30)
+  img$updateMask(edge$Not())
+}
+
+s1VHCollection <- s1VHCollection$map(maskEdges)
+
+percentiles <- s1VHCollection$
+  reduce(ee$Reducer$percentile(c(10, 50, 90)))$
+  clip(eeBWCA.shp)$
+  reproject(crs = "EPSG:26915", scale = 30)
+
+bandNames <- percentiles$bandNames()$getInfo()
+
+for (band in bandNames) {
+  image <- percentiles$select(band)$reproject(crs = "EPSG:26915", scale = 30)$clip(eeBWCA.shp)
+  task <- ee_image_to_drive(image = image, description = paste0(band, "_export"), folder = "GEDI_BWCA", fileNamePrefix = band, region = eeBWCA.shp$geometry(), scale = 30, maxPixels = 1e13, fileFormat = "GeoTIFF")
+  cat("Starting export for:", band, "\n")
+  task$start()
+}
+
+###########################################
+
+s1VH <- ee$ImageCollection("COPERNICUS/S1_GRD")$
+  filterDate(startDate, endDate)$
+  filterBounds(eeBWCA.shp)$
+  filter(ee$Filter$eq("instrumentMode", "IW"))$
+  filter(ee$Filter$listContains("transmitterReceiverPolarisation", "VH"))$
+  filter(ee$Filter$eq("orbitProperties_pass", "ASCENDING"))$
+  select("VH")
+
+s1VH$size()$getInfo()
+s1VH$aggregate_array("system:id")$getInfo()
+
+maskEdges <- function(img) {
+  img$updateMask(img$gt(-30))
+}
+s1VH <- s1VH$map(maskEdges)
+
+toLinear <- function(img) {
+  ee$Image(10)$pow(img$divide(10))$copyProperties(img, img$propertyNames())
+}
+s1VH <- s1VH$map(toLinear)
+
+leeFilter <- function(img) {
+
+  # 3x3 kernel
+  kernel <- ee$Kernel$square(1)
+
+  # Local mean and variance
+  mean <- img$reduceNeighborhood(ee$Reducer$mean(), kernel)
+  variance <- img$reduceNeighborhood(ee$Reducer$variance(), kernel)
+
+  # Noise variance (estimated locally)
+  noiseVar <- variance$reduceNeighborhood(
+    reducer = ee$Reducer$mean(),
+    kernel = kernel
+  )
+
+  # Lee filter coefficient
+  b <- variance$subtract(noiseVar)$divide(variance)
+
+  # Filtered image
+  mean$add(
+    b$multiply(img$subtract(mean))
+  )$rename(img$bandNames())$
+    copyProperties(img, img$propertyNames())
+}
+
+
+
+lee_gee <- function(img, L = 1, win = 3) {
+
+  kernel <- ee$Kernel$square(
+    radius = win %/% 2,
+    units = "pixels",
+    normalize = TRUE
+  )
+
+  mean <- img$reduceNeighborhood(
+    reducer = ee$Reducer$mean(),
+    kernel = kernel
+  )
+
+  variance <- img$reduceNeighborhood(
+    reducer = ee$Reducer$variance(),
+    kernel = kernel
+  )
+
+  sigma_n2 <- 1 / L
+
+  k <- variance$
+    subtract(mean$pow(2)$multiply(sigma_n2))$
+    divide(variance)$
+    clamp(0, 1)
+
+  mean$add(k$multiply(img$subtract(mean)))
+}
+
+
+
+s1VH <- s1VH$map(leeFilter)
+s1_filt <- lee_gee(s1VH$select("VH"), L = 4)
+
+
+median_s1VH <- s1VH$median()
+median_s1VH <- median_s1VH$clip(eeBWCA.shp)
+
+stats <- median_s1VH$reduceRegion(
+  reducer = ee$Reducer$minMax(),
+  geometry = eeBWCA.shp$geometry(),
+  scale = 30,  # Sentinel-1 pixel size ~10m, 30m is usually fine for regional stats
+  maxPixels = 1e13
+)
+
+# Print stats
+stats$getInfo()
+
+
+
+Map$centerObject(eeBWCA.shp)
+Map$addLayer(eeBWCA.shp)
+Map$addLayer(median_s1VH,
+             list(min = 0, max = 1, palette = c("#ff1b6b", "black", "#45caff")), "VH Median")
+
+
+# VV polarization
+s1VVCollection <- ee$ImageCollection("COPERNICUS/S1_GRD")$
+  filterDate(startDate, endDate)$
+  filterBounds(eeBWCA.shp)$
+  filter(ee$Filter$eq("instrumentMode", "IW"))$
+  filter(ee$Filter$listContains("transmitterReceiverPolarisation", "VV"))$
+  filter(ee$Filter$eq("orbitProperties_pass", "ASCENDING"))$
+  select("VV")
+percentiles <- s1VVCollection$
+  reduce(ee$Reducer$percentile(c(10, 50, 90)))$
+  clip(eeBWCA.shp)$
+  reproject(crs = "EPSG:26915", scale = 30)
+bandNames <- percentiles$bandNames()$getInfo()
+for (band in bandNames) {
+  image <- percentiles$select(band)$reproject(crs = "EPSG:26915", scale = 30)$clip(eeBWCA.shp)
+  task <- ee_image_to_drive(image = image, description = paste0(band, "_export"), folder = "GEDI_BWCA", fileNamePrefix = band, region = eeBWCA.shp$geometry(), scale = 30, maxPixels = 1e13, fileFormat = "GeoTIFF")
+  cat("Starting export for:", band, "\n")
+  task$start()
+}
+
+# HH polarization
+s1HHCollection <- ee$ImageCollection("COPERNICUS/S1_GRD")$
+  # filterDate("2012-01-01", endDate)$
+  # filterBounds(eeBWCA.shp)$
+  filter(ee$Filter$eq("instrumentMode", "IW"))$
+  filter(ee$Filter$listContains("transmitterReceiverPolarisation", "HH"))$
+  filter(ee$Filter$eq("orbitProperties_pass", "DESCENDING"))$
+  select("HH")
+percentiles <- s1HHCollection$
+  reduce(ee$Reducer$percentile(c(10, 50, 95)))$
+  clip(eeBWCA.shp)$
+  reproject(crs = "EPSG:26915", scale = 30)
+bandNames <- percentiles$bandNames()$getInfo()
+for (band in bandNames) {
+  image <- percentiles$select(band)$reproject(crs = "EPSG:26915", scale = 30)$clip(eeBWCA.shp)
+  task <- ee_image_to_drive(image = image, description = paste0(band, "_export"), folder = "GEDI_BWCA", fileNamePrefix = band, region = eeBWCA.shp$geometry(), scale = 30, maxPixels = 1e13, fileFormat = "GeoTIFF")
+  cat("Starting export for:", band, "\n")
+  task$start()
+}
+
+# HV polarization
+s1HVCollection <- ee$ImageCollection("COPERNICUS/S1_GRD")$
+  filterDate(startDate, endDate)$
+  filterBounds(eeBWCA.shp)$
+  filter(ee$Filter$eq("instrumentMode", "IW"))$
+  filter(ee$Filter$listContains("transmitterReceiverPolarisation", "HV"))$
+  filter(ee$Filter$eq("orbitProperties_pass", "ASCENDING"))$
+  select("HV")
+percentiles <- s1HVCollection$
+  reduce(ee$Reducer$percentile(c(10, 50, 90)))$
+  clip(eeBWCA.shp)$
+  reproject(crs = "EPSG:26915", scale = 30)
+bandNames <- percentiles$bandNames()$getInfo()
+for (band in bandNames) {
+  image <- percentiles$select(band)$reproject(crs = "EPSG:26915", scale = 30)$clip(eeBWCA.shp)
+  task <- ee_image_to_drive(image = image, description = paste0(band, "_export"), folder = "GEDI_BWCA", fileNamePrefix = band, region = eeBWCA.shp$geometry(), scale = 30, maxPixels = 1e13, fileFormat = "GeoTIFF")
+  cat("Starting export for:", band, "\n")
+  task$start()
+}
+
+# Load ALOS PALSAR HH yearly mosaics
+alosHHCollection <- ee$ImageCollection("JAXA/ALOS/PALSAR/YEARLY/SAR_EPOCH")$
+  # filterDate(startDate, endDate)$
+  filterBounds(eeBWCA.shp)$
+  select("HH")
+
+
+# Reduce to percentiles (10, 50, 90)
+percentiles <- alosHHCollection$
+  reduce(ee$Reducer$percentile(c(10, 50, 90)))$
+  clip(eeBWCA.shp)$
+  reproject(crs = "EPSG:26915", scale = 30)
+
+# Get the percentile band names (HH_p10, HH_p50, HH_p95)
+bandNames <- percentiles$bandNames()$getInfo()
+
+# Export each band separately
+for (band in bandNames) {
+  image <- percentiles$select(band)$clip(eeBWCA.shp)
+  task <- ee_image_to_drive(
+    image = image,
+    description = paste0(band, "_export"),
+    folder = "GEDI_BWCA",
+    fileNamePrefix = band,
+    region = eeBWCA.shp$geometry(),
+    scale = 30,  # ALOS resolution is ~25 m
+    maxPixels = 1e13,
+    fileFormat = "GeoTIFF"
+  )
+  cat("Starting export for:", band, "\n")
+  task$start()
+}
+
+# Load ALOS PALSAR HH yearly mosaics
+alosHVCollection <- ee$ImageCollection("JAXA/ALOS/PALSAR/YEARLY/SAR_EPOCH")$
+  # filterDate(startDate, endDate)$
+  filterBounds(eeBWCA.shp)$
+  select("HV")
+
+# Reduce to percentiles (10, 50, 95)
+percentiles <- alosHVCollection$
+  reduce(ee$Reducer$percentile(c(10, 50, 90)))$
+  clip(eeBWCA.shp)$
+  reproject(crs = "EPSG:26915", scale = 30)
+
+# Get the percentile band names (HH_p10, HH_p50, HH_p95)
+bandNames <- percentiles$bandNames()$getInfo()
+
+# Export each band separately
+for (band in bandNames) {
+  image <- percentiles$select(band)$clip(eeBWCA.shp)
+  task <- ee_image_to_drive(
+    image = image,
+    description = paste0(band, "_export"),
+    folder = "GEDI_BWCA",
+    fileNamePrefix = band,
+    region = eeBWCA.shp$geometry(),
+    scale = 30,  # ALOS resolution is ~25 m
+    maxPixels = 1e13,
+    fileFormat = "GeoTIFF"
+  )
+  cat("Starting export for:", band, "\n")
+  task$start()
+}
+
+# DESCENDING
+# I had a go at finding descending data for the BWCA but could not find any. No matter.
+# VH polarization = NONE
+# s1VHCollection <- ee$ImageCollection("COPERNICUS/S1_GRD")$
+#   filterDate(startDate, endDate)$
+#   filterBounds(eeBWCA.shp)$
+#   filter(ee$Filter$eq("instrumentMode", "IW"))$
+#   filter(ee$Filter$listContains("transmitterReceiverPolarisation", "VH"))$
+#   select("VH")
+# desc <- s1VHCollection$filter(ee$Filter$eq("orbitProperties_pass", "DESCENDING"))
+# desc <- desc$median()$clip(eeBWCA.shp)
+# stats <- desc$reduceRegion(reducer = ee$Reducer$minMax(), geometry = eeBWCA.shp, scale = 10, maxPixels = 1e13)$getInfo()
+# print(stats)
+# Map$centerObject(eeBWCA.shp)
+# Map$addLayer(desc, 
+#              list(min = -30, max = 0, palette = c("black", "orange", "red")),
+#              "Sentinel 1 - SAR (Descending)")
+# Map$addLayer(desc, {}, "Descending VH - Raw")
+# 
+# # Check to see if the BWCA has any descending data. If not then == 0
+# desc_col <- s1VHCollection$filter(ee$Filter$eq("orbitProperties_pass", "DESCENDING"))
+# desc_col$size()$getInfo()
+```
+
+# Final bits of data acquisition
+
+```{r}
+#----MODIS----#
+# Phenology Start of Season
+# Because we only need the one image of yearly phenology, we can do the cloud masking
+# a bit differently than previous cloud masking in this script. First let's make a
+# function that masks clouds in MODIS
+maskMODISClouds <- function(image) {
+  qa <- image$select("QA_Overall_1")
+  qualityMask <- qa$bitwiseAnd(3)$eq(0)   # Keep only the good cells
+  image$updateMask(qualityMask)
+}
+
+sosMODIS <- ee$ImageCollection("MODIS/061/MCD12Q2")$
+  filterDate("2023-01-01", "2023-12-31")$
+  filterBounds(eeBWCA.shp)$
+  map(maskMODISClouds)$
+  select("Greenup_1")
+sosImage <- sosMODIS$first()$clip(eeBWCA.shp)
+sosImage <- resample30mNN(sosImage)
+# stats <- sosImage$reduceRegion(reducer = ee$Reducer$minMax(), geometry = eeBWCA.shp, scale = 30, maxPixels = 1e13)$getInfo()
+# print(stats)
+Map$centerObject(eeBWCA.shp)
+Map$addLayer(eeBWCA.shp)
+Map$addLayer(sosImage,
+             list(min = 19380, max = 19507, palette = c("black", "orange", "red")),
+             "MODIS Phenology - Start of Season")
+
+
+band_name <- sosImage$bandNames()$get(0)$getInfo()
+task <- ee_image_to_drive(
+  image = sosImage,
+  description = paste0(band_name, "_export"),
+  folder = "GEDI_BWCA",
+  fileNamePrefix = band_name,
+  region = eeBWCA.shp$geometry(),
+  scale = 30,
+  maxPixels = 1e13,
+  fileFormat = "GeoTIFF"
+)
+task$start()
+
+# Phenology End of Season
+sosMODIS <- ee$ImageCollection("MODIS/061/MCD12Q2")$
+  filterDate("2023-01-01", "2023-12-31")$
+  filterBounds(eeBWCA.shp)$
+  map(maskMODISClouds)$
+  select("Senescence_1")
+sosImage <- sosMODIS$first()$clip(eeBWCA.shp)
+sosImage <- resample30mNN(sosImage)
+# stats <- sosImage$reduceRegion(reducer = ee$Reducer$minMax(), geometry = eeBWCA.shp, scale = 30, maxPixels = 1e13)$getInfo()
+# print(stats)
+Map$centerObject(eeBWCA.shp)
+Map$addLayer(eeBWCA.shp)
+Map$addLayer(sosImage,
+             list(min = 19528, max = 19660, palette = c("black", "orange", "red")),
+             "MODIS Phenology - End of Season")
+
+band_name <- sosImage$bandNames()$get(0)$getInfo()
+task <- ee_image_to_drive(
+  image = sosImage,
+  description = paste0(band_name, "_export"),
+  folder = "GEDI_BWCA",
+  fileNamePrefix = band_name,
+  region = eeBWCA.shp$geometry(),
+  scale = 30,
+  maxPixels = 1e13,
+  fileFormat = "GeoTIFF"
+)
+task$start()
+
+#----STATIC LANDSCAPE VARIABLES----#
+# Elevation
+srtmDEM <- ee$Image("USGS/SRTMGL1_003")$
+  clip(eeBWCA.shp)
+# stats <- srtmDEM$reduceRegion(reducer = ee$Reducer$minMax(), geometry = eeBWCA.shp, scale = 30, maxPixels = 1e13)$getInfo()
+# print(stats)
+Map$centerObject(eeBWCA.shp)
+Map$addLayer(eeBWCA.shp)
+Map$addLayer(srtmDEM,
+             list(min = 335, max = 700, palette = c("black", "orange", "red")),
+             "Elevation")
+
+# Slope
+slope <- ee$Terrain$slope(srtmDEM)
+# stats <- slope$reduceRegion(reducer = ee$Reducer$minMax(), geometry = eeBWCA.shp, scale = 30, maxPixels = 1e13)$getInfo()
+# print(stats)
+
+# Aspect
+aspect <- ee$Terrain$aspect(srtmDEM)
+# stats <- aspect$reduceRegion(reducer = ee$Reducer$minMax(), geometry = eeBWCA.shp, scale = 30, maxPixels = 1e13)$getInfo()
+# print(stats)
+
+Map$centerObject(eeBWCA.shp)
+Map$addLayer(eeBWCA.shp)
+Map$addLayer(srtmDEM,
+             list(min = 335, max = 700, palette = c("black", "orange", "red")),
+             "Elevation")
+Map$addLayer(slope,
+             list(min = 0, max = 52.55262, palette = c("black", "orange", "red")),
+             "Slope")
+Map$addLayer(aspect,
+             list(min = 0, max = 358.2852, palette = c("black", "orange", "red")),
+             "Elevation")
+
+################
+# Load SRTM DEM clipped to AOI
+srtmDEM <- ee$Image("USGS/SRTMGL1_003")$
+  clip(eeBWCA.shp)
+
+# Visualize DEM
+Map$centerObject(eeBWCA.shp)
+Map$addLayer(eeBWCA.shp)
+Map$addLayer(
+  srtmDEM,
+  list(min = 335, max = 700, palette = c("black", "orange", "red")),
+  "Elevation"
+)
+
+# Terrain products
+slope <- ee$Terrain$slope(srtmDEM)
+aspect <- ee$Terrain$aspect(srtmDEM)
+
+Map$addLayer(slope, list(min = 0, max = 45, palette = c("blue", "yellow", "red")), "Slope")
+Map$addLayer(aspect, list(min = 0, max = 360, palette = c("purple", "cyan", "green")), "Aspect")
+
+# --- EXPORTS ---
+# Helper function
+export_to_drive <- function(image, band_name) {
+  task <- ee_image_to_drive(
+    image = image,
+    description = paste0(band_name, "_export"),
+    folder = "GEDI_BWCA",
+    fileNamePrefix = band_name,
+    region = eeBWCA.shp$geometry(),
+    scale = 30,
+    maxPixels = 1e13,
+    fileFormat = "GeoTIFF"
+  )
+  task$start()
+}
+
+# DEM
+band_name_dem <- srtmDEM$bandNames()$get(0)$getInfo()
+export_to_drive(srtmDEM, band_name_dem)
+
+# Slope
+band_name_slope <- slope$bandNames()$get(0)$getInfo()
+export_to_drive(slope, band_name_slope)
+
+# Aspect
+band_name_aspect <- aspect$bandNames()$get(0)$getInfo()
+export_to_drive(aspect, band_name_aspect)
+
+```
+
+# Other data needed
+
+```{r}
+#----TREEMAP----#
+# AGB DRYBIO_L
+# biomassRast <- rast("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/TreeMap/BIOMASS/TreeMap2016_DRYBIO_L.tif")
+# BWCA.shp_Clip <- st_transform(BWCA.shp_Clip, crs = crs(biomassRast))
+# biomassRast <- crop(biomassRast, BWCA.shp_Clip) %>% mask(., BWCA.shp_Clip)
+# biomassRast <- project(biomassRast, fortypcdBWCA_UTM, method = 'bilinear')
+# plot(biomassRast)
+# writeRaster(biomassRast,
+#             filename = "/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/TreeMap/biomassBWCA.tif",
+#             NAflag = 0,
+#             overwrite = TRUE)
+
+biomassRast <- rast("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/TreeMap/biomassBWCA.tif")
+plot(biomassRast)
+
+#----MODIS----#
+# To calculate some of these MODIS values I will need to utilise several different data sources.
+# Below are 4 maps that come from the calibration of TRY plant trait data to MODIS images. Because
+# all of these come from a global raster, I will be cropping them to the BWCA and then writing them
+# back out as smaller sized raster files to save computation in the future.
+
+# Leaf Dry Matter Content
+# ldmcRast <- rast("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/MODIS/LDMC_1km_v1.tif")
+# BWCA.shp_Clip <- st_transform(BWCA.shp_Clip, crs = crs(ldmcRast))
+# ldmcRast <- crop(ldmcRast, BWCA.shp_Clip) %>% mask(., BWCA.shp_Clip)
+# ldmcRast <- project(ldmcRast, fortypcdBWCA_UTM, method = 'bilinear')
+# writeRaster(ldmcRast,
+#             filename = "/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/MODIS/ldmcRast.tif",
+#             NAflag = 0,
+#             overwrite = TRUE)
+ldmcRast <- rast("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/MODIS/ldmcRast.tif")
+
+# Leaf Nitrogen Content
+# lncRast <- rast("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/MODIS/LNC_1km_v1.tif")
+# lncRast <- crop(lncRast, BWCA.shp_Clip) %>% mask(., BWCA.shp_Clip)
+# lncRast <- project(lncRast, fortypcdBWCA_UTM, method = 'bilinear')
+# writeRaster(lncRast,
+#             filename = "/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/MODIS/lncRast.tif",
+#             NAflag = 0,
+#             overwrite = TRUE)
+lncRast <- rast("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/MODIS/lncRast.tif")
+
+# Leaf Phosphorus Content
+# lpcRast <- rast("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/MODIS/LPC_1km_v1.tif")
+# lpcRast <- crop(lpcRast, BWCA.shp_Clip) %>% mask(., BWCA.shp_Clip)
+# lpcRast <- project(lpcRast, fortypcdBWCA_UTM, method = 'bilinear')
+# writeRaster(lpcRast,
+#             filename = "/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/MODIS/lpcRast.tif",
+#             NAflag = 0,
+#             overwrite = TRUE)
+lpcRast <- rast("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/MODIS/lpcRast.tif")
+
+# Specific Leaf Area
+# slaRast <- rast("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/MODIS/SLA_1km_v1.tif")
+# slaRast <- crop(slaRast, BWCA.shp_Clip) %>% mask(., BWCA.shp_Clip)
+# slaRast <- project(slaRast, fortypcdBWCA_UTM, method = 'bilinear')
+# writeRaster(slaRast,
+#             filename = "/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/MODIS/slaRast.tif",
+#             NAflag = 0,
+#             overwrite = TRUE)
+slaRast <- rast("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/MODIS/slaRast.tif")
+
+```
+
+# CBD SAR paper 
+
+```{r}
+directory <- '/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/Maybe This Is The Way'
+files <- list.files(directory)
+
+rasterList <- list()
+for (file in files) {
+  filePath <- file.path(directory, file)
+  r <- rast(filePath)
+  name <- basename(filePath) %>% str_extract("^[^_]+_[^_]+_[^_]+_[^_]+")
+  rasterList[[name]] <- r
+  plot(r)
+}
+
+
+#####################################
+
+# ---------------------------
+# 1) Load VH & VV rasters (in dB, same CRS/resolution)
+# ---------------------------
+vh <- rasterList[[1]]  # VH (dB)
+vv <- rasterList[[8]]  # VV (dB)
+
+# ---------------------------
+# 2) 5x5 and 7x7 low-pass filters (mean)
+# ---------------------------
+w5 <- matrix(1, 5, 5) / 25
+w7 <- matrix(1, 7, 7) / 49
+
+vh5 <- focal(vh, w = w5, fun = "mean", na.policy = "omit")
+vh7 <- focal(vh, w = w7, fun = "mean", na.policy = "omit")
+vv5 <- focal(vv, w = w5, fun = "mean", na.policy = "omit")
+vv7 <- focal(vv, w = w7, fun = "mean", na.policy = "omit")
+
+# ---------------------------
+# 3) VH:VV ratio in dB space = VH_dB - VV_dB
+#    (equivalent to log10(VH_lin/VV_lin) scaled; this matches the usual treatment in dB)
+# ---------------------------
+vhvv   <- vh  - vv      # unfiltered ratio (dB)
+vhvv5  <- vh5 - vv5     # 5x5 ratio (dB)
+vhvv7  <- vh7 - vv7     # 7x7 ratio (dB)
+
+# ---------------------------
+# 4) Coefficients from your Table for CBD models
+#    (ONLY VH and VH:VV terms are included here, per your request)
+# ---------------------------
+
+# CBD1  (zenith 0–7°)
+b0_cbd1    <- 0.00      # <-- PUT THE PAPER'S INTERCEPT HERE
+b_vh_cbd1  <-  0.0066   # VH
+b_vh5_cbd1 <- -0.0349   # VH, 5x5
+b_vh7_cbd1 <-  0.0291   # VH, 7x7
+b_r_cbd1   <- -0.0005   # VH:VV
+b_r5_cbd1  <-  0.0027   # VH:VV, 5x5
+# VH:VV, 7x7 was "—" for CBD1 -> 0
+
+CBD1 <- b0_cbd1 +
+        b_vh_cbd1  * vh  +
+        b_vh5_cbd1 * vh5 +
+        b_vh7_cbd1 * vh7 +
+        b_r_cbd1   * vhvv +
+        b_r5_cbd1  * vhvv5
+
+# CBD12 (zenith 0–23°)
+b0_cbd12    <- 0.00     # <-- INTERCEPT
+b_vh_cbd12  <-  0.0141
+b_vh5_cbd12 <- -0.1061
+b_vh7_cbd12 <-  0.0645
+# VH:VV (unfiltered) for CBD12 was "—"
+b_r5_cbd12  <-  0.0108  # VH:VV, 5x5
+# VH:VV, 7x7 for CBD12 was "—"
+
+CBD12 <- b0_cbd12 +
+         b_vh_cbd12  * vh  +
+         b_vh5_cbd12 * vh5 +
+         b_vh7_cbd12 * vh7 +
+         b_r5_cbd12  * vhvv5
+
+# CBD123 (zenith 0–38°)
+b0_cbd123    <- 0.00    # <-- INTERCEPT
+b_vh_cbd123  <-  0.0332
+b_vh5_cbd123 <- -0.2172
+b_vh7_cbd123 <-  0.0961
+b_r_cbd123   <- -0.0013  # VH:VV
+b_r5_cbd123  <-  0.0278  # VH:VV, 5x5
+b_r7_cbd123  <-  0.0185  # VH:VV, 7x7
+
+CBD123 <- b0_cbd123 +
+          b_vh_cbd123  * vh   +
+          b_vh5_cbd123 * vh5  +
+          b_vh7_cbd123 * vh7  +
+          b_r_cbd123   * vhvv +
+          b_r5_cbd123  * vhvv5 +
+          b_r7_cbd123  * vhvv7
+
+# CBDFC (FuelCalc-derived CBD)
+b0_cbcfc    <- 0.00     # <-- INTERCEPT
+b_vh_cbcfc  <-  0.0259
+b_vh5_cbcfc <- -0.1708
+# VH, 7x7 for CBDFC was "—"
+b_r_cbcfc   <- -0.0028  # VH:VV
+b_r5_cbcfc  <-  0.0319  # VH:VV, 5x5
+# VH:VV, 7x7 for CBDFC was "—"
+
+CBDFC <- b0_cbcfc +
+         b_vh_cbcfc  * vh  +
+         b_vh5_cbcfc * vh5 +
+         b_r_cbcfc   * vhvv +
+         b_r5_cbcfc  * vhvv5
+
+# ---------------------------
+# 5) Inspect / plot / write
+# ---------------------------
+plot(CBD123 / 10, main = "CBD123 from S1 VH & VH:VV (kg m^-3)")
+# writeRaster(CBD123, "CBD123_from_S1_VH_ratio.tif", overwrite = TRUE)
+
+metricsDf$x <- st_coordinates(metricsDf$geom)[,1]
+metricsDf$y <- st_coordinates(metricsDf$geom)[,2]
+
+metricsDf <- st_as_sf(metricsDf, coords = c("x", "y"), crs = 26915)
+
+plot(CBD123 / 10, main = "CBD123 from S1 VH & VH:VV (kg m^-3)")
+plot(metricsDf, add = TRUE)
+
+
+cbdvalues <- extract(CBD123 / 10, metricsDf) %>% rename("CDB" = "VH")
+
+metricsDf$CBD <- cbdvalues[,2]
+
+ggplot(metricsDf, aes(x = Z, y = canopy_volume, colour = matchedModelSpp)) +
+  geom_point(alpha = 0.1) +
+  # geom_smooth(method = "lm") +
+  theme_bw() +
+  facet_wrap(~ matchedModelSpp)
+
+metricsDf %>%
+  ggplot(., aes(x = matchedModelSpp, y = Z, fill = matchedModelSpp)) +
+  geom_boxplot() +
+  theme_classic()
+
+
+metricsDf <- metricsDf %>%
+  group_by(matchedModelSpp) %>%
+  mutate(canopy_volume = ifelse(is.na(canopy_volume), median(canopy_volume, na.rm = TRUE), canopy_volume)) %>%
+  ungroup()
+
+
+cflvalues <- metricsDf[,c(18,5)] %>% mutate(CFL = CBD * canopy_volume)
+
+
+canopyCoverRast <- rast('/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/LANDFIRE/Canopy Cover/canopyCoverRast.tif')
+ccvalues <- extract(canopyCoverRast, metricsDf)
+
+
+
+cbhvalues <- metricsDf$CBH
+
+chvalues <- metricsDf$Z
+
+
+df <- cbind(cbdvalues[,2], cflvalues[,2], ccvalues[,2], cbhvalues, chvalues) %>%
+  `colnames<-`(c("CBD", "CFL", "CC", "CBH", "CH", "geometry"))
+
+df$Spp <- metricsDf$matchedModelSpp
+
+gc()
+
+
+
+metricsDf %>%
+  group_by(uniqueID) %>%
+  summarise(CBD = mean(CBD, na.rm = TRUE))
+
+metricsDf %>% filter(uniqueID == "TWP552307_") %>%
+  dplyr::select(CBD)
+
+names(metricsDf)
+```
+
+# DBH Model
+
+```{r}
+ggplot(metricsDf, aes(x = Z, y = canopy_volume)) +
+  geom_point() +
+  theme_gray()
+
+model <- mclust::Mclust(data_frame(metricsDf$Z, metricsDf$canopy_volume) %>% drop_na())
+# plot(model, what = "classification")
+
+lm(canopy_volume ~ Z, data = subset(metricsDf, cluster == 1))
+lm(canopy_volume ~ Z, data = subset(metricsDf, cluster == 2))
+
+
+gam_fit <- gam(canopy_volume ~ s(Z), data = metricsDf)
+plot(gam_fit)
+
+
+mix_fit <- flexmix::flexmix(canopy_volume ~ Z, data = metricsDf %>% drop_na(), k = 2)
+flexmix::parameters(mix_fit)
+
+
+ggplot(metricsDf %>% drop_na(), aes(x = Z, y = canopy_volume)) +
+  geom_point() +
+  theme_gray() +
+  stat_function(fun = function(x){-18.113726 + 9.736706*x}, linetype = "dashed", color = "red") +
+  stat_function(fun = function(x){-258.09794 + 42.11347*x}, linetype = "solid", color = "blue")
+########################################
+
+metricsDf %>%
+  filter(matchedModelSpp != "Bur oak") %>%
+  drop_na(Z, canopy_volume) %>%
+  group_by(matchedModelSpp) %>%
+  group_split() %>%
+  map(function(df) {
+    spp <- unique(df$matchedModelSpp)
+    mclust_Model <- Mclust(df[, c("Z", "canopy_volume")])
+    mix_fit <- flexmix(canopy_volume ~ Z, data = df, k = 2)
+    gam_fit <- gam(canopy_volume ~ s(Z), data = df)
+    list(
+      species = spp,
+      mclust = mclust_Model,
+      mix = mix_fit,
+      gam = gam_fit,
+      params = parameters(mix_fit)
+    )
+  })
+
+
+models <- metricsDf  %>%
+  filter(matchedModelSpp != "Bur oak") %>%
+  drop_na(Z, canopy_volume) %>%
+  group_by(matchedModelSpp) %>%
+  group_split() %>%
+  map(function(df) {
+    spp <- unique(df$matchedModelSpp)
+
+    # Skip groups with too few points
+    if (nrow(df) < 10) {
+      message("Skipping ", spp, " (too few observations)")
+      return(NULL)
+    }
+
+    # Try–catch to handle Mclust/flexmix errors gracefully
+    tryCatch({
+      mclust_model <- Mclust(df[, c("Z", "canopy_volume")])
+
+      mix_fit <- flexmix(canopy_volume ~ Z, data = df, k = 2)
+
+      gam_fit <- gam(canopy_volume ~ s(Z), data = df)
+
+      list(
+        species = spp,
+        mclust = mclust_model,
+        mix = mix_fit,
+        gam = gam_fit,
+        params = parameters(mix_fit)
+      )
+    }, error = function(e) {
+      message("Error in ", spp, ": ", e$message)
+      return(NULL)
+    })
+  }) %>%
+  compact()
+
+
+
+
+
+```
+
+
+# BIGMAP Data
+
+```{r}
+directory <- '/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/BIGMAP Rasters'
+files <- list.files(directory, pattern = "\\.tif", full.names = TRUE)
+
+bigmapRasters <- list()
+for (file in files) {
+  raster <- rast(file)
+  name <- tools::file_path_sans_ext(basename(file))
+  bigmapRasters[[name]] <- raster
+  plot(raster, main = name)
+}
+
+
+
+bigmapRasters <- lapply(bigmapRasters, function(x) {
+  project(x, templateRaster, method = "near") %>%
+    crop(., templateRaster) %>%
+    mask(., templateRaster)
+})
+
+gc()
+
+stack <- rast(bigmapRasters)
+
+topIDX <- app(stack, which.max, na.rm = TRUE)
+
+plot(topIDX)
+
+speciesLevel <- data.frame(
+  value = seq_along(names(bigmapRasters)),
+  species = names(bigmapRasters)
+)
+
+topSpp <- as.factor(topIDX)
+levels(topSpp) <- speciesLevel
+
+plot(topSpp)
+
+topSpp %>%
+  as.data.frame() %>%
+  group_by(species) %>%
+  summarise(n = n()) %>%
+  ggplot(., aes(x = reorder(species, -n), y = log10(n))) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5))
+
+
+```
+
+
+# Raster Calculations
+
+```{r}
+directory <- '/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/Processed Rasters'
+files <- list.files(directory, full.names = TRUE, pattern = "\\.tif")
+rasters <- list()
+for (file in files) {
+  filename <-  basename(file)
+  parts <- strsplit(filename, "_")[[1]]
+  shortName <- paste(parts[1:2], collapse = "_")
+  r <- rast(file)
+  # if (startsWith(shortName, "B")) {
+  #   r <- r / 10000
+  # }
+  rasters[[shortName]] <- r
+}
+
+VV <- rasters$VV_p50 %>% ifel(is.infinite(.), -99, .)
+VH <- rasters$VH_p50 %>% ifel(is.infinite(.), -99, .)
+VVVH_Plus <- VV + VH
+names(VVVH_Plus) <- "VVVH_Plus"
+VVVH_Minus <- VV - VH
+names(VVVH_Minus) <- "VVVH_Minus"
+
+VHVV_Ratio1 <- VH / VV
+names(VHVV_Ratio1) <- "VHVV_Ratio1"
+
+VV_Ratio1 <- VV / (VV + VH)
+names(VV_Ratio1) <- "VV_Ratio1"
+VH_Ratio1 <- VH / (VV + VH)
+names(VH_Ratio1) <- "VH_Ratio1"
+
+HH <- rasters$HH_BWCA %>% project(., templateRaster, method = "near")
+names(HH) <- "HH"
+HH <- ifel(HH > 0, 10 * log10(HH^2) - 83, NA)
+HV <- rasters$HV_BWCA %>% project(., templateRaster, method = "near")
+names(HV) <- "HV"
+HV <- ifel(HV > 0, 10 * log10(HV^2) - 83, NA)
+
+w5 <- matrix(1, 5, 5) / 25
+w7 <- matrix(1, 7, 7) / 49
+
+VH5 <- focal(VH, w = w5, fun = "mean", na.policy = "omit")
+names(VH5) <- "VH5"
+VH7 <- focal(VH, w = w7, fun = "mean", na.policy = "omit")
+names(VH7) <- "VH7"
+VV5 <- focal(VV, w = w5, fun = "mean", na.policy = "omit")
+names(VV5) <- "VV5"
+VV7 <- focal(VV, w = w7, fun = "mean", na.policy = "omit")
+names(VV7) <- "VV7"
+VHVV5 <- focal(VHVV_Ratio1, w = w5, fun = "mean", na.policy = "omit")
+names(VHVV5) <- "VHVV5"
+VHVV7 <- focal(VHVV_Ratio1, w = w7, fun = "mean", na.policy = "omit")
+names(VHVV7) <- "VHVV7"
+
+HH5 <- focal(HH, w = w5, fun = "mean", na.policy = "omit")
+names(HH5) <- "HH5"
+HH7 <- focal(HH, w = w7, fun = "mean", na.policy = "omit")
+names(HH7) <- "HH7"
+HV5 <- focal(HV, w = w5, fun = "mean", na.policy = "omit")
+names(HV5) <- "HV5"
+HV7 <- focal(HV, w = w7, fun = "mean", na.policy = "omit")
+names(HV7) <- "HV7"
+
+gc()
+
+# Get GLCM variables from SAR data
+# These need to be integers before I run the code, right now ratio values are continuous
+x <- glcm(raster::raster(VHVV_Ratio1), statistics = c("contrast", "dissimilarity", "homogeneity", "variance", "correlation", "mean", "entropy"), n_grey = 8, window = c(21,21))
+
+
+for (i in 1:raster::nlayers(x)) {
+  plot(x[[i]], main = names(x)[i])
+}
+
+rastList <- raster::unstack(x)
+rastList <- lapply(rastList, rast)
+contrast <- rastList[[1]]
+dissimilarity <- rastList[[2]]
+homogeneity <- rastList[[3]]
+variance <- rastList[[4]]
+correlation <- rastList[[5]]
+mean <- rastList[[6]]
+entropy <- rastList[[7]]
+
+# NDBI
+ndbi <- (rasters$HH_p50 - rasters$HV_p50) / (rasters$HH_p50 + rasters$HV_p50)
+names(ndbi) <- "ndbi"
+plot(ndbi)
+
+# NDVI (Normalized Vegetation Difference Index)
+ndvi <- (rasters$B8_p50 - rasters$B4_p50) / (rasters$B8_p50 + rasters$B4_p50)
+names(ndvi) <- "ndvi"
+# EVI (Enhanced Vegetation Index: 1 & 2)
+evi <- 2.5 * (((rasters$B8_p50 * 0.0001) - (rasters$B4_p50 * 0.0001)) / ((rasters$B8_p50 * 0.0001) + 6 * (rasters$B4_p50 * 0.0001) - 7.5 * (rasters$B2_p50 * 0.0001) + 1))
+names(evi) <- "evi"
+evi2 <- 2.5 * ((rasters$B8_p50 - rasters$B4_p50) / (rasters$B8_p50 + 2.4 * rasters$B4_p50 + 1))
+names(evi2) <- "evi2"
+# RVI (Radar Vegetation Index)
+rvi <- rasters$B8_p50 / rasters$B4_p50
+names(rvi) <- "rvi"
+# PSSRac (Pigment Specific Simple Ratio a)
+pssra <- rasters$B7_p50 / rasters$B4_p50
+names(pssra) <- "pssra"
+# SAVI (Soil Adjusted Vegetation Index)
+savi <- ((rasters$B8_p50 - rasters$B4_p50) / (rasters$B8_p50 + rasters$B4_p50 + 0.428)) * (1 + 0.428)
+names(savi) <- "savi"
+# GNDVI (Green Normalized Difference Vegetation Index)
+# Highly correlated with nitrogen, closer to 1 is more nitrogen
+gndvi <- (rasters$B8_p50 - rasters$B3_p50) / (rasters$B8_p50 + rasters$B3_p50)
+names(gndvi) <- "gndvi"
+# NDWI (Normalized Difference Water Index)
+ndwi <- (rasters$B3_p50 - rasters$B8_p50) / (rasters$B3_p50 + rasters$B8_p50)
+names(ndwi) <- "ndwi"
+# NDMI (Normalized Difference Moisture Index)
+ndmi <- (rasters$B8_p50 - rasters$B11_p50) / (rasters$B8_p50 + rasters$B11_p50)
+names(ndmi) <- "ndmi"
+
+# MODIS
+sos <- rast('/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/Processed Rasters/Greenup_1_2025_08_03_15_37_26.tif')
+eos <- rast('/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/Processed Rasters/Senescence_1_2025_08_03_15_37_36.tif')
+los <- eos - sos
+
+# Normalised Burn Ratio
+nbr <- (rasters$B8_p50 - rasters$B12_p50) / (rasters$B8_p50 + rasters$B12_p50)
+names(nbr) <- "nbr"
+nbr2 <- (rasters$B11_p50 - rasters$B12_p50) / (rasters$B11_p50 + rasters$B12_p50)
+names(nbr2) <- "nbr2"
+
+
+plot(nbr)
+plot(nbr2)
+plot(ndmi)
+
+plot(sos)
+plot(eos)
+plot(los)
+
+plot(ndvi)
+plot(evi)
+plot(evi2)
+plot(rvi)
+plot(pssra)
+plot(savi)
+plot(gndvi)
+plot(ndwi)
+
+
+blue <- rasters$B2_p50
+names(blue) <- "blue"
+green <- rasters$B3_p50
+names(green) <- "green"
+red <- rasters$B4_p50
+names(red) <- "red"
+nir <- rasters$B8_p50
+names(nir) <- "nir"
+swir1 <- rasters$B11_p50
+names(swir1) <- "swir1"
+swir2 <- rasters$B12_p50
+names(swir2) <- "swir2"
+
+crs(rasters$B2_p50) == crs(gndvi)
+
+gc()
+
+fortypcdBWCA <- project(fortypcdBWCA_UTM, rasters$B1_p10, method = "near")
+slaRast <- project(slaRast, fortypcdBWCA, method = "near")
+ldmcRast <- project(ldmcRast, fortypcdBWCA, method = "near")
+lpcRast <- project(lpcRast, fortypcdBWCA, method = "near")
+lncRast <- project(lncRast, fortypcdBWCA, method = "near")
+
+#----PRISM----#
+pptPrism <- rast("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/PRISM/Precipitation/PRISM_ppt_30yr_normal_800mM4_annual_bil.bil")
+shapefile <- BWCA.shp %>% st_transform(., crs(pptPrism))
+pptPrism <- crop(pptPrism, shapefile) %>% mask(., shapefile)
+pptPrism <- project(pptPrism, fortypcdBWCA, method = "near")
+names(pptPrism) <- "ppt"
+
+plot(pptPrism)
+
+tempPrism <- rast("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/PRISM/Temperature/PRISM_tmean_30yr_normal_800mM5_annual_bil.bil")
+tempPrism <- crop(tempPrism, shapefile) %>% mask(., shapefile)
+tempPrism <- project(tempPrism, fortypcdBWCA, method = "near")
+plot(tempPrism)
+names(tempPrism) <- "temp"
+
+#----TOPOGRAPHY----#
+shapefile <- BWCA.shp %>% st_transform(., crs(fortypcdBWCA))
+# Aspect
+aspect <- rasters$aspect_2025
+aspect <- project(aspect, fortypcdBWCA, method = "near")
+aspect <- crop(aspect, shapefile) %>% mask(., shapefile)
+aspect <- project(aspect, fortypcdBWCA, method = "near")
+
+# Slope
+slope <- rasters$slope_2025
+slope <- project(slope, fortypcdBWCA, method = "near")
+slope <- crop(slope, shapefile) %>% mask(., shapefile)
+slope <- project(slope, fortypcdBWCA, method = "near")
+
+# Elevation
+elevation <- rasters$elevation_2025
+elevation <- project(elevation, fortypcdBWCA, method = "near")
+elevation <- crop(elevation, shapefile) %>% mask(., shapefile)
+elevation <- project(elevation, fortypcdBWCA, method = "near")
+
+
+plot(fortypcdBWCA)
+
+
+metricsDf %>%
+  group_by(uniqueID) %>%
+  summarise(CBD = mean(CBD, na.rm = TRUE)) %>%
+  ggplot(., aes(x = CBD)) +
+  geom_histogram() +
+  geom_vline(xintercept = 0.1048578, color = "red", linetype = "dashed")
+
+
+metricsDf %>%
+  mutate(Crown_Biomass_KG = canopy_volume * CBD) %>%
+  group_by(uniqueID) %>%
+  summarise(Footprint_Total_Biomass = sum(Crown_Biomass_KG, na.rm = T),
+            CFL = Footprint_Total_Biomass / (pi * 12.5^2)) %>%
+  ggplot(., aes(x = CFL)) +
+  geom_histogram() +
+  theme_classic()
+
+gc()
+
+
+
+metricsDf %>%
+  mutate(Crown_Biomass_KG = canopy_volume * CBD) %>%
+  group_by(uniqueID) %>%
+  summarise(Footprint_Total_Biomass = sum(Crown_Biomass_KG, na.rm = T),
+            CFL = Footprint_Total_Biomass / (pi * 12.5^2)) %>%
+  arrange(CFL)
+
+
+
+metricsDf %>%
+  filter(uniqueID == "TWP571309_")
+
+
+```
+
+
+
+```{r}
+# Stack that
+# This gets to be too big for my RAM so I had to find an alternate way of writing it out
+stack <- c(ndvi, gndvi, evi, blue, green, red, nir, swir1, swir2, ndmi, nbr, nbr2, VV, VH, VH5, VH7, VV5, VV7, VHVV5, VHVV7, VVVH_Plus, VVVH_Minus, VHVV_Ratio1, VV_Ratio1, VH_Ratio1, contrast, dissimilarity, homogeneity, entropy, pptPrism, tempPrism, aspect, slope, elevation, HH, HV, HH5, HH7, HV5, HV7)
+
+coords <- read_csv("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/coordinates.csv")
+names(coords)
+
+points <- vect(coords, geom = c("x", "y"), crs  = crs(ndvi))
+values <- terra::extract(stack, points, ID = FALSE)
+
+stackDf <- cbind(coords, values) %>% drop_na()
+
+data.table::fwrite(stackDf, "/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/stackDf.csv")
+
+gc()
+
+
+gediFootprintDf <- gediMatched %>% group_by(code) %>%
+  summarise(across(contains(c("rh", "p_z", "pv")), ~ mean(.x, na.rm = TRUE))) %>%
+  rename_with(~ ifelse(startsWith(., "p_z"), sub("^p_z", "pai_", .),
+                       ifelse(startsWith(., "pv"), sub("^[^_]+", "pavd", .), .)))
+
+
+write_csv(gediFootprintDf, "/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/gediFootprintDf.csv")
+
+
+gediFootprintDf <- st_centroid(gediFootprintDf)
+
+X <- st_coordinates(gediFootprintDf)[,1]
+Y <- st_coordinates(gediFootprintDf)[,2]
+
+gediFootprintDf$x <- X
+gediFootprintDf$y <- Y
+
+stackDf <- st_as_sf(stackDf, coords = c("x", "y"), crs = crs(ndvi))
+
+# st_join(
+#   gediFootprintDf,
+#   stackDf,
+#   join = st_is_within_distance,
+#   dist = 100   # meters
+# )
+# 
+# st_crs(gediFootprintDf) == st_crs(stackDf)
+
+
+idx <- st_nearest_feature(gediFootprintDf, stackDf)
+
+d <- st_distance(
+  gediFootprintDf,
+  stackDf[idx, ],
+  by_element = TRUE
+)
+
+joined <- bind_cols(
+  gediFootprintDf,
+  stackDf[idx, ] |> st_drop_geometry()
+) |>
+  filter(d <= units::set_units(100, "m"))
+
+write_csv(joined, "/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/featuresDf.csv")
+
+
+# CBD values
+cbdvalues <- metricsDf %>%
+  group_by(uniqueID) %>%
+  summarise(CBD = mean(CBD, na.rm = TRUE))
+
+# CFL values
+cflvalues <- metricsDf %>%
+  mutate(CFL = CBD * canopy_volume) %>%
+  group_by(uniqueID) %>%
+  summarise(CFL = mean(CFL, na.rm = TRUE))
+
+# CBH values
+cbhvalues <- metricsDf %>%
+  group_by(uniqueID) %>%
+  summarise(CBH = mean(CBH, na.rm = TRUE))
+
+# Z values
+zvalues <- metricsDf %>%
+  group_by(uniqueID) %>%
+  summarise(H = mean(Z, na.rm = TRUE))
+
+# Canopy cover values
+ccvalues <- metricsDf %>%
+  group_by(uniqueID) %>%
+  summarise(CC = mean(CCover, na.rm = TRUE))
+  
+
+
+hist(as.numeric(cbdvalues$CBD), breaks = 30)
+hist(as.numeric(cflvalues$CFL), breaks = 30)
+hist(as.numeric(cbhvalues$CBH), breaks = 30)
+hist(as.numeric(zvalues$H), breaks = 30)
+hist(as.numeric(ccvalues$CC), breaks = 30)
+
+
+targetDf <- st_join(cbdvalues, cflvalues, by = "uniqueID") %>%
+  st_join(., cbhvalues, by = "uniqueID") %>%
+  st_join(., zvalues, by = "uniqueID") %>%
+  st_join(., ccvalues, by = "uniqueID")
+targetDf <- targetDf[,-c(1,4,6,8)]
+targetDf <- targetDf[,c(6,1,3,4,5,7,2)]
+
+finalDf <- targetDf %>%
+  mutate(uniqueID = str_remove(uniqueID, "_$")) %>%
+  st_drop_geometry() %>%
+  mutate(join_id = str_remove(uniqueID, "_$")) %>%
+  left_join(joined %>%
+              dplyr::select(-uniqueID), by = c("join_id" = "code")) %>%
+  dplyr::select(-join_id)
+
+
+X <- st_coordinates(finalDf$geometry)[,1]
+Y <- st_coordinates(finalDf$geometry)[,2]
+
+coordinates <- finalDf %>% dplyr::select(uniqueID, x, y)
+
+write_csv(coordinates, "/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/coordinates.csv")
+
+gc()
+
+# # Get FORTYPCD values
+# fortypcd <- extract(fortypcdBWCA, finalDf[,c("x", "y")]) %>% rename("FORTYPCD" = "Label") %>% dplyr::select(FORTYPCD)
+# 
+# finalDf <- cbind(finalDf, fortypcd)
+
+cols_to_drop <- finalDf %>%
+  dplyr::select(dplyr::contains(c("pai", "pavd"))) %>%
+  dplyr::select(dplyr::where(~ mean(. == 0, na.rm = TRUE) > 0.95)) %>%
+  names()
+
+finalDf <- finalDf %>%
+  dplyr::select(-dplyr::all_of(cols_to_drop))
+
+rh_cols <- paste0("rh", 0:100)
+
+finalDf <- finalDf %>%
+  rowwise() %>%
+  mutate(rh_vals = list(c_across(all_of(rh_cols))),
+         rh_vals_ground = list(rh_vals[rh_vals >= 0]),
+         rh_skewness = if (length(rh_vals_ground) > 2)
+      e1071::skewness(unlist(rh_vals_ground), na.rm = TRUE)
+    else NA_real_,
+    rh_kurtosis = if (length(rh_vals_ground) > 3)
+      e1071::kurtosis(unlist(rh_vals_ground), na.rm = TRUE)
+    else NA_real_) %>%
+  ungroup() %>%
+  dplyr::select(-rh_vals, -rh_vals_ground)
+
+
+finalDf %>%
+  mutate(Skew = case_when(
+    rh_skewness <= -0.5 ~ "Top",
+    rh_skewness < 0.5   ~ "Ladder Fuel",
+    TRUE                ~ "Understory"
+  )) %>%
+  group_by(Skew) %>%
+  summarise(n = n(), .groups = "drop") %>%
+  ggplot(., aes(x = Skew, y = n, fill = Skew)) +
+  geom_bar(stat = "identity") +
+  theme_classic()
+
+# Mean PAI 0-10m (m2/m2)
+# Like LAI but with the woody biomass thrown in too. Helps to describe understorys that have high biomass
+finalDf %>%
+  mutate(Mean_PAI_0_10 = base::rowMeans(dplyr::select(., pai_0_5m, pai_5_10), na.rm = TRUE)) %>%
+  dplyr::select(uniqueID, Mean_PAI_0_10) %>%
+  ggplot(., aes(x = Mean_PAI_0_10)) +
+  geom_histogram() +
+  theme_classic()
+
+# Sum PAI 0-10m
+# Alternate way of looking at understory biomass values. DOES SUM MAKE SENSE, I DON'T THINK SO
+finalDf %>%
+  mutate(Sum_PAI_0_10 = base::rowSums(dplyr::select(., pai_0_5m, pai_5_10), na.rm = TRUE)) %>%
+  dplyr::select(uniqueID, Sum_PAI_0_10) %>%
+  ggplot(., aes(x = Sum_PAI_0_10)) +
+  geom_histogram() +
+  theme_classic()
+
+# Fuel continuity (m2/m3)
+# Akin to the vertical distribution of PAI, describes the vertical packing and connectedness of ladder fuels
+finalDf %>%
+  mutate(
+    Fuel_Continuity = rowMeans(dplyr::select(., pavd_0_5, pavd_5_10), na.rm = TRUE),
+    Fuel_Continuity_SD = apply(dplyr::select(., pavd_0_5, pavd_5_10), 1, sd, na.rm = TRUE)) %>%
+  dplyr::select(uniqueID, Fuel_Continuity, Fuel_Continuity_SD) %>%
+  ggplot(., aes(x = Fuel_Continuity)) +
+  geom_histogram() +
+  theme_classic()
+
+# Ladderfuel ratio
+# This ratio quantifies the relative abundance of lower-canopy fuels (0-10m PAI) compared to canopy fuels (10-30m PAI),
+# representing vertical fuel connectivity 
+finalDf %>%
+  mutate(Sum_PAI_0_10 = base::rowSums(dplyr::select(., pai_0_5m, pai_5_10), na.rm = TRUE)) %>%
+  mutate(LCR = Sum_PAI_0_10 / base::rowSums(dplyr::select(., pai_10_15:pai_30_35), na.rm = TRUE)) %>%
+  dplyr::select(uniqueID, Sum_PAI_0_10, LCR) %>%
+  filter(LCR < 50) %>%
+  ggplot(., aes(x = LCR)) +
+  geom_histogram() +
+  theme_classic()
+
+options(GGally.progress = FALSE)
+
+finalDf %>%
+  mutate(Mean_PAI_0_10 = base::rowMeans(dplyr::select(., pai_0_5m, pai_5_10), na.rm = TRUE)) %>%
+  mutate(Sum_PAI_0_10 = base::rowSums(dplyr::select(., pai_0_5m, pai_5_10), na.rm = TRUE)) %>%
+  mutate(Fuel_Continuity = rowMeans(dplyr::select(., pavd_0_5, pavd_5_10), na.rm = TRUE),
+         Fuel_Continuity_SD = apply(dplyr::select(., pavd_0_5, pavd_5_10), 1, sd, na.rm = TRUE)) %>%
+  mutate(LCR = Sum_PAI_0_10 / base::rowSums(dplyr::select(., pai_10_15:pai_30_35), na.rm = TRUE)) %>%
+  dplyr::select(Mean_PAI_0_10, Sum_PAI_0_10, Fuel_Continuity, LCR, rh_skewness, rh_kurtosis) %>%
+  mutate(LCR = ifelse(is.infinite(LCR), median(LCR, na.rm = TRUE), LCR)) %>%
+  GGally::ggpairs(progress = FALSE)
+
+
+finalDf %>%
+  mutate(Mean_PAI_0_10 = base::rowMeans(dplyr::select(., pai_0_5m, pai_5_10), na.rm = TRUE)) %>%
+  mutate(Sum_PAI_0_10 = base::rowSums(dplyr::select(., pai_0_5m, pai_5_10), na.rm = TRUE)) %>%
+  mutate(Fuel_Continuity = rowMeans(dplyr::select(., pavd_0_5, pavd_5_10), na.rm = TRUE),
+         Fuel_Continuity_SD = apply(dplyr::select(., pavd_0_5, pavd_5_10), 1, sd, na.rm = TRUE)) %>%
+  mutate(LCR = Sum_PAI_0_10 / base::rowSums(dplyr::select(., pai_10_15:pai_30_35), na.rm = TRUE)) %>%
+  mutate(LCR = ifelse(is.infinite(LCR), median(LCR, na.rm = TRUE), LCR)) %>%
+  ggplot(., aes(x = pavd_0_5, y = Fuel_Continuity)) +
+  geom_point() +
+  geom_smooth() +
+  theme_classic()
+
+
+# LCR is ladder:canopy ratio
+finalDf %>%
+  mutate(Mean_PAI_0_10 = base::rowMeans(dplyr::select(., pai_0_5m, pai_5_10), na.rm = TRUE)) %>%
+  mutate(Sum_PAI_0_10 = base::rowSums(dplyr::select(., pai_0_5m, pai_5_10), na.rm = TRUE)) %>%
+  mutate(Fuel_Continuity = rowMeans(dplyr::select(., pavd_0_5, pavd_5_10), na.rm = TRUE),
+         Fuel_Continuity_SD = apply(dplyr::select(., pavd_0_5, pavd_5_10), 1, sd, na.rm = TRUE)) %>%
+  mutate(LCR = Sum_PAI_0_10 / base::rowSums(dplyr::select(., pai_10_15:pai_30_35), na.rm = TRUE)) %>%
+  mutate(LCR = ifelse(is.infinite(LCR), median(LCR, na.rm = TRUE), LCR))
+
+
+names(finalDf)
+
+
+finalDf %>%
+  pivot_longer(
+    cols = starts_with("pai_"),
+    names_to = "height_bin",
+    values_to = "pai"
+  ) %>%
+  mutate(
+    height_bin = str_remove(height_bin, "pai_"),
+    height_class = case_when(
+      height_bin == "0_5m"  ~ 5,
+      height_bin == "5_10"  ~ 10,
+      height_bin == "10_15" ~ 15,
+      height_bin == "15_20" ~ 20,
+      height_bin == "20_25" ~ 25,
+      height_bin == "25_30" ~ 30,
+      height_bin == "30_35" ~ 35
+    )
+  ) %>%
+  group_by(height_class) %>%
+  summarise(mean_pai = mean(pai, na.rm = TRUE)) %>%
+  ggplot(., aes(x = mean_pai, y = height_class)) +
+  geom_line(linewidth = 1.2, color = "forestgreen") +
+  geom_point(size = 2, color = "forestgreen") +
+  scale_y_continuous(name = "Height (m)", limits = c(0, 35)) +
+  scale_x_continuous(name = "Mean PAI") +
+  theme_minimal()
+
+
+# set.seed(NULL)  # for reproducibility
+
+finalDf %>%
+  filter(uniqueID %in% sample(unique(uniqueID), 10)) %>%
+  pivot_longer(
+    cols = starts_with("pavd_"),
+    names_to = "height_bin",
+    values_to = "pavd"
+  ) %>%
+  mutate(
+    height_bin = str_remove(height_bin, "pavd_"),
+    height_class = c(5, 10, 15, 20, 25, 30, 35, 40)[match(
+      height_bin,
+      c("0_5", "5_10", "10_15", "15_20", "20_25", "25_30", "30_35", "35_40")
+    )]
+  ) %>%
+  ggplot(aes(x = pavd, y = height_class)) +
+  geom_line(alpha = 0.6) +
+  stat_summary(fun = mean, geom = "line", linewidth = 1.2, color = "black") +
+  facet_wrap(~ uniqueID, ncol = 5) +
+  scale_y_continuous("Height (m)") +
+  scale_x_continuous("PAVD (m²/m³)") +
+  theme_minimal()
+
+
+finalDf %>%
+  filter(uniqueID %in% sample(unique(uniqueID), 10)) %>%
+  pivot_longer(
+    cols = starts_with("rh"),
+    names_to = "rh_bin",
+    values_to = "height"
+  ) %>%
+  mutate(
+    rh_pct = as.numeric(str_remove(rh_bin, "rh"))
+  ) %>%
+  ggplot(., aes(x = rh_pct, y = height)) +
+  geom_path(linewidth = 1.2) +
+  # scale_y_continuous("Height (m)") +
+  # scale_x_continuous("RH percentile (%)", limits = c(0, 100)) +
+  theme_minimal() +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  facet_wrap(~ uniqueID, ncol = 5)
+
+# LCR is ladder:canopy ratio
+# PAI tells us overall fuel availability, akin to LAI but with woody matter in there too
+# PAVD tells us where the fuel is in regards to it's vertical distribution
+finalDf <- finalDf %>%
+  mutate(Mean_PAI_0_10 = base::rowMeans(dplyr::select(., pai_0_5m, pai_5_10), na.rm = TRUE)) %>%
+  mutate(Sum_PAI_0_10 = base::rowSums(dplyr::select(., pai_0_5m, pai_5_10), na.rm = TRUE)) %>%
+  mutate(Fuel_Continuity = rowMeans(dplyr::select(., pavd_0_5, pavd_5_10), na.rm = TRUE),
+         Fuel_Continuity_SD = apply(dplyr::select(., pavd_0_5, pavd_5_10), 1, sd, na.rm = TRUE)) %>%
+  mutate(LCR = Sum_PAI_0_10 / base::rowSums(dplyr::select(., pai_10_15:pai_30_35), na.rm = TRUE)) %>%
+  mutate(LCR = ifelse(is.infinite(LCR), median(LCR, na.rm = TRUE), LCR))
+
+
+
+colSums(is.na(finalDf)) %>% as.data.frame()
+
+finalDf <- finalDf %>%
+  filter(!if_any(contains("rh"), is.na))
+
+
+
+write_csv(finalDf, "/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/BWCA_All_Variables.csv")
+
+#finalDf <- finalDf[,-c(8:31,33:56,58:81,83:96)]
+#
+#write_csv(finalDf, "/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/BWCA_Reduced_Variables.csv")
+
+
+
+gc()
+
+finalDf %>%
+  filter(uniqueID %in% sample(unique(uniqueID), 10)) %>%
+  pivot_longer(
+    cols = starts_with("pavd_"),
+    names_to = "pavd_bin",
+    values_to = "pavd"
+  ) %>%
+  mutate(
+    h_min = as.numeric(str_extract(pavd_bin, "(?<=_)[0-9]+")),
+    h_max = as.numeric(str_extract(pavd_bin, "(?<=_)[0-9]+(?=$)")),
+    height_mid = (h_min + h_max) / 2
+  ) %>%
+  ggplot(aes(x = pavd, y = height_mid)) +
+  geom_path(linewidth = 1.2) +
+  scale_y_continuous("Height (m)", expand = c(0, 0)) +
+  scale_x_continuous("PAVD (m² m⁻³)", expand = c(0, 0)) +
+  theme_minimal() +
+  facet_wrap(~ uniqueID, ncol = 5)
+
+# Here I convert total plant area into a gap fraction / transmittance using the Beer–Lambert law,
+# assuming a fixed light extinction through the canopy.
+thetaDegree <- 0:38
+thetaRadians <- thetaDegree * pi / 180
+finalDf <- finalDf %>%
+  mutate(Total_PAI = rowSums(across(c("pai_30_35":"pai_0_5m"))),
+         CGF = exp(-0.5 * 1 * Total_PAI))
+  
+# Here I calculate the CGF by the different zenith's like they do in Wolter et al. (2021), again using the
+# Beer-Lambert transmittancde equation from above, but now for all the zeniths of interest
+G <- 0.5
+Omega <- 1
+angleBins <- list(bin1 = 0:7, bin2 = 0:23, bin3 = 0:38)
+CGFList <- list()
+
+for (bin in names(angleBins)) {
+  anglesDegree <- angleBins[[bin]]
+  anglesRadians <- anglesDegree * pi /180
+  CGFmatrix <- sapply(anglesRadians, function(theta) exp(-G * Omega * finalDf$Total_PAI / cos(theta)))
+  CGFaverage <- rowMeans(CGFmatrix)
+  CGFList[[bin]] <- CGFaverage
+}
+
+cgfBins <- as.data.frame(CGFList) %>%
+  `colnames<-`(c("CGF_0-7", "CGF_0-23", "CGF_0-38"))
+
+finalDf <- cbind(finalDf, cgfBins)
+
+# I use the midpoint of the zenith angles to calculate CBD from each CGF interval,
+# adjusting the CGF values based on viewing angle. This is based on equation 1 from
+# Wolter et al. (2021)
+theta <- c(
+  "CGF_0-7"  = 3.5,
+  "CGF_0-23" = 11.5,
+  "CGF_0-38" = 19
+) * pi / 180
+
+finalDf <- finalDf %>%
+  mutate(
+    CBD_0_7 =
+      (-log(`CGF_0-7`)  * sin(theta["CGF_0-7"])  * cos(theta["CGF_0-7"])) / 2,
+
+    CBD_0_23 =
+      (-log(`CGF_0-23`) * sin(theta["CGF_0-23"]) * cos(theta["CGF_0-23"])) / 2,
+
+    CBD_0_38 =
+      (-log(`CGF_0-38`) * sin(theta["CGF_0-38"]) * cos(theta["CGF_0-38"])) / 2
+  )
+
+
+finalDf %>%
+  dplyr::select(CBD_0_7, CBD_0_23, CBD_0_38)%>%
+  pivot_longer(
+    cols = c(CBD_0_7, CBD_0_23, CBD_0_38),
+    names_to = "group",
+    values_to = "value"
+  ) %>%
+  ggplot(., aes(x = value, fill = group)) +
+  geom_histogram(
+    alpha = 0.5,
+    position = "identity",
+    bins = 30
+  ) +
+  theme_classic()
+
+gc()
+
+
+# Create matrices used to smooth the SAR rasters.
+# TODO: MOVE TO IT'S RIGHTFUL PLACE SOMEWHERE ABOVE HERE FOR THE CLEAN VERSION
+# INFACT MICH OF WHAT IS BELOW HERE WILL NEED TO BE REORGANISED
+# w5 <- matrix(1, 5, 5) / 25
+# w7 <- matrix(1, 7, 7) / 49
+# 
+# VH5 <- focal(VH, w = w5, fun = "mean", na.policy = "omit")
+# VH7 <- focal(VH, w = w7, fun = "mean", na.policy = "omit")
+# VV5 <- focal(VV, w = w5, fun = "mean", na.policy = "omit")
+# VV7 <- focal(VV, w = w7, fun = "mean", na.policy = "omit")
+# VHVV5 <- focal(VHVV_Ratio1, w = w5, fun = "mean", na.policy = "omit")
+# VHVV7 <- focal(VHVV_Ratio1, w = w7, fun = "mean", na.policy = "omit")
+# 
+# HH5 <- focal(HH, w = w5, fun = "mean", na.policy = "omit")
+# HH7 <- focal(HH, w = w7, fun = "mean", na.policy = "omit")
+# HV5 <- focal(HV, w = w5, fun = "mean", na.policy = "omit")
+# HV7 <- focal(HV, w = w7, fun = "mean", na.policy = "omit")
+
+
+plot(VH)
+plot(VH5)
+plot(VH7)
+plot(VV)
+plot(VV5)
+plot(VV7)
+plot(VHVV_Ratio1)
+plot(VHVV5)
+plot(VHVV7)
+
+plot(HH)
+plot(HH5)
+plot(HH7)
+plot(HV)
+plot(HV5)
+plot(HV7)
+
+gc()
+# wolterSAR <- c(VH5, VH7, VV5, VV7, VHVV5, VHVV7, HH, HH5, HH7, HV, HV5, HV7) %>%
+#   terra::extract(., vect(finalDf$geometry)) %>%
+#   `colnames<-`(c("ID", "VH5", "VH7", "VV5", "VV7", "VHVV5", "VHVV7", "HH", "HH5", "HH7", "HV", "HV5", "HV7")) %>%
+#   dplyr::select(-ID)
+
+# finalDf <- cbind(finalDf, wolterSAR)
+
+finalDf <- finalDf %>% drop_na()
+
+
+scaledDf1 <- finalDf %>%
+  dplyr::select(-uniqueID, -geometry, -x, -y, -CBD, -CFL, -CBH, -H, -CC, -CBD_0_7, -CBD_0_23, -CBD_0_38, -CGF, -`CGF_0-7`, -`CGF_0-23`, -`CGF_0-38`) %>%
+  scale(.)
+scaledDf1 <- cbind(finalDf$CBD_0_7, scaledDf1) %>% as.data.frame() %>% rename("CBD_0_7" = "V1")
+
+
+scaledDf2 <- finalDf %>%
+  dplyr::select(VH, VH5, VH7, VV, VV5, VV7, VHVV_Ratio1, VHVV5, VHVV7, HH, HH5, HH7, HV, HV5, HV7, glcm_contrast, glcm_dissimilarity, glcm_homogeneity, glcm_entropy) %>%
+  scale(.)
+
+gc()
+
+# pls.1 <- plsr(finalDf$CBD_0_7 ~ as.matrix(scaledDf1), ncomp = 6, validation = "LOO")
+pls.1 <- plsr(CBD_0_7 ~ ., 
+              data = scaledDf1,
+              ncomp = 1,
+              validation = "LOO",
+              scale = FALSE)
+summary(pls.1)
+
+pls.1 <- plsr(CBD_0_7 ~ ., 
+              data = scaledDf1,
+              ncomp = 1,
+              validation = "CV",
+              scale = FALSE,
+              segments = 10)
+summary(pls.1)
+
+# A single latent component derived from your 164 predictors is enough to explain ~97% of the variation in CBD_0_7, 
+# and it predicts new data very accurately (RMSEP ≈ 0.0043). This result is robust to different cross-validation 
+# schemes and shows no obvious signs of overfitting.
+
+validationplot(pls.1)
+coef(pls.1) %>% as.data.frame() %>% arrange(desc(abs(`CBD_0_7.1 comps`)))
+explvar(pls.1)
+R2(pls.1)
+
+
+
+# VIP Method, still lots of variables
+vip <- function(pls.obj) {
+  W <- pls.obj$loading.weights
+  `T` <- pls.obj$scores
+  Q <- pls.obj$Yloadings
+  
+  p <- nrow(W)
+  h <- ncol(W)
+  
+  SSY <- colSums((T %*% diag(Q))^2)
+  vip <- sqrt(p * rowSums(W^2 %*% diag(SSY)) / sum(SSY))
+  
+  return(vip)
+}
+
+vip_scores <- vip(pls.1)
+keep_vars <- names(vip_scores[vip_scores >= 1])
+scaledDf_vip <- scaledDf1[, c("CBD_0_7", keep_vars)]
+
+```
+pls.vip <- plsr(
+  CBD_0_7 ~ ., 
+  data = scaledDf_vip,
+  ncomp = 1,
+  validation = "CV",
+  segments = 10,
+  scale = FALSE
+)
+
+summary(pls.vip)
+
+# Bootstrapping PLS fits
+set.seed(33)
+B <- 200
+coef_mat <- matrix(NA, nrow = B, ncol = ncol(scaledDf1) - 1)
+colnames(coef_mat) <- colnames(scaledDf1)[-1]
+
+for (b in 1:B) {
+  idx <- sample(1:nrow(scaledDf1), replace = TRUE)
+  
+  pls.b <- plsr(
+    CBD_0_7 ~ ., 
+    data = scaledDf1[idx, ],
+    ncomp = 1,
+    scale = FALSE
+  )
+  
+  coef_mat[b, ] <- coef(pls.b)[, , 1]
+}
+
+coef_mean <- apply(coef_mat, 2, mean)
+coef_sd   <- apply(coef_mat, 2, sd)
+stability <- abs(coef_mean) / coef_sd
+
+keep_vars <- names(stability[stability > 1])
+scaledDf_stable <- scaledDf1[, c("CBD_0_7", keep_vars)]
+
+pls.stable <- plsr(
+  CBD_0_7 ~ ., 
+  data = scaledDf_stable,
+  ncomp = 1,
+  validation = "CV",
+  segments = 10,
+  scale = FALSE
+)
+
+summary(pls.stable)
+
+```
+
+scaledDf1 %>% as.data.frame() %>% names()
+
+rmse <- RMSEP(pls.1)$val[1, , ]
+ncomp_opt <- which.min(rmse)
+
+
+pls.2 <- plsr(finalDf$CBD_0_7 ~ as.matrix(scaledDf), ncomp = ncomp_opt)
+
+summary(pls.2)
+
+pred <- predict(pls.1, ncomp = 6)
+R2 <- cor(pred, finalDf$CBD_0_7)^2
+R2
+
+
+hist(finalDf$CBD_0_7)
+
+testDf <- cbind(finalDf$CBD_0_7, scaledDf1) %>%
+  as.data.frame() %>%
+  rename("CBD_0_7" = "V1")
+
+
+write_csv(testDf, "/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/TEST_CBD_7.csv")
+```
+# ---------------------------
+# 1) Load VH & VV rasters (in dB, same CRS/resolution)
+# ---------------------------
+vh <- rasterList[[1]]  # VH (dB)
+vv <- rasterList[[8]]  # VV (dB)
+
+# ---------------------------
+# 2) 5x5 and 7x7 low-pass filters (mean)
+# ---------------------------
+w5 <- matrix(1, 5, 5) / 25
+w7 <- matrix(1, 7, 7) / 49
+
+vh5 <- focal(vh, w = w5, fun = "mean", na.policy = "omit")
+vh7 <- focal(vh, w = w7, fun = "mean", na.policy = "omit")
+vv5 <- focal(vv, w = w5, fun = "mean", na.policy = "omit")
+vv7 <- focal(vv, w = w7, fun = "mean", na.policy = "omit")
+
+# ---------------------------
+# 3) VH:VV ratio in dB space = VH_dB - VV_dB
+#    (equivalent to log10(VH_lin/VV_lin) scaled; this matches the usual treatment in dB)
+# ---------------------------
+vhvv   <- vh  - vv      # unfiltered ratio (dB)
+vhvv5  <- vh5 - vv5     # 5x5 ratio (dB)
+vhvv7  <- vh7 - vv7     # 7x7 ratio (dB)
+
+```
+
+
+
+#####################################
+
+# DO NOT DELETE. I'm going try making a final df again above
+
+```{r}
+# Stack that
+stack <- c(ndvi, gndvi, evi, blue, green, red, nir, swir1, swir2, ndmi, nbr, nbr2, HH, HV, pptPrism, tempPrism, aspect, slope, elevation)
+stackDf <- stack %>% as.data.frame(xy = TRUE)
+
+# Get all tbe data without any NAs, we will use this to train on later
+stackDf <- stackDf %>% drop_na()
+
+treDf <- read_csv("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/FuelCalc/BWCA-Out.csv")
+treDf <- treDf[-1,] %>% mutate(across(where(is.character), as.numeric)) %>% cbind(treDf[-1,], .)
+treDf$PlotID <- gsub("-Baseline", "", treDf$PlotID)
+
+# Average the values of individual trees back to the footprint level
+gediFootprintDf <- gediMatched %>% group_by(code) %>%
+  summarise(across(contains(c("rh", "p_z", "pv")), ~ mean(.x, na.rm = TRUE))) %>%
+  rename_with(~ ifelse(startsWith(., "p_z"), sub("^p_z", "pai_", .),
+                       ifelse(startsWith(., "pv"), sub("^[^_]+", "pavd", .), .)))
+
+# Create a dataframe with all of the target data in it
+targetDf <- inner_join(treDf[,c(1,2,4,6,10,18,24)],
+           metricsDf %>% group_by(uniqueID) %>% summarise(HT = max(Z), CC = max(CCover)),
+           by = c("PlotID" = "uniqueID"))
+targetDf <- targetDf %>% filter(preCFL != 0)
+
+# Create the final table and remove columns where they are all 0s
+finalTable <- targetDf %>%
+  mutate(PlotID = gsub("_", "", .$PlotID)) %>%
+  inner_join(gediFootprintDf, by = c("PlotID" = "code"))
+# finalTable <- finalTable %>% select(where(~ !is.numeric(.) || any(. != 0)))
+
+# Get the centroid of the footprint from the trees in that footprint
+finalTable$geometry <- st_centroid(finalTable$geometry.x)
+
+data <- extract(stack, st_as_sf(finalTable$geometry))
+
+finalTable <- cbind(finalTable, data[,-1])
+
+
+##################
+# Canopy Bulk Density
+CBD <- finalTable[,-c(10, 172, 173)]
+CBD <- CBD[, -c(1,2,4:9)]
+
+CBD <- CBD %>% drop_na()
+
+CBD <- CBD %>% mutate(across(where(is.numeric), scale),
+               preCBD = as.numeric(preCBD))
+
+CBD <- CBD[,-c(3:26,28:51,53:76,78:91)]
+
+summarise(across(where(is.numeric), sum, na.rm = TRUE))
+
+# coords <- cbind(st_coordinates(finalTable$geometry)[,1], st_coordinates(finalTable$geometry)[,2])
+# groups <- kmeans(coords, centers = 10)$cluster
+# CBD$cluster <- groups
+# CBD$geometry <- finalTable$geometry
+# CBD <- st_as_sf(CBD)
+
+hist(CBD$preCBD)
+
+target_var <- "preCBD"
+
+
+
+hist(cbdvalues$CDB)
+
+# Create formula
+form <- as.formula(paste(target_var, "~ ."))
+
+# --- Set up training control ---
+set.seed(33)
+ctrl <- trainControl(
+  method = "cv",          # cross-validation
+  number = 5,             # 5-fold CV
+  verboseIter = TRUE
+)
+
+# --- Train random forest model ---
+rf_model <- train(
+  form,
+  data = CBD,
+  method = "rf",
+  trControl = ctrl,
+  tuneLength = 5,
+  importance = TRUE
+)
+
+# --- Inspect results ---
+print(rf_model)
+varImp(rf_model)
+plot(rf_model)
+
+rf_model$trainingData %>% names()
+
+
+
+control <- trainControl(method="cv", number=5)
+
+grid <- expand.grid(mtry=c(2, 5, 10, 20, 40),
+                    splitrule="variance",
+                    min.node.size=c(1, 5, 10))
+
+rf_model <- train(
+  preCBD ~ ., data = CBD,
+  method = "ranger",
+  tuneGrid = grid,
+  trControl = control,
+  importance = 'impurity'
+)
+
+print(rf_model)
+varImp(rf_model)
+plot(rf_model)
+
+hist(CBD$preCBD)
+
+summary(CBD$preCBD)
+
+
+gediMatched %>%
+  as.data.frame()
+
+
+BWCA_UTM.shp <- st_transform(BWCA.shp, 26915)
+predpts <- spatSample(fortypcdBWCA, size = 2000, method = "regular", as.points = TRUE)
+CBD <- st_transform(CBD, st_crs(predpts))
+predpts_sf <- st_as_sf(predpts)
+
+knndmFolds <- knndm(tpoints = CBD,
+                    predpoints = predpts_sf,
+                    k = 10,
+                    samplesize = 5000)
+
+
+ctrl <- trainControl(
+  method = "cv",
+  number = k,
+  index = trainIndices,
+  indexOut = testIndices,
+  search = "grid"
+)
+
+grid <- expand.grid(mtry = c(5, 10, 15, 30))
+
+model <- train(
+  Z ~ ., 
+  data = testZ,
+  method = "rf",
+  trControl = ctrl,
+  importance = TRUE,
+  ntree = 100
+  # tuneGrid = grid
+)
+
+gediMatched
+```
+
+
+
+
+```{r}
+RI <- c(3,2,2,3)
+
+L_full <- 484
+L_sim <- 100
+lambda <- 1 / RI
+lambdaTotal <- sum(lambda)
+lambdaSim <- lambdaTotal * (L_sim / L_full)
+
+k <- 0:10
+prob <- dpois(0:10, lambdaSim)
+
+round(prob, 2)
+prob_cum <- ppois(k, lambdaSim)
+
+
+
+probOld <- dpois(0:10, lambdaTotal)
+
+cbind(prob, probOld) %>%
+  as.data.frame() %>%
+  mutate(ID = 0:10) %>%
+  pivot_longer(cols = "prob":"probOld", values_to = "Value", names_to = "Name") %>%
+  mutate(Name = case_when(
+    Name == "prob" ~ "Simulated NC Coastline",
+    TRUE ~ "Full NC Coastline"
+  )) %>%
+  ggplot(., aes(x = ID, y = Value, col = Name, shape = Name)) +
+  geom_point(size = 2.5) +
+  geom_line(size = 1) +
+  theme_classic() +
+  scale_x_continuous(name = "Number of Storm Events",
+                     breaks = 0:10) +
+  ylab("Probability of landfall") +
+  labs(color = "Coastline Type", shape = "Coastline Type") +
+  theme(legend.position = "bottom")
+```
+
+
+# Low r2 verison
+
+```{r}
+gediMatched <- st_read("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Shapefiles/gediMatched.shp")
+
+
+# Some of the GEE files have slightly different dimensions so some files need to
+# be projected so they can all be stacked
+fortypcdBWCA <- project(fortypcdBWCA_UTM, rasters$B1_p10, method = "near")
+slaRast <- project(slaRast, fortypcdBWCA, method = "near")
+ldmcRast <- project(ldmcRast, fortypcdBWCA, method = "near")
+lpcRast <- project(lpcRast, fortypcdBWCA, method = "near")
+lncRast <- project(lncRast, fortypcdBWCA, method = "near")
+
+#----PRISM----#
+pptPrism <- rast("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/PRISM/Precipitation/PRISM_ppt_30yr_normal_800mM4_annual_bil.bil")
+shapefile <- BWCA.shp %>% st_transform(., crs(pptPrism))
+pptPrism <- crop(pptPrism, shapefile) %>% mask(., shapefile)
+pptPrism <- project(pptPrism, fortypcdBWCA, method = "near")
+
+plot(pptPrism)
+
+tempPrism <- rast("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/PRISM/Temperature/PRISM_tmean_30yr_normal_800mM5_annual_bil.bil")
+tempPrism <- crop(tempPrism, shapefile) %>% mask(., shapefile)
+tempPrism <- project(tempPrism, fortypcdBWCA, method = "near")
+plot(tempPrism)
+
+rastList <- lapply(rastList, function(x) {
+  project(x, fortypcdBWCA, method = "near")
+})
+
+
+contrast <- rastList[[1]]
+dissimilarity <- rastList[[2]]
+homogeneity <- rastList[[3]]
+variance <- rastList[[4]]
+correlation <- rastList[[5]]
+mean <- rastList[[6]]
+entropy <- rastList[[7]]
+
+
+# Create the stack
+fullStack <- c(rasters$B1_p50,
+  rasters$B2_p50,
+  rasters$B3_p50,
+  rasters$B4_p50,
+  rasters$B5_p50,
+  rasters$B6_p50,
+  rasters$B7_p50,
+  rasters$B8_p50,
+  rasters$B8A_p50,
+  rasters$B11_p50,
+  rasters$B12_p50,
+  rasters$B1_p10,
+  rasters$B2_p10,
+  rasters$B3_p10,
+  rasters$B4_p10,
+  rasters$B5_p10,
+  rasters$B6_p10,
+  rasters$B7_p10,
+  rasters$B8_p10,
+  rasters$B8A_p10,
+  rasters$B11_p10,
+  rasters$B12_p10,
+  rasters$B1_p95,
+  rasters$B2_p95,
+  rasters$B3_p95,
+  rasters$B4_p95,
+  rasters$B5_p95,
+  rasters$B6_p95,
+  rasters$B7_p95,
+  rasters$B8_p95,
+  rasters$B8A_p95,
+  rasters$B11_p95,
+  rasters$B12_p95,
+  fortypcdBWCA,
+ ndvi,
+ evi,
+ evi2,
+ rvi,
+ pssra,
+ savi,
+ gndvi,
+ ndwi,
+ ldmcRast,
+ slaRast,
+ lpcRast,
+ lncRast,
+ contrast,
+ dissimilarity,
+ homogeneity,
+ variance,
+ correlation,
+ mean,
+ entropy
+ )
+
+# fractionsDf <- read_csv("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/out_GEDI_PLOT.csv")
+# fractionsDf <- fractionsDf %>% unique()
+# fractionsDf <- fractionsDf %>% mutate(uniqueID = str_sub(uniqueID, end = -2)) %>%
+#   group_by(uniqueID) %>% summarise(across(where(is.numeric), sum, na.rm = TRUE))
+
+
+treDf <- read_csv("/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/FuelCalc/BWCA-Out.csv")
+treDf <- treDf[-1,-1] %>% 
+  mutate(across(where(is.character), as.numeric)) %>%
+  cbind(treDf[-1,1], .)
+
+# treDf %>% mutate(allID = paste0("uID_", PlotID)) %>%
+#   inner_join(., fractionsDf, by = c("allID" = "PlotID"))
+# 
+# metricsDf <- metricsDf %>% mutate(allID = paste0("uID_", uniqueID)) %>%
+#   inner_join(., fractionsDf, by = c("allID" = "uniqueID"))
+
+gediFootprintDf <- gediMatched %>% group_by(code) %>%
+  summarise(across(contains(c("rh", "p_z", "pv")), ~ mean(.x, na.rm = TRUE))) %>%
+  rename_with(~ ifelse(startsWith(., "p_z"), sub("^p_z", "pai_", .),
+                       ifelse(startsWith(., "pv"), sub("^[^_]+", "pavd", .), .)))
+
+metricsDf
+
+treDf$PlotID <- gsub("-Baseline", "", treDf$PlotID)
+
+targetDf <- inner_join(treDf[,c(1,2,4,6,10,18,24)],
+           metricsDf %>% group_by(uniqueID) %>% summarise(HT = max(Z), CC = max(CCover)),
+           by = c("PlotID" = "uniqueID"))
+
+targetDf <- targetDf %>% filter(preCFL != 0)
+
+finalTable <- targetDf %>%
+  mutate(PlotID = gsub("_", "", .$PlotID)) %>%
+  inner_join(gediFootprintDf, by = c("PlotID" = "code"))
+
+finalTable <- finalTable %>% select(where(~ !is.numeric(.) || any(. != 0)))
+
+finalTable$geometry <- st_centroid(finalTable$geometry)
+
+data <- extract(fullStack, st_as_sf(finalTable))
+
+finalTable <- cbind(finalTable, data[,-1])
+
+
+finalTable <- finalTable %>% mutate(glcm_correlation = ifelse(glcm_correlation == Inf | glcm_correlation == -Inf, mean(glcm_correlation), glcm_correlation))
+
+finalTable <- finalTable %>% drop_na()
+
+scaleTable <- finalTable[,-c(1,162)] %>% mutate(Label = as.numeric(Label)) %>% scale() %>% as.data.frame() %>% cbind(finalTable[,1],.) %>%
+  rename("PlotID" = "finalTable[, 1]")
+
+
+
+hist(finalTable$preCFL)
+
+hist(finalTable$ndwi)
+```
+
+
+pcaTable <- scaleTable[, -c(1:9)]
+pcaTable <- pcaTable[, -c(1:9)]
+
+# non_constant_cols <- apply(as.matrix(pcaTable), 2, function(col) sd(col, na.rm = TRUE) != 0)
+# non_constant_cols %>% as.data.frame() %>% filter(. == FALSE)
+
+pcaOutput <- prcomp(pcaTable)
+pcaDf <- as.data.frame(pcaOutput$x)
+pcaDf$groups <- finalTable$Label
+centroids <- aggregate(cbind(PC1,PC2) ~ groups, pcaDf, "mean")
+
+valid_groups <- unique(pcaDf$groups[sapply(split(pcaDf, pcaDf$groups), function(df) {
+  sum(complete.cases(df[, c("PC1", "PC2")])) >= 2
+})])
+
+# Generate ellipses
+conf.rgn <- do.call(rbind, lapply(valid_groups, function(t) {
+  subdf <- pcaDf[pcaDf$groups == t, c("PC1", "PC2")]
+  if (nrow(subdf) < 2 || anyNA(subdf)) return(NULL)
+
+  centre_row <- centroids[centroids$groups == t, c("PC1", "PC2")]
+  if (nrow(centre_row) == 0 || anyNA(centre_row)) return(NULL)
+
+  ell <- ellipse::ellipse(cov(subdf), centre = as.matrix(centre_row), level = 0.95)
+  data.frame(groups = as.character(t), ell)
+}))
+
+
+# Plot PC1 and PC2
+ggplot(data = pcaDf, aes(x = PC1, y = PC2, group = as.factor(groups), color = as.factor(groups))) + 
+    # geom_polygon(data = conf.rgn, aes(fill = groups), alpha = 0.05) +
+    geom_point(size = 1, alpha = 0.1) + 
+  labs(title = "Principal Component Analysis of Scotland Tree Types: PC1 and PC2") +
+  theme_classic() +
+  geom_hline(yintercept = 0, linetype = "dashed", alpha = 0.2) +
+  geom_vline(xintercept = 0, linetype = "dashed", alpha = 0.2) +
+  theme(legend.position = "none") +
+  ylim(-20,20) +
+  xlim(-30,20)
+
+
+summary(pcaOutput) # 31, 0.99
+pcaOutput$rotation %>% as.data.frame() %>% select(PC26) %>% arrange(PC26)
+# rh61, pai_70_75, B8A_p50, B2_p95, B4_p95, rh0, rh0, LNC_1km_v1, glcm_dissimilarity
+# B6_p10, pavd_35_40, glcm_variance, pavd_30_35, B1_p10, glcm_correlation, glcm_correlation, Label, Label
+# pavd_0_5, B1_p50, B1_p95, B4_p10, pavd_35_40, SLA_1km_v1, glcm_entropy
+
+scaleTable1 <- scaleTable %>% select(preCFL, rh61, pai_70_75, B8A_p50, B2_p95, B4_p95, rh0, rh0, LNC_1km_v1, glcm_dissimilarity, B6_p10, pavd_35_40, glcm_variance, pavd_30_35, B1_p10, glcm_correlation, glcm_correlation, Label, Label, pavd_0_5, B1_p50, B1_p95, B4_p10, pavd_35_40, SLA_1km_v1, glcm_entropy)
+
+# MACHINE LEARNING
+ctrl <- trainControl(
+  method = "cv",      # 10-fold cross-validation
+  number = 5,
+  verboseIter = FALSE
+)
+
+xgb_model <- train(
+  preCFL ~ .,
+  data = scaleTable1,
+  method = "xgbTree",
+  trControl = ctrl,
+  # tuneGrid = grid,
+  metric = "RMSE"
+)
+
+
+sum(is.na(scaleTable))
+
+
+var(scaleTable$preCFL)
+```
+
+metricsDf <- metricsDf %>% mutate(allID = paste0("uID_", uniqueID)) %>%
+  inner_join(., fractionsDf, by = c("allID" = "uniqueID"))
+
+gediFootprintDf <- gediMatched %>% group_by(code) %>%
+  summarise(across(contains(c("rh", "p_z", "pv")), ~ mean(.x, na.rm = TRUE))) %>%
+  rename_with(~ ifelse(startsWith(., "p_z"), sub("^p_z", "pai_", .),
+                       ifelse(startsWith(., "pv"), sub("^[^_]+", "pavd", .), .)))
+
+finalTable <- left_join(metricsDf %>% mutate(uniqueID = str_sub(uniqueID, end = -2)),
+          gediFootprintDf %>% st_drop_geometry(),
+          by = c("uniqueID" = "code"))
+
+# Because this is still in multipoint geometry for each indiviudal tree for each
+# GEDI footprint I am taking the centroid of the trees in each footprint and that
+# will be the singular point which defines each footprint in space
+centroids <- st_centroid(finalTable$geom)
+
+finalTable <- finalTable %>% st_drop_geometry()
+
+finalTable <- cbind(finalTable, centroids)
+
+finalTable <- st_as_sf(finalTable)
+
+x <- extract(fullStack, finalTable) # still extracting tree points instead of footprint point. need to fix
+
+mode <- function(x) {
+  x <- na.omit(x)
+  if (length(x) == 0) return(NA)
+  ux <- unique(x)
+  ux[which.max(tabulate(match(x, ux)))]
+}
+
+x <- x %>% group_by(ID) %>% summarise(across(where(is.numeric), ~ mean(.x, na.rm = TRUE)),
+                                 Label = mode(Label)) %>%
+  mutate(across(starts_with("B"), ~ .x / 10000))
+
+finalTable <- cbind(finalTable, x[,-1])
+
+glcmCols <- c("glcm_contrast", "glcm_dissimilarity", "glcm_homogeneity", "glcm_variance", "glcm_correlation", "glcm_mean", "glcm_entropy")
+
+finalTable <- finalTable %>% filter(!if_all(all_of(glcmCols), is.na))
+
+finalTable <- finalTable %>% 
+  mutate(across(
+    all_of(glcmCols),
+    ~ {
+      med <- median(.[!is.infinite(.) & !is.na(.)], na.rm = TRUE)
+      ifelse(is.na(.) | is.infinite(.), med, .)
+    }
+  ))
+
+# Here I am doing some extra cleaning by removing the columns that are only 0s
+finalTable <- finalTable %>% select(-frac_Bur.oak, -frac_Elm...ash...black.locust, -frac_Lodgepole.pine, -frac_Other.hardwoods, -frac_Silver.maple...American.elm, -frac_Sugarberry...hackberry...elm...green.ash, -pai_130_135, -pai_135_140, -pai_140_145, -pai_145_150, -pavd_135_140, -pavd_140_145, -pavd_145_150) %>%
+  drop_na()
+
+
+
+pcaTable <- finalTable
+pcaTable <- pcaTable[, -c(1:9)]
+pcaTable <- pcaTable %>% mutate(LabelNumeric = as.numeric(Label)) %>% as.data.frame() %>% st_drop_geometry() %>% select(-Label, -geometry)
+
+
+non_constant_cols <- apply(as.matrix(pcaTable), 2, function(col) sd(col, na.rm = TRUE) != 0)
+non_constant_cols %>% as.data.frame() %>% filter(. == FALSE)
+
+
+pcaOutput <- prcomp(pcaTable, scale = TRUE, center = TRUE)
+pcaDf <- as.data.frame(pcaOutput$x)
+pcaDf$groups <- finalTable$Label
+centroids <- aggregate(cbind(PC1,PC2) ~ groups, pcaDf, "mean")
+
+valid_groups <- unique(pcaDf$groups[sapply(split(pcaDf, pcaDf$groups), function(df) {
+  sum(complete.cases(df[, c("PC1", "PC2")])) >= 2
+})])
+
+# Generate ellipses
+conf.rgn <- do.call(rbind, lapply(valid_groups, function(t) {
+  subdf <- pcaDf[pcaDf$groups == t, c("PC1", "PC2")]
+  if (nrow(subdf) < 2 || anyNA(subdf)) return(NULL)
+
+  centre_row <- centroids[centroids$groups == t, c("PC1", "PC2")]
+  if (nrow(centre_row) == 0 || anyNA(centre_row)) return(NULL)
+
+  ell <- ellipse::ellipse(cov(subdf), centre = as.matrix(centre_row), level = 0.95)
+  data.frame(groups = as.character(t), ell)
+}))
+
+
+# Plot PC1 and PC2
+ggplot(data = pcaDf, aes(x = PC1, y = PC2, group = as.factor(groups), color = as.factor(groups))) + 
+    # geom_polygon(data = conf.rgn, aes(fill = groups), alpha = 0.05) +
+    geom_point(size = 1, alpha = 0.1) + 
+  labs(title = "Principal Component Analysis of Scotland Tree Types: PC1 and PC2") +
+  theme_classic() +
+  geom_hline(yintercept = 0, linetype = "dashed", alpha = 0.2) +
+  geom_vline(xintercept = 0, linetype = "dashed", alpha = 0.2) +
+  theme(legend.position = "none") +
+  ylim(-20,20) +
+  xlim(-30,20)
+
+
+summary(pcaOutput) # 20, 0.95232
+pcaOutput$rotation %>% as.data.frame() %>% arrange(PC1)
+# rh60, pai_75_80m
+
+finalStack <- fullStack[[c("B5_p50", "ndvi", "B11_p10", "glcm_dissimilarity", "LPC_1km_v1", "glcm_variance", "glcm_mean", "B1_p50", "glcm_correlation", "B1_p10", "SLA_1km_v1", "B1_p50", "B1_p95", "glcm_entropy")]]
+
+
+
+```
+
+# Random forest training
+
+```{r}
+# Canopy Height
+CH <- finalTable
+
+CH <- CH[,-c(1,3:9)] %>% st_drop_geometry()
+coords <- cbind(st_coordinates(finalTable$geometry)[,1], st_coordinates(finalTable$geometry)[,2])
+groups <- kmeans(coords, centers = 10)$cluster
+CH$cluster <- groups
+
+# Create a spatial cross validation and then visualise
+plot_df <- data.frame(
+  x = coords[,1],
+  y = coords[,2],
+  cluster = factor(groups)
+)
+
+ggplot(plot_df, aes(x = x, y = y, color = cluster)) +
+  geom_point() +
+  coord_equal() +
+  scale_color_brewer(palette = "Set3") +
+  theme_minimal()
+
+
+uniqueClusters <- unique(CH$cluster)
+trainIndex <- lapply(uniqueClusters, function(x) {which(CH$cluster != x)})
+testIndex <- lapply(uniqueClusters, function(x) {which(CH$cluster == x)})
+
+ctrl <- trainControl(
+  method = "cv",
+  number = length(uniqueClusters),
+  index = trainIndex,
+  indexOut = testIndex
+)
+
+ctrl_normal <- trainControl(
+  method = "cv",
+  number = 10       # standard k-fold
+)
+
+set.seed(33)
+model <- train(
+  Z ~ .,         
+  data = CH[,-236],
+  method = "xgbTree",
+  trControl = ctrl
+)
+
+##################################
+# Different spatial approach
+coords
+distMat <- dist(coords)
+hcSpatial <- hclust(distMat, method = "ward.D2")
+CH$spatialBlock <- cutree(hcSpatial, k = 10)
+
+featureDist <- dist(scale(CH[, -c(1,235,236)]))
+hcFeature <- hclust(featureDist, method = "ward.D2")
+CH$featureBlock <- cutree(hcFeature, k = 10)
+
+targetDist <- dist(scale(CH$Z))
+hcTarget <- hclust(targetDist, method = "ward.D2")
+CH$targetBlock <- cutree(hcTarget, k = 10)
+
+combinedLabels <- paste(CH$spatialBlock, CH$featureBlock, CH$targetBlock, sep = "_")
+
+combinedDf <- data.frame(
+  spatial = factor(CH$spatialBlock),
+  feature = factor(CH$featureBlock),
+  target  = factor(CH$targetBlock))
+
+combinedNumeric <- fastDummies::dummy_cols(combinedDf, remove_first_dummy = TRUE)
+distMat <- dist(combinedNumeric)
+consensus <- ConsensusClusterPlus(as.matrix(distMat),
+                                  maxK = 5,
+                                  reps = 50,
+                                  clusterAlg = "hc",
+                                  distance = "manhattan",
+                                  plot = NULL)
+
+CH$spcvFold <- consensus$consensusClass
+#################################################
+spatialFolds <- spatialBlock(
+  speciesData = st_as_sf(cbind(CH, finalTable$geometry)),
+  theRange = 5000,
+  k = 10,
+  selection = "random",
+  iteration = 100,
+  showBlocks = TRUE
+)
+
+CH$foldID <- spatialFolds$foldID
+for(f in 1:10){
+  trainData <- CH[CH$foldID != f, ]
+  testData  <- CH[CH$foldID == f, ]
+}
+
+folds <- unique(CH$foldID)
+trainIndex <- lapply(folds, function(f) which(CH$foldID != f))
+testIndex <- lapply(folds, function(f) which(CH$foldID == f))
+
+# Setup trainControl with custom folds
+ctrl <- trainControl(
+  method = "cv",
+  number = 10,
+  index = trainIndex,
+  indexOut = testIndex,
+  savePredictions = "final"
+)
+
+set.seed(123)
+model <- train(
+  Z ~ .,   # replace with your formula
+  data = CH[,-c(236,237)],
+  method = "rf",
+  trControl = ctrl
+)
+###############################################
+CH$geometry <- finalTable$geometry
+CH <- st_as_sf(CH)
+BWCA_UTM.shp <- st_transform(BWCA.shp, 26915)
+predpts <- spatSample(fortypcdBWCA, size = 2000, method = "regular", as.points = TRUE)
+CH <- st_transform(CH, st_crs(predpts))
+predpts_sf <- st_as_sf(predpts)
+
+knndmFolds <- knndm(tpoints = CH,
+                    predpoints = predpts_sf,
+                    k = 5,
+                    samplesize = 5000,
+                    clustering = "kmeans")
+
+
+
+crs(predpts)
+
+
+
+
+##################
+# Canopy Bulk Density
+CBD <- finalTable
+
+CBD <- CBD[,-c(1,2,3,4:9)] %>% st_drop_geometry()
+coords <- cbind(st_coordinates(finalTable$geometry)[,1], st_coordinates(finalTable$geometry)[,2])
+groups <- kmeans(coords, centers = 10)$cluster
+CBD$cluster <- groups
+
+CBD$geometry <- finalTable$geometry
+CBD <- st_as_sf(CBD)
+BWCA_UTM.shp <- st_transform(BWCA.shp, 26915)
+predpts <- spatSample(fortypcdBWCA, size = 2000, method = "regular", as.points = TRUE)
+CBD <- st_transform(CBD, st_crs(predpts))
+predpts_sf <- st_as_sf(predpts)
+
+knndmFolds <- knndm(tpoints = CBD,
+                    predpoints = predpts_sf,
+                    k = 10,
+                    samplesize = 5000)
+```
+
+
+
+
+folds <- unique(Z$cluster)
+
+testZ <- finalTable[,c(57,2:34,36:54,69,76:108)] %>% drop_na()
+
+clusters <- unique(Z$cluster)
+k <- 5
+clusters <- sample(clusters) # Shuffle clusters
+foldList <- split(clusters, cut(seq_along(clusters), breaks = k, labels = FALSE))
+
+trainIndices <- list()
+testIndices <- list()
+
+for (i in 1:k) {
+  testCluster <- foldList[[i]]
+  testIDX <- which(Z$cluster %in% testCluster)
+  trainIDX <- which(!(Z$cluster %in% testCluster))  # <-- FIXED !
+  trainIndices[[paste0("Fold", i)]] <- trainIDX
+  testIndices[[paste0("Fold", i)]] <- testIDX
+}
+
+ctrl <- trainControl(
+  method = "cv",
+  number = k,
+  index = trainIndices,
+  indexOut = testIndices,
+  search = "grid"
+)
+
+grid <- expand.grid(mtry = c(5, 10, 15, 30))
+
+model <- train(
+  Z ~ ., 
+  data = testZ,
+  method = "rf",
+  trControl = ctrl,
+  importance = TRUE,
+  ntree = 100
+  # tuneGrid = grid
+)
+
+
+#######################
+
+# 1. Build training data with response named "Z"
+testZ <- finalTable[,c(57,2:34,36:54,69,76:108, which(colnames(finalTable)=="cluster"))] %>%
+  drop_na()
+colnames(testZ)[1] <- "Z"  # ensure the response is named Z
+
+# 2. Create spatial folds from testZ$cluster
+clusters <- unique(testZ$cluster)
+k <- 5
+clusters <- sample(clusters)
+foldList <- split(clusters, cut(seq_along(clusters), breaks = k, labels = FALSE))
+
+trainIndices <- list()
+testIndices <- list()
+
+for (i in 1:k) {
+  testCluster <- foldList[[i]]
+  testIDX <- which(testZ$cluster %in% testCluster)
+  trainIDX <- which(!(testZ$cluster %in% testCluster))
+  trainIndices[[paste0("Fold", i)]] <- trainIDX
+  testIndices[[paste0("Fold", i)]] <- testIDX
+}
+
+# 3. Train control
+ctrl <- trainControl(
+  method = "cv",
+  number = k,
+  index = trainIndices,
+  indexOut = testIndices,
+  search = "grid"
+)
+
+grid <- expand.grid(mtry = c(5, 10, 15, 30))
+testZ <- scale(testZ[,-c(54,88)], center = TRUE, scale = TRUE)
+testZ <- testZ[, colSums(is.na(testZ) | is.nan(testZ)) == 0]
+
+# 4. Train RF model
+model <- train(
+  Z ~ .,  # exclude cluster column from predictors
+  data = testZ ,
+  method = "rf",
+  trControl = ctrl,
+  importance = TRUE,
+  ntree = 100,
+  tuneGrid = grid
+)
+
+# 5. Confirm no NA values
+colSums(is.na(testZ))
+
+
+write.csv(finalTable, '/Users/louisgoodall/Desktop/Portfolio_Projects/GEDI/Data/RF Tables/finalTableFull.csv')
+
+
+testZ %>% as.data.frame()
+```
+# I MAY NOT NEED THIS SECTION AFTER ALL
+# Now to determine if stratified or random sampling is better for the models. Below
+# is code to view the boxplots of stratified vs random for all 5 Y variables. When
+# using continuous data for Y, createFolds automatically implements stratified sampling
+# in order to preserve a homogeneous distribution among the fold of Y. This is computationally
+# more expensive and if random does it just as well I will use random. IT DID!
+
+dfs <- list(Z = Z, CBH = CBH, CBD = CBD, CC = CC, CFL = CFL)
+stratSummaries <- list()
+randomSummaries <- list()
+
+for (name in names(dfs)) {
+  df <- dfs[[name]]
+  # set.seed(33)
+  stratifiedFolds <- createFolds(df[[1]], k = 10, returnTrain = FALSE)
+  randomFolds <- sample(rep(1:10, length.out = nrow(df)))
+  summarizeFolds <- function(folds, df) {
+    sapply(folds, function(idx) {
+      c(mean = mean(df[[1]][idx]),
+        median = median(df[[1]][idx]),
+        sd = sd(df[[1]][idx]))
+    })
+  }
+  stratSummary <- summarizeFolds(stratifiedFolds, df)
+  randomSummary <- summarizeFolds(split(seq_along(nrow(df)), randomFolds), df)
+  stratSummaries[[name]] <- stratSummary
+  randomSummaries[[name]] <- randomSummary
+  
+  df$stratifiedFold <- NA
+  for (i in seq_along(stratifiedFolds)) {
+    df$stratifiedFold[stratifiedFolds[[i]]] <- i
+  }
+  df$randomFold <- randomFolds
+  dfs[[name]] <- df
+  
+  p1 <- ggplot(df, aes(x = factor(stratifiedFold), y = df[[1]])) +
+  geom_boxplot() +
+  ggtitle(paste0(name, " - Stratified folds")) +
+  xlab("Fold") + ylab("Outcome")
+  
+  p2 <- ggplot(df, aes(x = factor(randomFold), y = df[[1]])) +
+  geom_boxplot() +
+  ggtitle(paste0(name, " - Random folds")) +
+  xlab("Fold") + ylab("Outcome")
+  
+  print(p1)
+  print(p2)
+}
+
+
+trainIndex <- createDataPartition(Z$Z,
+                                  p = 0.8,
+                                  list = FALSE,
+                                  times = 1)
+  
+train <- Z[trainIndex, ]
+test <- Z[-trainIndex, ]
+
+trainControl <- trainControl(method = "cv", number = 5)
+
+model <- train(Z ~.,
+               data = train,
+               method = "rf",
+               metric = "Rsquared",
+               trControl = trainControl,
+               ntree = 300,
+               keep.forest = TRUE,
+               importance = TRUE)
+
+model
+
+print(model)
+```
+
+
+
+
+
+
+
+
+
